@@ -1,0 +1,29 @@
+# CMake / native builds
+build/
+cmake-build-*/
+CMakeUserPresets.json
+compile_commands.json
+
+# Emscripten / generated web build output
+wasm-build/
+dist/
+
+# Node / TypeScript
+node_modules/
+*.tsbuildinfo
+
+# Python tooling
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+
+# Playtest/runtime artifacts
+.cache/
+playwright-report/
+test-results/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
