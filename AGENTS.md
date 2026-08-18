@@ -18,7 +18,8 @@ For documentation changes, follow [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.m
 
 - `main` must remain runnable and playable once the playable path exists.
 - The authoritative world lives in the C++23 Simulation Core.
-- TypeScript is presentation/input only; it must never become a second source of gameplay truth.
+- Presentation/input code is non-authoritative; it must never become a second source of gameplay truth.
+- The required development loop must run without network access in the agent environment. Browser/WASM tooling is optional until explicitly reintroduced after local viability is proven.
 - Gameplay work is vertical: rule -> protocol -> player experience -> proof.
 - Prefer the smallest real causal model over a fake placeholder or speculative framework.
 - Do not add abstractions, subsystems, dependencies, or refactors for hypothetical future use.

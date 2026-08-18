@@ -30,8 +30,8 @@ A rule should have one canonical home.
 Examples:
 
 - engineering/toolchain rules -> `engineering/DEVELOPMENT_RULES.md`;
-- current playable behavior -> future `GAME.md`;
-- implemented architecture -> future `ARCHITECTURE.md`;
+- current playable behavior -> `GAME.md`;
+- implemented architecture -> `ARCHITECTURE.md`;
 - project roadmap while still needed -> `specs/PROJECT_SPEC.md`.
 
 Other docs may summarize and link, but must not silently fork the contract.
@@ -68,7 +68,7 @@ When the retirement condition is met, delete it from the active tree and update 
 
 Create a decision record only for a choice that is expensive or difficult to reverse and whose rationale will matter later. Do not create ADRs for routine implementation choices.
 
-Accepted decision records are historical evidence, not a second copy of current architecture. Current architecture belongs in `ARCHITECTURE.md` once that document exists.
+Accepted decision records are historical evidence, not a second copy of current architecture. Current architecture belongs in `ARCHITECTURE.md`.
 
 ## Required document qualities
 
@@ -89,8 +89,8 @@ Update docs only when the task changes a real contract.
 
 Examples:
 
-- new playable control -> update `GAME.md` when it exists;
-- protocol ownership/boundary change -> update `ARCHITECTURE.md` when it exists;
+- new playable control -> update `GAME.md`;
+- protocol ownership/boundary change -> update `ARCHITECTURE.md`;
 - toolchain/dependency policy change -> update `engineering/DEVELOPMENT_RULES.md`;
 - milestone/product invariant change -> update `specs/PROJECT_SPEC.md` while it exists;
 - serious new causal mechanic -> add/update a model contract if the mechanic warrants one.

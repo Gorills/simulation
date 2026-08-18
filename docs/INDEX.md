@@ -14,14 +14,14 @@ This is the navigation root and catalog for repository knowledge. Agents should 
 |---|---|---|---|
 | ACTIVE | [`DOCUMENTATION.md`](DOCUMENTATION.md) | Documentation structure, indexing, lifecycle, and anti-drift rules | Documentation conventions change |
 | ACTIVE | [`engineering/DEVELOPMENT_RULES.md`](engineering/DEVELOPMENT_RULES.md) | Stack, architecture boundaries, determinism, local verification, playtest and agent engineering rules | Engineering/toolchain contract changes |
+| ACTIVE | [`GAME.md`](GAME.md) | What is actually playable now: controls, current scenario, milestone and player-facing gaps | Player-visible gameplay changes |
+| ACTIVE | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Implemented dependency direction, authority, protocol, client and playtest lifecycle | Implemented architecture changes |
 | TEMPORARY | [`specs/PROJECT_SPEC.md`](specs/PROJECT_SPEC.md) | Condensed product/architecture contract and milestone roadmap derived from the original greenfield brief | Product invariants or roadmap change; delete when retirement condition is met |
 
 ## Future canonical docs
 
 Create these only when the corresponding implementation exists; do not create placeholders:
 
-- `GAME.md` — what is actually playable now: controls, core loop, current scenario, current milestone, player-facing gaps.
-- `ARCHITECTURE.md` — implemented dependency direction, ownership, protocol, WASM boundary, persistence, browser runner lifecycle.
 - `MODELING_POLICY.md` — accepted historical baseline, magic deviations, uncertainty, fidelity rules, anti-overmodeling decisions.
 - `models/<mechanic>.md` — only for serious mechanics whose causal model needs an explicit contract.
 - `decisions/<decision>.md` — only for expensive or hard-to-reverse architecture decisions.

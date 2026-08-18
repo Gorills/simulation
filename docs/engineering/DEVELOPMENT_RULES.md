@@ -2,24 +2,42 @@
 
 **Status:** ACTIVE
 
-These are the canonical engineering rules for the current project stack. They are constraints for implementation, not proof that the corresponding files/tools already exist.
+These are the canonical engineering rules for the current project stack. The stack is intentionally chosen so the full build/test/playtest loop runs inside the agent environment without downloading tools or dependencies.
 
 ## 1. Authority and dependency direction
 
 There is one authoritative implementation of world rules: the **C++23 Simulation Core**.
-
-Dependency direction:
 
 ```text
 presentation -> protocol -> simulation
 simulation !-> presentation
 ```
 
-The Simulation Core must not depend on DOM, Canvas, browser events, keyboard/mouse input, camera state, frame time/FPS, wall-clock time, filesystem/network as gameplay inputs, UI state, locale, or environment variables as sources of world rules.
+The Simulation Core must not depend on terminal input, rendering, wall-clock time, filesystem/network as gameplay inputs, UI state, locale, or environment variables as sources of world rules.
 
-TypeScript may own input mapping, rendering, animation, camera, UI panels and other presentation state. It must not own authoritative inventory, money, relationships, status, skills, semantic location, ownership, institution membership, spell outcomes or trade outcomes.
+Presentation may map input and render projections. It must not own authoritative inventory, money, relationships, status, skills, location, ownership, institutions, spell outcomes, trade outcomes, or any alternate gameplay state.
 
-## 2. C++
+## 2. Runnable-stack invariant
+
+The required development loop must work with the tools already available in the execution environment and must not require network access.
+
+Current required stack:
+
+- C++23;
+- GCC capable of C++23 (Clang is an optional local cross-check);
+- CMake;
+- Ninja;
+- CTest;
+- Python 3 standard library;
+- native terminal reference client.
+
+The ordinary loop must not download SDKs, package-manager dependencies, browser binaries, test frameworks, or build tools.
+
+A new third-party dependency, browser runtime, WASM toolchain, package manager requirement, or network bootstrap is a separate bounded stack-change task and must prove it runs in the agent environment before becoming required.
+
+Browser/WASM may return later as optional presentation adapters. They must not become a development gate until the environment proves they can build and run locally.
+
+## 3. C++ policy
 
 - Language standard: C++23.
 - Required CMake settings:
@@ -31,18 +49,13 @@ CMAKE_CXX_EXTENSIONS = OFF
 ```
 
 - Prefer value semantics and RAII.
-- Use `std::unique_ptr` only for real heap ownership.
-- Use `std::shared_ptr` only for demonstrated shared ownership.
-- Raw pointers/references are non-owning views; owning raw pointers and ordinary manual `new/delete` are forbidden.
-- Expected gameplay/domain failures are data, normally expressed with typed results such as `std::expected`, not exceptions.
-- Use strong domain types where mixing primitive values would cause real bugs.
-- No mutable global world state, service locator, mutable singleton, hidden static RNG, or mutable global registry.
-- Prefer concrete types. Do not create an interface/abstract base class before a second real implementation/use case unless an adapter boundary inherently requires one.
-- Avoid metaprogramming/framework abstractions without current payoff.
+- Use heap ownership only when real lifetime requirements demand it.
+- No mutable global world state, service locator, mutable singleton, hidden RNG, or mutable global registry.
+- Expected gameplay/domain failures are data, not control-flow exceptions.
+- Prefer concrete types; do not create interfaces/framework layers for hypothetical use.
+- Avoid metaprogramming and abstractions without current payoff.
 
-### Warnings
-
-Project C++ should use strict target-scoped warnings for GCC/Clang:
+Project code uses target-scoped warnings:
 
 ```text
 -Wall
@@ -57,11 +70,9 @@ Project C++ should use strict target-scoped warnings for GCC/Clang:
 -Wold-style-cast
 ```
 
-`-Werror` may be used in a controlled local verification preset for project code, but third-party warnings must not become project errors.
-
 Do not mass-format unrelated files in a bounded task.
 
-## 3. Build system and C++ dependencies
+## 4. Build and dependency policy
 
 Use:
 
@@ -77,18 +88,11 @@ Rules:
 - use target-based CMake;
 - no project-wide `include_directories()` / `add_definitions()` for project code;
 - compile options are target-scoped;
-- third-party warnings are isolated from project warning policy.
+- the current required stack has **no third-party C++ dependencies**.
 
-Initial allowed C++ dependencies:
+Do not add GoogleTest, nlohmann/json, Emscripten, frontend frameworks, package-manager dependencies, or equivalent libraries merely for convenience. A real need requires a separate bounded decision and local viability proof.
 
-- GoogleTest **1.17.0**, tests only;
-- nlohmann/json **3.12.0**, only at serialization/protocol/persistence/adapter boundaries.
-
-All dependencies must use exact versions/commits plus integrity information in a single dependency lock/bootstrap definition. No floating `main`, `master`, or `latest`. Dependency upgrades are separate bounded tasks.
-
-Domain APIs must not expose `nlohmann::json`; parse/validate JSON at a boundary and convert to typed domain values.
-
-## 4. Determinism
+## 5. Determinism
 
 For the same seed, initial state, content version, protocol version, command sequence and simulation step sequence, authoritative results must be reproducible within the declared deterministic contract.
 
@@ -96,24 +100,22 @@ Authoritative logic must not depend on:
 
 - `std::random_device` or hidden system RNG;
 - wall clock / `system_clock::now()`;
-- frame rate;
+- rendering/frame rate;
 - thread scheduling;
 - nondeterministic iteration order when order changes results;
 - pointer/address ordering;
 - locale-dependent parsing;
 - unspecified filesystem enumeration order.
 
-Use one explicit seeded PRNG state, or explicitly named deterministic streams derived from the world seed by a fixed algorithm. Do not create convenience RNGs inside systems/NPCs.
+Use explicit seeded PRNG state when randomness is introduced. Do not create convenience RNGs inside systems/NPCs.
 
-If authoritative order matters, use stable ordering or explicitly sort keys.
-
-Use integer/fixed/scaled integer values by default for load-bearing accumulative state such as money, quantities, time, thresholds, obligations, rates and spell costs. A floating-point value that controls an authoritative branch requires an explicit design decision and native/WASM determinism coverage.
+Use integer/fixed/scaled integer values by default for load-bearing accumulative state such as money, quantities, time, thresholds, obligations and rates.
 
 Simulation starts single-threaded. Do not add worker/job systems without a measured bottleneck.
 
-## 5. Protocol and WASM boundary
+## 6. Protocol contract
 
-Protocol is a small application contract, not a serialized copy of internal `WorldState`:
+Protocol is a small application contract, not a copy of internal `WorldState`:
 
 ```text
 Input Intent
@@ -124,106 +126,91 @@ Input Intent
 
 Clients send intent, never desired authoritative state. The simulation computes the outcome.
 
-Protocol has an explicit version. A breaking protocol change updates the version and the affected native/WASM/client verification together. Do not pre-build compatibility for versions that do not exist.
+Protocol has an explicit version. A breaking protocol change updates the version and affected tests/client verification together. Do not pre-build compatibility for versions that do not exist.
 
-Browser integration uses the same C++ Simulation Core compiled through **Emscripten SDK**.
+The current native terminal client links to the C++ core through typed protocol structures. A future browser/network adapter must map external data into the same typed protocol rather than bypassing it.
 
-Early WASM boundary default:
+## 7. Reference client
 
-```text
-small C-compatible exported facade
-+ UTF-8 JSON command/result envelopes
-```
+The current required reference client is the native executable `sim_cli`.
 
-Do not expose C++ ABI/object graphs or mutable `WorldState` pointers to JavaScript. TypeScript must not directly mutate C++ memory as the gameplay API. The WASM module must be modularized and avoid global namespace pollution.
+Responsibilities:
 
-Emscripten must be installed from the official SDK, pinned to a concrete tagged release in `tools/toolchain.lock`, checked with `emcc --check`, and never silently fall back to another version. Do not use `latest` in normal scripts.
+- read player input;
+- map keys to protocol intents;
+- render projections and feedback;
+- expose machine-readable debug lines for bounded playtests.
 
-## 6. Reference web client
+It must not directly mutate simulation state.
 
-Initial client stack:
+The first controls are `W/A/S/D`; the current line-oriented terminal client requires Enter after a command in an interactive terminal. `Q` quits.
 
-- TypeScript;
-- HTML;
-- Canvas 2D;
-- DOM for panels/UI;
-- ES modules;
-- Web Audio only when needed.
+A graphical/browser client is optional future presentation work, not a prerequisite for simulation progress.
 
-Do not initially add React, Vue, Angular, Phaser, Pixi, Three.js, Babylon.js, Electron, a state-management framework, or a DI container. Add a framework only after a concrete measured/observed limitation of the current client.
+## 8. Python tooling
 
-TypeScript compiler policy:
+Python is developer tooling/playtest orchestration only, not Simulation Core.
 
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitOverride": true,
-    "useUnknownInCatchVariables": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true
-  }
-}
-```
+Current required tooling uses the Python standard library only.
 
-Pin TypeScript in `package.json` + lockfile before use and invoke the repository-local version, not an arbitrary global `tsc`.
+Rules:
 
-## 7. Python developer tooling
+- use type hints where they improve clarity;
+- use `pathlib` for paths;
+- `subprocess` uses explicit argv, cwd and bounded timeouts;
+- no `shell=True` without a specific justified reason;
+- cleanup through `try/finally` or bounded process lifecycle code;
+- no infinite polling;
+- tooling must not perform unexpected network access.
 
-Python is for developer tooling and playtest orchestration only, never Simulation Core rules.
+## 9. Native playtest anti-hang contract
 
-When Python tooling is bootstrapped:
-
-- create a repo-local `.venv`;
-- pin Playwright and Ruff in a lock/requirements file before routine use;
-- use type hints where they improve tool clarity;
-- prefer `pathlib`;
-- call `subprocess` with explicit argv, cwd, environment and bounded lifecycle/timeouts;
-- do not use `shell=True` without a specific justified reason;
-- use `try/finally` or context managers for cleanup;
-- never implement unbounded polling;
-- centralize browser process lifecycle rather than duplicating it in scenarios.
-
-## 8. Browser playtest anti-hang contract
-
-Gameplay browser runs have one canonical entry point once implemented:
+The only standard automated gameplay entry point is:
 
 ```bash
 python tools/play.py --scenario <name>
 ```
 
-Agents must not bypass it with direct Chromium/Chrome/Playwright launch commands for game playtests.
+Do not bypass it with ad-hoc gameplay subprocess scripts when a canonical scenario exists.
 
-Standard playtest constraints:
+Standard playtest rules:
 
-- non-blocking singleton lock at `.cache/play/chromium.lock`;
-- if occupied: print `PLAYTEST BUSY`, fail, report blocker, stop; do not wait/retry;
-- exactly one Playwright runtime, one browser, one ephemeral BrowserContext and one Page;
-- no persistent context, browser pools, multiple tabs/contexts or parallel browser workers;
-- bounded timeouts; never `timeout=0`;
-- baseline upper bounds: 10s launch, 10s navigation, 5s action/state wait, 45s total scripted run;
-- wait on explicit conditions rather than arbitrary long sleeps;
-- supervisor owns and may terminate only its own worker process group;
-- never `pkill chromium`, `killall chromium`, or clean unrelated browser state;
-- close context before browser, then Playwright runtime, local server and worker;
-- use Playwright-managed Chromium pinned to the Playwright version for routine playtests.
+- non-blocking lock at `.cache/play/terminal.lock`;
+- if busy: print `PLAYTEST BUSY`, return non-zero, and stop;
+- exactly one game subprocess for the scenario;
+- child starts in its own process group/session;
+- hard wall-clock timeout: 10 seconds unless a scenario explicitly justifies less/more;
+- on timeout terminate/kill only the owned process group;
+- no arbitrary long sleeps or retry loops;
+- success retains bounded recent artifacts.
 
-## 9. Testing and local verification
-
-Test pyramid:
+Artifacts:
 
 ```text
-many fast deterministic C++ tests
-some protocol/native scenario tests
-few browser playtest scenarios
-manual/agent exploratory playtest
+.cache/play/<run-id>/
+  run.json
+  stdout.log
+  stderr.log
+  final.txt
+  debug.json
 ```
 
-GoogleTests must be independent, repeatable, deterministic, behavior-named, small and order-independent. Prefer real value objects/state over large mock graphs.
+`final.txt` is the rendered terminal frame. `debug.json` is machine-readable authoritative evidence exposed by the client projection.
 
-Use CTest labels as relevant:
+## 10. Test architecture
+
+Use many small deterministic native tests and few bounded gameplay scenarios.
+
+Current tests are dependency-free C++ executables registered in CTest. They must be:
+
+- independent;
+- repeatable;
+- deterministic;
+- behavior-focused;
+- small;
+- order-independent.
+
+CTest labels:
 
 ```text
 unit
@@ -234,60 +221,87 @@ scenario
 slow
 ```
 
-Browser playtests do not need to be CTest tests.
+Mocks should be rare. Core domain tests should use real values/state.
 
-Use ASan + UBSan in a dedicated local preset for memory/UB-sensitive changes, milestone checks, or suspicious crashes/corruption—not for every UI tweak.
-
-For load-bearing deterministic scenarios, compare native and WASM results when relevant. Divergence is a blocker for that capability.
-
-Verification is risk-based and minimal: build/test only what proves the current bounded change, plus one browser playtest when gameplay is affected.
-
-## 10. Canonical developer commands
-
-Once implemented, the repository must converge on a single thin front door:
+## 11. Canonical local commands
 
 ```bash
+python tools/dev.py doctor
 python tools/dev.py configure
 python tools/dev.py build
 python tools/dev.py test --target sim
 python tools/dev.py test --target protocol
 python tools/dev.py test --target determinism
-python tools/dev.py wasm
 python tools/dev.py check
 python tools/play.py --scenario smoke
 ```
 
-These commands are planned contracts until the files exist. Do not claim they work before verifying them. Do not invent alternate routine invocation paths without a concrete reason.
+`tools/dev.py` is thin orchestration over CMake/CTest. It is not a custom build system.
 
-## 11. No CI
+Do not invent alternate invocation paths without a concrete reason.
 
-This repository intentionally has **no CI** at the current stage.
+## 12. Risk-based verification
 
-- Do not add `.github/workflows/*` or another CI service configuration.
-- Do not make local development depend on CI.
-- Do not report CI status or wait/poll for CI.
-- If CI becomes desirable later, it requires an explicit user request and a separate bounded task.
+Run the smallest sufficient check for the task.
 
-Local deterministic verification and bounded playtests are the source of development evidence for now.
-
-## 12. Development behavior
-
-Gameplay capability work should normally be vertical:
+### C++ rule change
 
 ```text
-RULE -> CONTRACT -> EXPERIENCE -> PROOF
+build affected target
+-> focused native test / CTest label
+-> affected playtest if player-visible
 ```
 
-Do not build a simulation subsystem several fidelity levels ahead of player-facing exposure. Do not create fake client-side simulation while waiting for the core.
+### Terminal presentation/input change
 
-Before adding a subsystem or abstraction, ask:
+```text
+build sim_cli
+-> affected playtest
+-> inspect final.txt/debug.json when load-bearing
+```
 
-1. What can the player see/do because of it?
-2. What observable result is currently wrong without it?
-3. Can an F1 causal model solve it with far less complexity?
-4. Can it be verified in the playable build now?
-5. What are we deliberately not modeling?
-6. Does this introduce a second source of truth?
-7. Does it require speculative abstractions with no current use case?
+### Persistence change
 
-If the answers are weak, do not add it.
+```text
+save/load roundtrip
+-> replay determinism
+-> one player-facing save/load scenario
+```
+
+## 13. No CI
+
+This repository intentionally has no CI. Do not add GitHub Actions, CI configuration, status-gate logic, or CI documentation unless the user explicitly requests CI in a later bounded task.
+
+Development evidence is local build/test/playtest output.
+
+## 14. Bounded agent workflow
+
+Each development pass:
+
+```text
+Task N
+-> inspect relevant code/tests/docs
+-> define IN SCOPE / OUT OF SCOPE internally
+-> minimal coherent change
+-> self-review diff
+-> targeted local tests
+-> if gameplay affected: one bounded canonical playtest
+-> commit/push only when permitted
+-> report VERIFIED / NOT VERIFIED / ASSUMPTIONS / BLOCKERS
+-> STOP
+```
+
+After `продолжай`, audit the previous task before starting the next. If the previous task has a blocker, fix only that task and stop again.
+
+If the same issue survives two meaningful attempts, stop with observed facts and diagnostics instead of random retries.
+
+## 15. No speculative architecture
+
+Before adding an abstraction ask:
+
+1. what current problem does it solve;
+2. is there a second real use case;
+3. can it be simpler;
+4. does it increase the number of states/layers an agent must remember.
+
+Do not add abstractions, subsystems or frameworks whose current payoff is only hypothetical.

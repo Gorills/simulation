@@ -48,14 +48,14 @@ minimal authoritative C++ rule
   -> protocol command/result/projection/events
   -> client affordance/feedback
   -> targeted deterministic proof
-  -> bounded keyboard/mouse playtest
+  -> bounded playable input scenario
 ```
 
 Do not spend a sequence of tasks building simulation internals with no new observable player behavior.
 
 ### One authoritative world
 
-C++23 Simulation Core owns world truth. TypeScript presents projections and sends intents; it does not implement an alternate economy, inventory, money, relationship, status or other gameplay truth.
+C++23 Simulation Core owns world truth. Presentation clients render projections and send intents; they do not implement an alternate economy, inventory, money, relationship, status or other gameplay truth.
 
 ### Fidelity ladder
 
@@ -156,16 +156,15 @@ Every milestone remains playable.
 
 - C++23 native core;
 - CMake/Ninja presets;
-- pinned Emscripten;
-- same core builds native + WASM;
-- strict TypeScript Canvas shell;
-- protocol round-trip;
+- zero-download required development loop;
+- native terminal reference client;
+- explicit protocol intent/result/projection;
 - WASD movement through authoritative command/state;
 - singleton bounded `tools/play.py`;
-- screenshot + read-only debug state;
-- one deterministic native test.
+- terminal frame + machine-readable debug evidence;
+- deterministic native CTest proof.
 
-**Done when:** the game opens in a browser, the player can move, and evidence proves browser movement/state comes from the real C++/WASM core rather than client-only state.
+**Done when:** the agent can run `python tools/dev.py check` and `python tools/play.py --scenario smoke` entirely in its own environment without network access, and the playtest proves player movement/state came from the real C++ Simulation Core rather than presentation-only state.
 
 ### Milestone 1 — Living Need
 
@@ -205,7 +204,7 @@ Enough compositional state for at least two different careers/roles to emerge (f
 
 ### Milestone 7 — Persistence & Repeated Play
 
-Save/load, replay, native/WASM parity for a core scenario, 30–60 minute sessions, and gameplay fixes driven by actual play.
+Save/load, replay determinism for a core scenario, 30–60 minute sessions, and gameplay fixes driven by actual play.
 
 **Done when:** consequences persist coherently and the game supports meaningful continued play.
 
@@ -220,7 +219,7 @@ A gameplay capability is complete only when applicable evidence exists for all o
 - targeted regression test for load-bearing causality;
 - player-facing feedback;
 - actual invocation in the game;
-- screenshot/debug evidence of expected outcome;
+- player-facing frame/transcript plus debug evidence of expected outcome;
 - no unrelated refactor;
 - permanent docs/model updated only if a real contract changed.
 
@@ -255,15 +254,15 @@ The first gameplay development task is the **Playable Spine** and should remain 
 2. C++23 `sim_core`;
 3. explicit seeded deterministic state;
 4. one minimal intent such as movement;
-5. native GoogleTest/CTest proof;
-6. pinned Emscripten bootstrap;
-7. the same C++ core compiled to WASM;
-8. minimal protocol adapter;
-9. strict TypeScript client;
-10. Canvas scene and WASD;
-11. read-only `window.__GAME_DEBUG__`;
-12. singleton/watchdog `tools/play.py`;
-13. real Chromium smoke run and screenshot;
-14. evidence that authoritative state came from C++/WASM rather than client-only state.
+5. dependency-free native CTest proof;
+6. native terminal reference client;
+7. protocol-driven WASD input;
+8. machine-readable debug projection;
+9. singleton/watchdog `tools/play.py`;
+10. real local smoke run through stdin;
+11. final terminal frame + debug artifact;
+12. evidence that authoritative state came from C++ core rather than client-only state.
+
+The mandatory development path must not require network access or downloadable SDKs. Browser/WASM can be added later only as an optional bounded presentation capability after the execution environment proves it can build and run them.
 
 Do not split this into a long simulation/tooling waiting room. After its report, stop before Milestone 1 work.
