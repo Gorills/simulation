@@ -1,40 +1,47 @@
 # Documentation Index
 
-This is the navigation root and catalog for repository knowledge. Agents should start here instead of scanning all Markdown files.
+**Status:** ACTIVE
+
+This is the navigation root and catalog for repository knowledge. Agents start here instead of scanning every Markdown file.
 
 ## Status model
 
 - **ACTIVE** — current canonical source of truth.
-- **TEMPORARY** — intentionally short-lived guidance used during a phase of development; must state when it can be removed.
-- **RETIRED** — no longer active. Retired temporary documents should normally be deleted rather than kept in the active docs tree; Git history preserves them.
+- **TEMPORARY** — intentionally phase-bound guidance; it must state when it can be removed.
+- **RETIRED** — no longer active. Retired temporary documents are normally deleted from the active tree; Git history preserves them.
 
 ## Canonical documents
 
 | Status | Document | Purpose | Update when |
 |---|---|---|---|
 | ACTIVE | [`DOCUMENTATION.md`](DOCUMENTATION.md) | Documentation structure, indexing, lifecycle, and anti-drift rules | Documentation conventions change |
-| ACTIVE | [`engineering/DEVELOPMENT_RULES.md`](engineering/DEVELOPMENT_RULES.md) | Stack, architecture boundaries, determinism, local verification, playtest and agent engineering rules | Engineering/toolchain contract changes |
-| ACTIVE | [`GAME.md`](GAME.md) | What is actually playable now: controls, current scenario, milestone and player-facing gaps | Player-visible gameplay changes |
-| ACTIVE | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Implemented dependency direction, authority, protocol, client and playtest lifecycle | Implemented architecture changes |
-| TEMPORARY | [`specs/PROJECT_SPEC.md`](specs/PROJECT_SPEC.md) | Condensed product/architecture contract and milestone roadmap derived from the original greenfield brief | Product invariants or roadmap change; delete when retirement condition is met |
+| ACTIVE | [`engineering/AGENT_RUNBOOK.md`](engineering/AGENT_RUNBOOK.md) | Exact commands and operational procedure for agents: setup, build, tests, graphical verification, artifacts, teardown, triage | Agent-visible command/lifecycle/tooling behavior changes |
+| ACTIVE | [`engineering/DEVELOPMENT_RULES.md`](engineering/DEVELOPMENT_RULES.md) | Stack, C++/CMake/platform/dependency rules, verification policy, and bounded engineering workflow | Engineering/toolchain contract changes |
+| ACTIVE | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Implemented foundation structure, graphical platform boundary, vendoring, and Linux verification lifecycle | Implemented architecture changes |
+| TEMPORARY | [`specs/PROJECT_SPEC.md`](specs/PROJECT_SPEC.md) | Condensed product contract and roadmap from the original greenfield brief; explicitly separates foundation from future gameplay | Product invariants or roadmap change; delete when retirement condition is met |
+
+## Current stage
+
+The repository contains a verified **development/graphics foundation** and intentionally contains no gameplay implementation.
+
+Do not create `GAME.md` until the first real player-visible gameplay path exists. When it exists, `GAME.md` becomes the canonical description of what a player can actually do and must be added to the table above in the same task.
 
 ## Future canonical docs
 
-Create these only when the corresponding implementation exists; do not create placeholders:
+Create these only when corresponding implementation exists; do not create placeholders:
 
-- `MODELING_POLICY.md` — accepted historical baseline, magic deviations, uncertainty, fidelity rules, anti-overmodeling decisions.
-- `models/<mechanic>.md` — only for serious mechanics whose causal model needs an explicit contract.
-- `decisions/<decision>.md` — only for expensive or hard-to-reverse architecture decisions.
-
-When one of these becomes real, add it to the canonical table above in the same task.
+- `GAME.md` — actual playable behavior, controls, player-visible state and known gaps.
+- `MODELING_POLICY.md` — accepted historical baseline, magic deviations, uncertainty/fidelity rules and anti-overmodeling policy once those rules become operational.
+- `models/<mechanic>.md` — serious mechanics whose causal model needs an explicit durable contract.
+- `decisions/<decision>.md` — expensive or hard-to-reverse architecture decisions whose rationale must be retained.
 
 ## Navigation rule
 
-Do not add a new documentation file without deciding which of these is true:
+Before adding a documentation file, decide which is true:
 
 1. it is a new canonical source of truth and must be indexed here;
 2. it is subordinate detail linked from an indexed canonical document;
 3. it is temporary and has an explicit retirement condition;
 4. it should not exist.
 
-For the full policy, see [`DOCUMENTATION.md`](DOCUMENTATION.md).
+For full policy, see [`DOCUMENTATION.md`](DOCUMENTATION.md).
