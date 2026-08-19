@@ -54,7 +54,7 @@ Native rule tests must not require Godot. Core tests use real value objects/stat
 
 The first `sim_tests` cases prove equal initial seed/input produces equal movement projection and invalid diagonal movement does not mutate the world.
 
-CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol`.
+CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces repository-level architecture policy.
 
 Recommended CTest labels:
 
@@ -194,21 +194,13 @@ save/load round-trip
 
 Follow [`engineering/VERSIONS.md`](engineering/VERSIONS.md): build native code, build the adapter, load it in the pinned Godot engine and run the smallest playable scenario.
 
-## CI
+## Local-only verification policy
 
-CI is an independent backstop, not the first feedback loop or a workflow state machine.
+This project intentionally has **no CI**. Verification and milestone acceptance are performed on the developer machine with the repository-owned bootstrap, CMake/CTest presets, and bounded Godot playtests.
 
-The first useful CI should remain bounded:
+Do not add GitHub Actions, GitLab CI, CircleCI, Jenkins, Buildkite, Azure Pipelines, Travis, AppVeyor, or another project CI service/configuration. Do not create committed workflow files as a substitute for running the local gates.
 
-```text
-checkout
--> acquire pinned toolchain/dependencies
--> configure
--> native build
--> fast unit/protocol/determinism tests
-```
-
-Do not add a large matrix or full graphical playtest farm before there is measured value.
+A local failure must be fixed locally; it cannot be deferred with “CI will catch it.” Empty GitHub status/check contexts are expected and are not missing project evidence. The applicable local test/build/playtest artifacts are the evidence.
 
 ## Definition of Done for a gameplay capability
 

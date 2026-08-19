@@ -18,6 +18,7 @@ Current executable behavior wins over prose. Accepted ADRs record intentional ar
 - `src/sim` and `src/protocol` remain Godot-free.
 - The GDExtension adapter is the only Godot ↔ protocol runtime seam.
 - Gameplay work is a small playable vertical capability: rule → contract → experience → proof.
+- Verification is local-only. Do not add project CI services, committed CI workflow files, or CI configuration; use the repository bootstrap, CMake/CTest presets, and bounded Godot playtests on the developer machine.
 - Do not restore the deleted Fenster / TypeScript / WASM / Playwright architecture.
 - Do not add speculative frameworks, abstractions, or subsystems without a current demonstrated need.
 - Do not claim verification that was not actually run.
