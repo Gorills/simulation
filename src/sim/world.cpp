@@ -3,8 +3,35 @@
 #include <cassert>
 #include <expected>
 #include <utility>
+#include <vector>
 
 namespace worldsim::sim {
+namespace {
+
+struct PendingGroundedMove final {
+    std::size_t actor_index{};
+    GroundedStepState next{};
+};
+
+[[nodiscard]] GroundedLocomotionTickError map_step_error(const GroundedStepError error) noexcept {
+    switch (error) {
+    case GroundedStepError::invalid_environment:
+    case GroundedStepError::invalid_body:
+    case GroundedStepError::invalid_config:
+        return GroundedLocomotionTickError::invalid_context;
+    case GroundedStepError::invalid_state:
+        return GroundedLocomotionTickError::invalid_continuation_state;
+    case GroundedStepError::invalid_intent:
+        return GroundedLocomotionTickError::invalid_intent;
+    case GroundedStepError::no_ground_support:
+        return GroundedLocomotionTickError::no_ground_support;
+    case GroundedStepError::arithmetic_overflow:
+        return GroundedLocomotionTickError::arithmetic_overflow;
+    }
+    return GroundedLocomotionTickError::arithmetic_overflow;
+}
+
+} // namespace
 
 World::World(const WorldSeed seed) noexcept : seed_(seed) {}
 
@@ -71,6 +98,80 @@ std::expected<void, WorldError> World::apply_bootstrap_step(
     return {};
 }
 
+std::expected<void, GroundedLocomotionTickError> World::advance_grounded_locomotion_tick(
+    const GroundedLocomotionContext &context,
+    const std::span<const ActorGroundedMoveIntent> intents
+) {
+    if (!context.is_valid()) {
+        return std::unexpected(GroundedLocomotionTickError::invalid_context);
+    }
+
+    std::vector<PendingGroundedMove> pending;
+    pending.reserve(intents.size());
+
+    for (const auto &intent : intents) {
+        if (!intent.actor.is_valid()) {
+            return std::unexpected(GroundedLocomotionTickError::invalid_entity_id);
+        }
+        if (!intent.move.is_valid()) {
+            return std::unexpected(GroundedLocomotionTickError::invalid_intent);
+        }
+
+        const auto index = actor_index(intent.actor);
+        if (!index.has_value()) {
+            return std::unexpected(GroundedLocomotionTickError::unknown_entity);
+        }
+        for (const auto &already_pending : pending) {
+            if (already_pending.actor_index == *index) {
+                return std::unexpected(GroundedLocomotionTickError::duplicate_actor_intent);
+            }
+        }
+
+        const auto &actor = actors_[*index];
+        if (!actor.spatial.has_value()) {
+            return std::unexpected(GroundedLocomotionTickError::missing_spatial_state);
+        }
+        if (!actor.grounded_locomotion.is_valid()) {
+            return std::unexpected(GroundedLocomotionTickError::invalid_continuation_state);
+        }
+        if (!actor.grounded_locomotion.is_compatible(context.config.ticks_per_second)) {
+            return std::unexpected(GroundedLocomotionTickError::incompatible_tick_rate);
+        }
+
+        const auto step = step_grounded(
+            context.environment,
+            context.body,
+            context.config,
+            GroundedStepState{
+                .spatial = *actor.spatial,
+                .remainder = actor.grounded_locomotion.remainder,
+            },
+            intent.move
+        );
+        if (!step.has_value()) {
+            return std::unexpected(map_step_error(step.error()));
+        }
+
+        pending.push_back(PendingGroundedMove{
+            .actor_index = *index,
+            .next = *step,
+        });
+    }
+
+    for (const auto &update : pending) {
+        auto &actor = actors_[update.actor_index];
+        actor.spatial = update.next.spatial;
+        actor.grounded_locomotion = GroundedLocomotionContinuation{
+            .remainder = update.next.remainder,
+            .ticks_per_second = context.config.ticks_per_second,
+        };
+    }
+
+    ++tick_.value;
+    ++revision_.value;
+    return {};
+}
+
 void World::advance_one_tick() noexcept {
     ++tick_.value;
     ++revision_.value;
@@ -103,6 +204,12 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         }
         if (actor.spatial.has_value() && !actor.spatial->is_valid()) {
             return std::unexpected(WorldSnapshotError::invalid_spatial_state);
+        }
+        if (
+            !actor.grounded_locomotion.is_valid() ||
+            (!actor.spatial.has_value() && !actor.grounded_locomotion.is_pristine())
+        ) {
+            return std::unexpected(WorldSnapshotError::invalid_grounded_locomotion_state);
         }
 
         const bool inserted = restored.actor_index_by_id_

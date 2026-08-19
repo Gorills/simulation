@@ -1,5 +1,6 @@
 #include "protocol/simulation.hpp"
 
+#include <array>
 #include <cassert>
 #include <expected>
 #include <optional>
@@ -7,6 +8,8 @@
 
 namespace worldsim::protocol {
 namespace {
+
+static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
 
 [[nodiscard]] std::optional<sim::CardinalDirection> cardinal_direction(
     const BootstrapMoveIntent &intent
@@ -26,6 +29,19 @@ namespace {
     return std::nullopt;
 }
 
+[[nodiscard]] bool is_valid_move_intent(const ControlledActorMoveIntent &intent) noexcept {
+    if (
+        intent.x < -kPlanarMoveIntentScale || intent.x > kPlanarMoveIntentScale ||
+        intent.z < -kPlanarMoveIntentScale || intent.z > kPlanarMoveIntentScale
+    ) {
+        return false;
+    }
+    const auto x = static_cast<std::int64_t>(intent.x);
+    const auto z = static_cast<std::int64_t>(intent.z);
+    const auto scale = static_cast<std::int64_t>(kPlanarMoveIntentScale);
+    return x * x + z * z <= scale * scale;
+}
+
 [[nodiscard]] sim::WorldSeed checked_world_seed(const ProtocolInteger seed) {
     if (seed < 0) {
         throw std::invalid_argument("protocol seed must be non-negative");
@@ -41,9 +57,32 @@ namespace {
     return *converted;
 }
 
+[[nodiscard]] ControlledActorMovementError map_world_locomotion_error(
+    const sim::GroundedLocomotionTickError error
+) noexcept {
+    switch (error) {
+    case sim::GroundedLocomotionTickError::unknown_entity:
+    case sim::GroundedLocomotionTickError::invalid_entity_id:
+        return ControlledActorMovementError::controlled_actor_missing;
+    case sim::GroundedLocomotionTickError::missing_spatial_state:
+        return ControlledActorMovementError::controlled_actor_spatial_state_missing;
+    case sim::GroundedLocomotionTickError::invalid_context:
+    case sim::GroundedLocomotionTickError::duplicate_actor_intent:
+    case sim::GroundedLocomotionTickError::invalid_continuation_state:
+    case sim::GroundedLocomotionTickError::incompatible_tick_rate:
+    case sim::GroundedLocomotionTickError::invalid_intent:
+    case sim::GroundedLocomotionTickError::no_ground_support:
+    case sim::GroundedLocomotionTickError::arithmetic_overflow:
+        return ControlledActorMovementError::world_rejected;
+    }
+    return ControlledActorMovementError::world_rejected;
+}
+
 } // namespace
 
-Simulation::Simulation(const ProtocolInteger seed) : world_(checked_world_seed(seed)) {
+Simulation::Simulation(const ProtocolInteger seed)
+    : world_(checked_world_seed(seed)),
+      locomotion_context_(sim::make_flat_locomotion_acceptance_context()) {
     const auto spawned = world_.spawn_actor(
         controlled_actor_,
         sim::ActorSpawnState{
@@ -73,6 +112,44 @@ BootstrapMoveOutcome Simulation::bootstrap_move(const BootstrapMoveIntent &inten
     }
 
     return BootstrapMoveResult{.actor = bootstrap_controlled_actor_projection()};
+}
+
+ControlledActorMoveIntentOutcome Simulation::submit_controlled_actor_move_intent(
+    const ControlledActorMoveIntent &intent
+) noexcept {
+    if (!is_valid_move_intent(intent)) {
+        return std::unexpected(ControlledActorMovementError::invalid_intent);
+    }
+    controlled_move_intent_ = intent;
+    return {};
+}
+
+ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
+    if (
+        world_.tick().value >= kMaxProtocolInteger ||
+        world_.revision().value >= kMaxProtocolInteger
+    ) {
+        return std::unexpected(ControlledActorMovementError::protocol_integer_exhausted);
+    }
+
+    const std::array intents{
+        sim::ActorGroundedMoveIntent{
+            .actor = controlled_actor_,
+            .move = sim::PlanarMoveIntent{
+                .x = controlled_move_intent_.x,
+                .z = controlled_move_intent_.z,
+            },
+        },
+    };
+    const auto advanced = world_.advance_grounded_locomotion_tick(
+        locomotion_context_,
+        intents
+    );
+    if (!advanced.has_value()) {
+        return std::unexpected(map_world_locomotion_error(advanced.error()));
+    }
+
+    return controlled_actor_spatial_projection();
 }
 
 BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() const {

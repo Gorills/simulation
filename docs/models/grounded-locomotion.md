@@ -30,24 +30,30 @@ Implemented in the Godot-free native transition:
 - fixed-step gravity/falling with exact integer remainder carry;
 - stable landing on lower walkable support without tunneling;
 - zero-input rest on flat and walkable sloped support without downhill creep;
-- deterministic replay for the implemented fixtures.
+- deterministic replay for the implemented fixtures;
+- one actor-keyed `World` locomotion batch per authoritative tick, with atomic validation/mutation and one `SimulationTick` / `WorldRevision` advance regardless of actor count;
+- persisted per-actor fixed-step continuation required for deterministic subsequent movement;
+- semantic controlled-actor protocol intent whose submission does not itself mutate world state, followed by a separate authoritative locomotion tick through the same `World` transition.
 
 Still deliberately pending:
 
-- `World` / protocol movement wiring;
-- ordered authoritative movement samples and Godot reconciliation;
-- prediction/navigation and the first content location.
+- ordered authoritative movement samples;
+- GDExtension/Godot movement wiring, buffering and reconciliation;
+- prediction/navigation and the first content location;
+- an actual NPC decision source feeding the already actor-generic `World` movement batch.
 
 ## Authoritative invariants
 
 1. **Simulation decides movement.** Human or NPC code supplies intent; the shared solver produces authoritative spatial state.
 2. **No client-authored outcome.** There is no production `SetPosition`, `SetVelocity`, grounded flag or Godot collision result input.
-3. **Player/NPC parity.** Equivalent actors use the same transition; control source is not a world-law distinction.
+3. **Player/NPC parity.** Equivalent actors use the same transition; control source is not a world-law distinction. `World` consumes actor-keyed intent batches rather than a player-special movement method.
 4. **Simulation-owned environment.** Godot geometry can visualize a fixture but is not authoritative collision input.
 5. **Determinism.** Same initial state + environment + ordered intent + fixed configuration yields the same result.
 6. **Continuous movement preserves `SpatialEpoch`.** Walls, slopes, steps and falls are not teleports.
 7. **Selective exact fidelity remains valid.** Only actors needing exact local spatial causality require this state.
 8. **Performance is correctness.** The current vector scans are acceptable only for the tiny acceptance fixture. They are not the production spatial index for a large world; production lookup must be bounded by actual local/causal geometry before this transition is used at scale.
+9. **Intent submission is not time advancement.** Protocol/controller state may replace a desired planar intent without mutating `World`; the fixed locomotion tick is the authoritative mutation boundary.
+10. **A world tick is not an actor call count.** One movement batch may contain multiple actor intents and advances tick/revision once after the entire batch succeeds.
 
 ## Current native representation
 
@@ -61,6 +67,8 @@ Still deliberately pending:
 This is intentionally the smallest representation required by the acceptance arena. Finite arbitrary wall meshes, triangle-mesh collision, terrain acceleration structures and general rigid-body physics are not selected yet.
 
 Acceptance fixtures should avoid ambiguous overlapping support patches except deliberate equal-height seams. The step fixture uses adjacent, non-overlapping flat patches with an integer-contiguous boundary so the support transition has one deterministic owner on each side. A real-location collision representation must define lookup/overlap semantics explicitly instead of depending on vector order.
+
+`GroundedLocomotionContext` packages the neutral environment, upright body and step configuration supplied to the `World` movement operation. The current protocol integration uses `make_flat_locomotion_acceptance_context()` only as a temporary Stage C2 integration fixture. It is Simulation-owned neutral data, not the authoritative geometry of the live Godot scene and not a production content-location contract.
 
 ### Body / timing / movement baseline
 
@@ -91,11 +99,15 @@ Acceleration/deceleration, sprint, facing/turn response, grounding snap, jump se
 
 While grounded, current intent directly defines the existing constant-speed planar fixture. When support is lost, the fall slice preserves takeoff planar velocity and deliberately does not invent airborne steering. A later air-control rule, if wanted, must be explicit rather than silently reusing grounded intent semantics.
 
-### Integer integration
+The application protocol exposes the same semantic shape as `ControlledActorMoveIntent`. Valid submission only replaces session/controller intent. It cannot choose entity identity, position, velocity, support state or final displacement. `Simulation::advance_locomotion_tick()` binds that controller intent to the controlled actor and invokes the actor-generic `World` batch transition.
+
+### Integer integration and continuation
 
 Authoritative positions and velocities remain integer millimeters / millimeters-per-second. Per-axis position remainders carry fractional millimeters between ticks rather than truncating them every step.
 
 Airborne gravity additionally carries a separate vertical-velocity remainder so dividing acceleration by the 60 Hz tick rate does not lose fractional millimeters-per-second each tick. Falling uses deterministic semi-implicit fixed-step integration: gravity updates vertical velocity first, then that velocity advances Y for the tick.
+
+Those remainders affect the next authoritative result, so once locomotion is routed through `World` they are retained in per-actor `GroundedLocomotionContinuation` together with the fixed tick-rate provenance. They are not projection data and not a disposable runtime cache. `WorldSnapshot` schema v2 captures and restores them; changing the configured tick rate while non-pristine continuation exists is rejected rather than silently changing arithmetic semantics.
 
 Slope support height is derived deterministically from the patch endpoints and planar coordinate. Walkability uses integer rise/run comparison; authoritative code does not call floating-point trigonometry.
 
@@ -170,9 +182,19 @@ While airborne, gravity integrates vertical velocity using the configured positi
 
 This slice deliberately does not add jump impulse, coyote time, air acceleration/steering, floor snap, fall damage or steep-surface sliding.
 
+### World batch and protocol transition
+
+`World::advance_grounded_locomotion_tick()` accepts a batch of actor-keyed `PlanarMoveIntent` values plus one Simulation-owned locomotion context.
+
+Before mutating any actor it validates the full batch and computes every candidate transition. Invalid entity identity, missing exact spatial state, duplicate actor intent, incompatible continuation state, invalid intent, unsupported state or solver failure reject the operation without partial actor mutation or time advancement. Once all candidates succeed, their spatial/continuation states are committed and the world advances `SimulationTick` and `WorldRevision` exactly once.
+
+This makes actor count independent from time advancement and gives human-controlled and NPC actors the same world-law seam. Current tests exercise two actors through one batch; wiring a real NPC decision source into that seam remains a later acceptance item.
+
+At the protocol boundary, `submit_controlled_actor_move_intent()` validates and stores only desired planar intent. It does not advance time or mutate `SpatialState`. `advance_locomotion_tick()` is the authoritative tick boundary: it binds the stored controller intent to the controlled `EntityId`, invokes the shared World batch and returns a fresh controlled spatial projection. There is still no `SetPosition`, `SetVelocity`, `SetTransform` or final-displacement command.
+
 ### Deterministic replay
 
-Native tests require exact equality for repeated flat/wall, slope, step and ledge/fall/landing intent streams from identical state/configuration/environment.
+Native tests require exact equality for repeated flat/wall, slope, step and ledge/fall/landing intent streams from identical state/configuration/environment. World/protocol tests additionally prove exact repeated integration, atomic multi-actor batches and deterministic continuation across snapshot/restore.
 
 ## Neutral acceptance arena
 
@@ -201,6 +223,8 @@ Rules:
 - tests assert outcomes rather than duplicating solver classification logic;
 - do not generalize the tiny fixture representation into arbitrary-world collision before a real location requires it.
 
+The protocol's temporary flat acceptance context is a Stage C2 integration fixture only. It demonstrates the command-to-World route; it is not evidence that the current visible Godot floor has become Simulation content.
+
 ## Parameters deliberately unresolved
 
 Still require reviewed choices backed by the next real mechanic/playtest:
@@ -225,7 +249,7 @@ Once authoritative continuous samples are exposed, Godot must:
 - never decide authoritative wall/slope/step/landing results;
 - remove duplicate local world-law movement as authoritative migration completes.
 
-The current local `ThirdPersonPlayer` remains a temporary presentation/feel shell.
+The current local `ThirdPersonPlayer` remains a temporary presentation/feel shell. The new protocol movement API is intentionally not exposed through GDExtension in this bounded slice; the next movement task must first define ordered authoritative samples rather than turning a polling projection into an accidental continuous-presentation contract.
 
 ## Performance contract
 
@@ -260,9 +284,9 @@ The 50° slope migration baseline and the numerical 0.3 m reference used to sele
 
 ## Next bounded task
 
-Expose this stable shared movement transition through `World` and a semantic controlled-actor movement protocol command/result. Do not expose a final-position setter. Ordered authoritative movement samples and Godot reconciliation remain the following slice after the World/protocol transition is proven.
+Produce **ordered authoritative movement samples** from the now-shared World/protocol movement transition. Only after sample ordering/continuity is explicit should GDExtension/Godot consume the stream and add buffering/interpolation/reconciliation.
 
-Do not build the first visual content location before the required native collision semantics are proven.
+Do not expose a final-position setter, and do not turn the current read projection into an implicit frame-sampling contract.
 
 ## Falsifiers
 

@@ -96,6 +96,20 @@ Simulation
 
 `ObservedWorldProjection` does not contain bootstrap grid coordinates or production spatial state. `ControlledActorSpatialProjection` is purpose-built for the exact-spatial controlled presentation.
 
+The native application movement path is now also production-shaped:
+
+```text
+ControlledActorMoveIntent(x, z)
+  -> protocol validation + controller/session intent state
+  -> Simulation::advance_locomotion_tick()
+  -> World::advance_grounded_locomotion_tick(actor-keyed batch)
+  -> shared Godot-free grounded/fall solver
+  -> authoritative SpatialState + fixed-step continuation
+  -> ControlledActorSpatialProjection
+```
+
+Submitting controller intent does not itself advance world time or spatial state. One successful actor-keyed World batch advances `SimulationTick` and `WorldRevision` once regardless of actor count. The GDExtension/Godot continuous movement seam is still deliberately pending ordered authoritative samples.
+
 ## Ownership by layer
 
 | Layer | Owns | Must not own |
@@ -126,6 +140,8 @@ NPC decision -------------------------------+-> same authoritative action/rule p
 
 Human control is a relationship outside the actor's world identity. It must not grant alternate economy, inventory, relationship, institution, ownership, law, combat or movement rules.
 
+For locomotion, the shared Core seam is now concrete: `World::advance_grounded_locomotion_tick()` consumes an actor-keyed batch. Tests prove two actors can move in one world tick and that invalid batches do not partially mutate actors. The protocol binds only the human-controlled actor to that generic operation. A real NPC decision source feeding the same batch remains a later integration proof, not a separate movement law.
+
 If an NPC can open a shop, buy an item, attack a traveler, join an institution, acquire property or move through a place, a human-controlled actor uses the same world capability when the same prerequisites hold.
 
 ## Domain API quality bar
@@ -142,15 +158,17 @@ Durable distinctions now include:
 - `SpatialVelocity` — signed 64-bit millimeters per second;
 - `SpatialEpoch` — continuity identity for interpolation/snap semantics;
 - `SpatialState` — optional exact spatial state when current causal fidelity requires it;
+- `PlanarMoveIntent` — bounded semantic X/Z movement intent, never displacement or final state;
+- `GroundedLocomotionContinuation` — hidden per-actor fixed-step remainder/tick-rate state that affects the next authoritative movement result and therefore belongs to snapshot truth;
 - bootstrap grid/cardinal types — explicitly temporary transport probes.
 
-A command changing an actor does not automatically mean time advanced. A world revision changing does not automatically mean spatial position changed. A spatial epoch changing means presentation must treat the relocation as discontinuous.
+A command changing an actor does not automatically mean time advanced. A world revision changing does not automatically mean spatial position changed. A spatial epoch changing means presentation must treat the relocation as discontinuous. Controller intent submission is specifically non-mutating; the fixed locomotion tick is the world-time mutation boundary.
 
 Do not introduce a strong type merely to wrap every scalar. Add one when it prevents mixing different meanings, removes invalid states or makes an authoritative contract materially clearer.
 
 ## Authoritative spatial contract
 
-The exact coordinate representation is now selected; the collision/navigation solver is not.
+The exact coordinate representation and the first bounded grounded locomotion/collision solver are selected. The **production content-location geometry/query representation** is not.
 
 Simulation exact 3D coordinates use:
 
@@ -173,9 +191,9 @@ The controlled actor in the active 3D session has exact spatial state. A distant
 
 `SpatialEpoch` changes on teleport/respawn/discontinuous transfer. Samples across different epochs are not interpolated as ordinary motion.
 
-There is deliberately no general `SetPosition`/`SetVelocity` world API. Future movement writes are semantic intents whose resulting position/velocity are decided by the Simulation solver.
+There is deliberately no general `SetPosition`/`SetVelocity` world API. Implemented continuous movement writes are semantic actor intents whose resulting position/velocity are decided by the Simulation solver. The current neutral `GroundPatch`/`VerticalBarrier` vectors and flat protocol acceptance context prove the transition; they are not yet a production large-world collision/index format or a declaration that Godot scene colliders are authoritative.
 
-Detailed causal contract: [`models/spatial-location.md`](models/spatial-location.md).
+Detailed causal contract: [`models/spatial-location.md`](models/spatial-location.md) and [`models/grounded-locomotion.md`](models/grounded-locomotion.md).
 
 ## Protocol boundary: writes vs reads
 
@@ -197,7 +215,9 @@ The protocol is a small application contract, not an exported `WorldState`. Inte
 
 The shared application protocol version lives in `src/protocol/version.hpp`. Breaking boundary changes update that version and affected native/client evidence together.
 
-For movement, future good input is a semantic desired movement intent. `SetNpcPosition`, `SetPlayerTransform` or client-authored final velocity are invalid world APIs.
+Movement now uses `ControlledActorMoveIntent{x,z}` at the native application boundary. `submit_controlled_actor_move_intent()` validates/replaces controller state but does not mutate `World`; `advance_locomotion_tick()` applies the stored intent through the shared actor-generic World batch. `SetNpcPosition`, `SetPlayerTransform`, client-authored velocity and final-displacement setters remain invalid world APIs.
+
+The current movement API is not yet exposed by GDExtension. Before continuous Godot consumption, the protocol must define ordered authoritative movement samples so polling a read projection does not accidentally become an underspecified frame-stream contract.
 
 ## Purpose-built projections
 
@@ -287,6 +307,8 @@ bootstrap_debug_projection()            # Milestone 0 diagnostics only
 
 Spatial unit conversion belongs here: integer millimeters in protocol become meter-space Godot `Vector3` values. Collision or movement decisions do not.
 
+The native semantic locomotion API intentionally stops at `src/protocol` in the current Stage C2 slice. The next bridge task must establish ordered authoritative movement samples before adding GDExtension movement methods or continuous Godot consumption.
+
 If a systemic gameplay rule is implemented inside a `GDCLASS`, GDScript node, UI script or serialization helper, the boundary is violated.
 
 ## Godot client architecture
@@ -316,17 +338,18 @@ SimFacade.controlled_actor_spatial_projection()
 
 The current `ThirdPersonPlayer.move_and_slide()` result is still local presentation/prototype movement. It must not be copied back into Simulation as authoritative location.
 
-The next movement stage is:
+The native path now exists through semantic controlled intent -> actor-generic World batch -> deterministic Simulation movement/collision -> authoritative `SpatialState`. The next movement stage is therefore:
 
 ```text
-semantic player/NPC movement intent
-  -> deterministic Simulation movement/collision solver
-  -> ordered ControlledActor/NPC spatial samples
+shared World/protocol locomotion tick
+  -> ordered EntityId-keyed authoritative movement samples
+  -> GDExtension translation
   -> Godot sample buffer
-  -> interpolation / optional prediction + reconciliation
+  -> interpolation / reconciliation
+  -> optional prediction only if measured latency requires it
 ```
 
-The exact collision/navigation representation is intentionally **not selected yet**. It must be chosen from the first real terrain/reachability requirement and tested in Godot-free native code.
+The production collision/navigation representation is intentionally **not selected yet**. It must be chosen from the first real terrain/reachability requirement and tested in Godot-free native code; the current neutral acceptance vectors are not a large-world geometry architecture.
 
 Godot's floating-point world precision is also presentation-side. Simulation's int64 millimeter coordinates do not require enabling Godot large-world coordinates now; future rebasing/double precision can be added if measured world scale requires it.
 
@@ -398,6 +421,9 @@ Current executable structure establishes load-bearing boundaries:
 - protocol/session owns the current human-control binding;
 - `SimulationTick`, `WorldRevision` and `SpatialEpoch` have separate meanings;
 - exact `SpatialState` is optional and Godot-free;
+- actor-generic `World::advance_grounded_locomotion_tick()` applies multiple actor intents atomically and advances time/revision once per batch;
+- fixed-step locomotion continuation that affects subsequent state is captured by `WorldSnapshot` schema v2 and deterministic restore continuation tests;
+- protocol movement tests prove semantic intent submission does not mutate world state and fixed locomotion ticks produce authoritative projections through the shared World path;
 - `ObservedWorldProjection` and `ControlledActorSpatialProjection` are separate purpose-built reads;
 - native tests prove exact-spatial and non-exact actors can coexist and invalid spatial epoch cannot mutate the world;
 - protocol tests prove bootstrap grid movement changes revision but not production spatial position;
