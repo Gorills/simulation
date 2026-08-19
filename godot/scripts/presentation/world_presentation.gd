@@ -11,6 +11,9 @@ var _controlled_spatial_initialized: bool = false
 var _controlled_spatial_epoch: int = 0
 var _controlled_spatial_tick: int = -1
 var _controlled_spatial_revision: int = -1
+var _controlled_authoritative_position: Vector3 = Vector3.ZERO
+var _controlled_authoritative_velocity: Vector3 = Vector3.ZERO
+var _movement_batches_applied: int = 0
 
 
 func apply_observed_world_projection(
@@ -88,9 +91,8 @@ func apply_observed_world_projection(
     return true
 
 
-# Initial placement only. Continuous authoritative movement must buffer ordered
-# Simulation samples and interpolate/reconcile them; repeatedly calling this
-# function would turn every update into a teleport.
+# Initial placement only. Continuous authoritative movement arrives through
+# apply_authoritative_movement_sample_batch().
 func initialize_controlled_spatial_presentation(
     projection: Dictionary,
     controlled_binding: EntityBinding
@@ -134,13 +136,143 @@ func initialize_controlled_spatial_presentation(
         return false
 
     var position: Vector3 = position_value
+    var velocity: Vector3 = velocity_value
     presentation_root.global_position = position
+    if presentation_root is CharacterBody3D:
+        (presentation_root as CharacterBody3D).velocity = velocity
     presentation_root.reset_physics_interpolation()
 
     _controlled_spatial_initialized = true
     _controlled_spatial_epoch = spatial_epoch
     _controlled_spatial_tick = tick
     _controlled_spatial_revision = revision
+    _controlled_authoritative_position = position
+    _controlled_authoritative_velocity = velocity
+    return true
+
+
+# Applies one fixed authoritative movement batch during a Godot physics tick.
+# Every sample and bound presentation root is validated before the first transform
+# write. Godot physics interpolation then smooths same-epoch transforms for render.
+func apply_authoritative_movement_sample_batch(batch: Dictionary) -> bool:
+    if not _controlled_spatial_initialized:
+        push_error("movement samples require initialized controlled spatial presentation")
+        return false
+
+    var tick := _read_nonnegative_int(batch, "tick")
+    var revision := _read_nonnegative_int(batch, "revision")
+    var protocol_version := _read_positive_int(batch, "protocol_version")
+    if tick < 0 or revision < 0 or protocol_version <= 0:
+        push_error("WorldPresentation received an invalid movement batch header")
+        return false
+    if protocol_version != _protocol_version:
+        push_error("movement batch protocol version does not match observed world")
+        return false
+    if tick != _controlled_spatial_tick + 1:
+        push_warning(
+            "WorldPresentation rejected non-consecutive movement tick %d after %d"
+            % [tick, _controlled_spatial_tick]
+        )
+        return false
+    if revision <= _controlled_spatial_revision or revision <= _last_revision:
+        push_warning(
+            "WorldPresentation rejected stale movement revision %d after %d"
+            % [revision, _last_revision]
+        )
+        return false
+
+    var samples_value = batch.get("samples", null)
+    if typeof(samples_value) != TYPE_ARRAY:
+        push_error("movement batch requires a samples array")
+        return false
+
+    var samples: Array = samples_value
+    if samples.is_empty():
+        push_error("movement batch must contain the controlled actor sample")
+        return false
+
+    var validated_samples: Array = []
+    var previous_entity_id := 0
+    var controlled_sample_found := false
+    for sample_value in samples:
+        if typeof(sample_value) != TYPE_DICTIONARY:
+            push_error("movement sample must be a Dictionary")
+            return false
+        var sample: Dictionary = sample_value
+        var entity_id := _read_positive_int(sample, "entity_id")
+        var spatial_epoch := _read_positive_int(sample, "spatial_epoch")
+        var position_value = sample.get("position_m", null)
+        var velocity_value = sample.get("velocity_mps", null)
+        if (
+            entity_id <= previous_entity_id
+            or spatial_epoch <= 0
+            or typeof(position_value) != TYPE_VECTOR3
+            or typeof(velocity_value) != TYPE_VECTOR3
+        ):
+            push_error("movement samples must be strictly EntityId-ordered and spatially valid")
+            return false
+        if not _observed_entity_ids.has(entity_id):
+            push_error("movement sample references an entity outside the observed world")
+            return false
+
+        var presentation_root: Node3D = null
+        var binding_value = _bindings.get(entity_id, null)
+        if binding_value != null:
+            var binding := binding_value as EntityBinding
+            if binding == null:
+                push_error("movement sample binding is not an EntityBinding")
+                return false
+            presentation_root = binding.get_parent() as Node3D
+            if presentation_root == null or not is_ancestor_of(presentation_root):
+                push_error("movement sample presentation root must live under WorldPresentation")
+                return false
+        if entity_id == _controlled_entity_id and presentation_root == null:
+            push_error("controlled movement sample has no bound presentation root")
+            return false
+
+        var position: Vector3 = position_value
+        var velocity: Vector3 = velocity_value
+        validated_samples.append({
+            "entity_id": entity_id,
+            "position_m": position,
+            "velocity_mps": velocity,
+            "spatial_epoch": spatial_epoch,
+            "presentation_root": presentation_root,
+        })
+        if entity_id == _controlled_entity_id:
+            controlled_sample_found = true
+        previous_entity_id = entity_id
+
+    if not controlled_sample_found:
+        push_error("movement batch is missing the controlled actor sample")
+        return false
+
+    for sample_value in validated_samples:
+        var sample: Dictionary = sample_value
+        var entity_id: int = sample["entity_id"]
+        var presentation_root := sample["presentation_root"] as Node3D
+        if presentation_root == null:
+            continue
+
+        var position: Vector3 = sample["position_m"]
+        var velocity: Vector3 = sample["velocity_mps"]
+        var spatial_epoch: int = sample["spatial_epoch"]
+        presentation_root.global_position = position
+        if presentation_root is CharacterBody3D:
+            (presentation_root as CharacterBody3D).velocity = velocity
+
+        if entity_id == _controlled_entity_id:
+            if spatial_epoch != _controlled_spatial_epoch:
+                presentation_root.reset_physics_interpolation()
+            _controlled_spatial_epoch = spatial_epoch
+            _controlled_spatial_tick = tick
+            _controlled_spatial_revision = revision
+            _controlled_authoritative_position = position
+            _controlled_authoritative_velocity = velocity
+
+    _last_tick = tick
+    _last_revision = revision
+    _movement_batches_applied += 1
     return true
 
 
@@ -174,6 +306,14 @@ func presentation_for(entity_id: int) -> Node3D:
     return binding.get_parent() as Node3D
 
 
+func controlled_authoritative_position() -> Vector3:
+    return _controlled_authoritative_position
+
+
+func controlled_authoritative_velocity() -> Vector3:
+    return _controlled_authoritative_velocity
+
+
 func debug_snapshot() -> Dictionary:
     var observed_ids: Array = _observed_entity_ids.keys()
     observed_ids.sort()
@@ -190,6 +330,17 @@ func debug_snapshot() -> Dictionary:
         "controlled_spatial_epoch": _controlled_spatial_epoch,
         "controlled_spatial_tick": _controlled_spatial_tick,
         "controlled_spatial_revision": _controlled_spatial_revision,
+        "controlled_authoritative_position_m": [
+            _controlled_authoritative_position.x,
+            _controlled_authoritative_position.y,
+            _controlled_authoritative_position.z,
+        ],
+        "controlled_authoritative_velocity_mps": [
+            _controlled_authoritative_velocity.x,
+            _controlled_authoritative_velocity.y,
+            _controlled_authoritative_velocity.z,
+        ],
+        "movement_batches_applied": _movement_batches_applied,
     }
 
 

@@ -32,9 +32,9 @@ python tools/dev.py play --scenario smoke --locale en
 - `native` configures/builds/tests the Godot-free native graph and also runs localization-catalog integrity through `tools/dev.py check`.
 - `sanitize` runs the same Godot-free graph with ASan+UBSan under GCC/Clang and the same localization-catalog integrity check.
 - `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
-- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed identity, authoritative controlled-actor spatial state, presentation initialization, active locale/translated probes and screenshot evidence.
+- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed identity, authoritative controlled-actor spatial state, one real authoritative movement sample batch, duplicate/stale-batch rejection, presentation reconciliation, active locale/translated probes and screenshot evidence.
 - localization-affecting runtime UI changes require rendered evidence for every supported locale; catalog parity alone is not visual proof.
-- the third-person control foundation additionally requires real local keyboard/mouse and gamepad playtesting; static authoritative spawn evidence is not proof that continuous locomotion is authoritative yet.
+- material third-person control changes additionally require real local keyboard/mouse and gamepad playtesting; automated smoke proves the authority round-trip, not subjective control feel.
 
 The existence of these commands is not evidence that all of them have run in a particular environment.
 
@@ -43,7 +43,7 @@ The existence of these commands is not evidence that all of them have run in a p
 A systemic player-facing capability normally needs:
 
 1. authoritative native behavior;
-2. explicit semantic protocol command/result/events/projection;
+2. explicit semantic protocol command/result/events/projection or transition-result stream;
 3. targeted deterministic/regression evidence where relevant;
 4. visible Godot feedback based on the authoritative result;
 5. one bounded playtest proving the real round-trip;
@@ -64,24 +64,30 @@ Native rule tests must not require Godot. Core tests use real value objects/stat
 The native test graph mirrors production ownership:
 
 - `sim_core_tests` links only `sim_core` + `GTest::gtest_main` and exercises domain state/transitions directly;
-- `protocol_tests` links `sim_protocol` + `GTest::gtest_main` and exercises validation plus command-to-domain-to-projection behavior.
+- `protocol_tests` links `sim_protocol` + `GTest::gtest_main` and exercises validation plus command-to-domain-to-projection/result behavior.
 
-The current domain tests prove:
+The current domain tests prove, among other locomotion/state contracts:
 
-- different actor `EntityId`s use the same authoritative bootstrap actor operation;
+- different actor `EntityId`s use the same authoritative actor operation;
 - actor actions change `WorldRevision` without pretending that `SimulationTick` advanced;
 - explicit simulation-time advancement changes tick/revision separately;
 - duplicate/unknown/invalid identities fail without mutation;
 - exact `SpatialState` can exist for one actor while another authoritative actor has no exact spatial pose;
 - invalid `SpatialEpoch` is rejected without mutating the world;
-- equal initial state/action sequences remain deterministic.
+- equal initial state/action sequences remain deterministic;
+- shared grounded-locomotion batches are atomic and actor-count independent for time advancement;
+- authoritative movement samples are returned in canonical ascending `EntityId` order even when intent collection order is reversed;
+- fixed-step continuation survives snapshot/restore deterministically.
 
 The current protocol tests prove:
 
 - the minimum `ObservedWorldProjection` contains only the externally controlled actor identity and current tick/revision;
 - the controlled actor starts with exact authoritative spatial state at the origin, zero velocity and epoch 1;
 - bootstrap grid movement advances world revision but does **not** alter production `SpatialState`;
-- malformed bootstrap input is rejected without mutating observed authoritative state.
+- malformed bootstrap input is rejected without mutating observed authoritative state;
+- movement intent submission alone does not mutate authoritative world state;
+- a fixed locomotion tick returns a post-transition `AuthoritativeMovementSampleBatch`;
+- repeated movement batches increase tick/revision deterministically.
 
 CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces the Godot-free dependency boundary.
 
@@ -132,33 +138,32 @@ The development client should expose a read-only debug surface sufficient to exp
 - presentation position separately from authoritative spatial/semantic location;
 - `SimulationTick`, `WorldRevision` and spatial continuity epoch separately;
 - nearby/materialized actor IDs and relevant observation state;
-- last authoritative events;
+- last authoritative events/results/samples relevant to the scenario;
 - seed and scenario;
-- last command result;
 - current screen/dialog state.
 
 The debug surface must not expose authoritative mutation methods. Scenario setup belongs to explicit initialization before the world starts, not debugger cheats.
 
-Milestone 0 now exposes the local third-person presentation position, `SimFacade.bootstrap_debug_projection()`, `SimFacade.observed_world_projection()`, `SimFacade.controlled_actor_spatial_projection()`, and the read-only `WorldPresentation` identity/spatial initialization snapshot. The bootstrap grid and production spatial sample remain deliberately separate.
+Milestone 0 exposes the local third-person presentation position, bootstrap/observed/spatial read projections, the latest authoritative movement-batch evidence, and the read-only `WorldPresentation` reconciliation snapshot. The bootstrap grid and production spatial sample remain deliberately separate.
 
 ## Third-person control verification
 
 Control feel is empirical. Source review and Godot import success are necessary but insufficient.
 
-Before accepting a material control/presentation change, use the pinned Godot runtime and verify the affected device path. For the foundation, check at least:
+Before accepting a material control/presentation change, use the pinned Godot runtime and verify the affected device path. Check at least:
 
 - keyboard movement intent is camera-relative and releases cleanly without drift;
 - mouse look direction is correct, captured motion is stable across the supported window/stretch setup, and Escape/click pointer lifecycle works;
 - left-stick movement has a circular deadzone, reaches the full analog range and does not drift at rest;
 - right-stick look has no drift at rest, reaches useful angular speed at full deflection and has the expected vertical direction;
-- Shift and L3 both engage sprint intent without duplicating input code;
-- presentation acceleration/deceleration/direction-change/turn response feels immediate rather than delayed by stacked smoothing;
-- `SpringArm3D` pulls the camera inward against nearby geometry and excludes the player presentation collider;
-- walking across floor/slope contacts does not introduce obvious visual jitter or camera stepping.
+- authoritative movement visibly follows Simulation samples and does not continue through a local `move_and_slide()`/Godot-gravity path;
+- presentation turning remains responsive without changing the authoritative physics-root position;
+- `SpringArm3D` pulls the camera inward against nearby presentation geometry and excludes the player presentation collider;
+- same-epoch movement does not introduce obvious visual jitter or camera stepping.
 
-These checks validate presentation feel. They do **not** prove authoritative continuous world movement. That proof begins only when semantic movement intent drives a Godot-free Simulation movement/collision transition and Godot renders resulting samples.
+Sprint/acceleration/deceleration were part of the former local presentation motor. They are **not current locomotion capabilities** after the authority migration and must not be advertised or treated as verified until equivalent semantics exist in Simulation.
 
-Tune presentation values through `ControlProfile` / `LocomotionProfile` first. Change presentation algorithms only when playtest evidence shows that tuning cannot solve the problem.
+These checks validate presentation feel. Authoritative movement itself is proved separately by semantic movement intent driving the Godot-free Simulation transition and the resulting ordered samples driving the Godot presentation.
 
 ## Godot playtest supervisor
 
@@ -212,34 +217,48 @@ Each run writes under:
   debug.json
 ```
 
-For the `smoke` scenario, `debug.json` is a boundary-evidence object with five sections:
+For the `smoke` scenario, `debug.json` is a boundary-evidence object with six logical sections:
 
 ```text
 bootstrap_projection:
-  entity_id=1, x=1, y=0, tick=0, revision=2, seed=1, protocol_version=4
+  entity_id=1, x=1, y=0, tick=0, revision=2, seed=1, protocol_version=5
 
 observed_world_projection:
-  controlled_actor_id=1, tick=0, revision=2, protocol_version=4
+  controlled_actor_id=1, tick=1, revision=3, protocol_version=5
   entities=[{entity_id=1}]
 
 controlled_actor_spatial_projection:
   entity_id=1
-  position_m=[0,0,0]
-  velocity_mps=[0,0,0]
+  position_m=[0.096,0,0]
+  velocity_mps=[5.8,0,0]
   spatial_epoch=1
-  tick=0, revision=2, protocol_version=4
+  tick=1, revision=3, protocol_version=5
+
+movement_stream:
+  duplicate_batch_rejected=true
+  batch:
+    tick=1, revision=3, protocol_version=5
+    samples=[{
+      entity_id=1,
+      position_m=[0.096,0,0],
+      velocity_mps=[5.8,0,0],
+      spatial_epoch=1
+    }]
 
 presentation:
   controlled_entity_id=1
-  last_tick=0
-  last_revision=2
-  protocol_version=4
+  last_tick=1
+  last_revision=3
+  protocol_version=5
   observed_entity_ids=[1]
   bound_entity_ids=[1]
   controlled_spatial_initialized=true
   controlled_spatial_epoch=1
-  controlled_spatial_tick=0
-  controlled_spatial_revision=1
+  controlled_spatial_tick=1
+  controlled_spatial_revision=3
+  controlled_authoritative_position_m=[0.096,0,0]
+  controlled_authoritative_velocity_mps=[5.8,0,0]
+  movement_batches_applied=1
 
 localization:
   locale=ru|en
@@ -248,11 +267,13 @@ localization:
   controls_hint=<translated UI_DEBUG_CONTROLS_HINT>
 ```
 
-The localization section proves the active presentation locale and selected translated runtime strings. The simulation/protocol evidence remains language-independent.
+The localization section proves the active presentation locale and selected translated runtime strings. Simulation/protocol evidence remains language-independent.
 
-The initial actor spawn creates revision 1. `WorldPresentation` binds identity and performs initial placement from the revision-1 spatial projection, then calls `reset_physics_interpolation()`. The bootstrap step creates revision 2 but mutates only the old grid probe; a fresh production spatial projection therefore still reports origin/zero velocity/epoch 1 at revision 2.
+The initial actor spawn creates revision 1. `WorldPresentation` binds identity and performs initial placement from the revision-1 spatial projection, then calls `reset_physics_interpolation()`. The bootstrap step creates revision 2 but mutates only the old grid probe. The smoke scenario then submits semantic +X movement intent at full scale and advances one real locomotion tick, producing tick 1 / revision 3 and 96 mm of authoritative displacement at the current 5800 mm/s, 60 Hz fixture.
 
-This difference is intentional evidence that bootstrap grid coordinates cannot become authoritative third-person position by accident.
+The same returned movement batch is submitted to `WorldPresentation` a second time only as a rejection probe. It must be rejected before presentation mutation because its tick/revision are duplicate/stale. This is boundary evidence, not a second authoritative Simulation transition.
+
+This sequence proves both that bootstrap coordinates cannot become production location and that production location now reaches Godot through the semantic movement/sample contract.
 
 Successful artifacts may be retained on a bounded rolling basis; failure artifacts should remain available for diagnosis until explicit cleanup.
 
@@ -271,11 +292,11 @@ build affected target
 
 ```text
 native rule/protocol tests
--> identity/tick/revision/epoch/projection assertions
+-> identity/tick/revision/epoch/sample assertions
 -> adapter build
--> Godot load
--> command/result/projection round-trip
--> presentation reconciliation/materialization evidence when applicable
+-> Godot load/import
+-> semantic command/result round-trip
+-> presentation reconciliation evidence
 ```
 
 ### Godot presentation/control change
@@ -307,7 +328,7 @@ See [`engineering/localization.md`](engineering/localization.md) for the locale/
 native protocol tests
 -> adapter build
 -> Godot loads extension
--> one semantic command/projection round-trip playtest
+-> one semantic command/result/projection-or-sample round-trip playtest
 ```
 
 ### Persistence change
@@ -339,8 +360,8 @@ A capability is done only when all applicable items are true:
 - authoritative C++ implementation exists for world state/consequences;
 - player-controlled and NPC actors use the same relevant world rule rather than privileged player logic;
 - Godot has no bypass truth for entity existence/location/inventory/economy/social/politics/combat/magic outcomes;
-- protocol expresses the semantic input/result/events/projection when needed;
-- projection exposes only the presentation information that should be observable;
+- protocol expresses the semantic input/result/events/projection/transition result when needed;
+- projection/result exposes only the presentation information that should be observable;
 - deterministic behavior is tested where required;
 - a targeted regression test protects important causality;
 - player-facing feedback exists;
@@ -355,6 +376,7 @@ Reports should distinguish facts, not perform a second workflow ceremony:
 
 - **VERIFIED** — checks that actually ran and their results;
 - **NOT VERIFIED** — checks not run or unavailable;
+- **ASSUMPTIONS** — load-bearing interpretations not yet proved by a dedicated scenario;
 - **BLOCKERS** — concrete conditions preventing completion.
 
 For gameplay evidence record the scenario, relevant input/action and observable screenshot/debug outcome.

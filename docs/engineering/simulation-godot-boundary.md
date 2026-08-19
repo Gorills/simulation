@@ -54,15 +54,19 @@ SetTransform
 
 The client may describe what an actor attempts. Simulation computes the resulting world state.
 
-The native locomotion write path now exists below GDExtension:
+The controlled locomotion path is now executable end-to-end:
 
 ```text
-ControlledActorMoveIntent
+PlayerControls camera-relative analog intent
+  -> SimFacade.controlled_actor_submit_move_intent(x, z)
   -> protocol/session intent state
+  -> SimFacade.advance_locomotion_tick()
   -> Simulation::advance_locomotion_tick()
   -> World::advance_grounded_locomotion_tick(actor-keyed batch)
   -> authoritative movement/collision transition
   -> AuthoritativeMovementSampleBatch
+  -> GDExtension unit/DTO translation
+  -> WorldPresentation
 ```
 
 Submitting movement intent alone is not a world mutation. The fixed locomotion tick is the authoritative time/state transition.
@@ -107,7 +111,7 @@ Future feature projections such as shops, inventory, relationships or institutio
 
 Continuous authoritative movement is not modeled as repeated polling of `ControlledActorSpatialProjection`.
 
-A successful native locomotion tick returns one `AuthoritativeMovementSampleBatch`:
+A successful locomotion tick returns one `AuthoritativeMovementSampleBatch`:
 
 ```text
 tick
@@ -124,7 +128,7 @@ The batch is the post-transition result of one atomic World locomotion tick. Eve
 
 Across locomotion batches, `SimulationTick` provides movement-time order. `WorldRevision` locates that batch relative to other authoritative world mutations. Do not add a second sequence counter until a concrete transport/presentation requirement proves that tick + revision are insufficient.
 
-This native sample result is **not yet exposed through `SimFacade`**. Until the GDExtension/Godot slice lands, the existing read projection remains initial/debug read state, not an implicit continuous stream API.
+Protocol **v5** makes this transition-result contract Godot-facing through `SimFacade.advance_locomotion_tick()`. `ControlledActorSpatialProjection` remains useful for initial/debug reads; it is not the continuous frame stream.
 
 ## Identity and presentation replicas
 
@@ -203,49 +207,53 @@ SimFacade.controlled_actor_spatial_projection()
 
 This API is **initial placement only**. Reusing it every authoritative update would turn continuous movement into repeated teleports and is forbidden by its contract.
 
-Godot's official interpolation guidance requires resetting physics interpolation after initial placement/teleport to avoid interpolating from an invalid previous transform.
+Godot's interpolation contract requires resetting physics interpolation after initial placement or a discontinuous relocation.
 
-## Continuous movement — current boundary and next bridge slice
+## Continuous movement — implemented bridge
 
-Implemented native path:
+The active controlled path is:
 
 ```text
-protocol movement intent
+PlayerControls semantic movement intent
+        ↓
+protocol v5 movement intent
         ↓
 Godot-free Simulation movement/collision solver
         ↓
 ordered AuthoritativeMovementSampleBatch
+        ↓
+GDExtension mm/mm-s -> meter/m-s translation
+        ↓
+WorldPresentation batch validation
+        ↓
+physics-root authoritative transform/velocity update
+        ↓
+Godot physics interpolation for same-epoch rendering
 ```
 
-Next bridge slice:
+`WorldPresentation` validates the complete sample shape before presentation application. The controlled stream requires:
 
-```text
-AuthoritativeMovementSampleBatch
-        ↓
-GDExtension translation
-        ↓
-Godot EntityId-keyed sample buffer
-        ↓
-monotonic tick/revision validation
-        ↓
-SpatialEpoch-aware interpolation + reconciliation
-        ↓
-remove duplicate local world-law movement
-        ↓
-optional local prediction only if measured need exists
-```
+- matching protocol version;
+- exactly the next locomotion tick;
+- a strictly newer world revision;
+- samples strictly ascending by positive `EntityId`;
+- every sample to belong to the observed set;
+- valid position/velocity vectors and positive `SpatialEpoch`;
+- one controlled-actor sample.
 
-The current `ThirdPersonPlayer.move_and_slide()` path remains presentation/prototype movement. Do **not** copy its resulting `global_position`/velocity back into Simulation.
+A same-epoch controlled sample updates the physics-root position/velocity during `_physics_process()`. A changed `SpatialEpoch` is a discontinuity: the new authoritative position is applied and interpolation is reset rather than blending across the relocation.
+
+The controlled `ThirdPersonPlayer` no longer calls `move_and_slide()` or computes local gravity, acceleration/deceleration or sprint displacement. Its physics-root position therefore cannot create a competing location outcome. The visual child may rotate toward authoritative velocity because facing is still presentation-only.
 
 The implemented solver uses neutral Simulation-owned acceptance geometry. Production content-location geometry/query representation is still deliberately unresolved; choose it from a concrete terrain/reachability requirement. Do not make Godot Physics/Jolt, `StaticBody3D`, a navmesh or `CharacterBody3D` authoritative by convenience.
 
 ## Smooth presentation
 
-Simulation tick rate and render rate are different clocks.
+Simulation locomotion and the current local Godot client both run at the project-owned **60 Hz** fixed baseline. The in-process client advances one authoritative locomotion tick from each Godot physics tick, so the current bridge deliberately uses Godot's enabled physics interpolation for same-epoch transform smoothing instead of inventing another wall-clock/jitter buffer.
 
-Presentation may interpolate compatible authoritative samples. If samples arrive on timing boundaries that do not match local Godot physics ticks, evaluate deliberate custom sample interpolation rather than forcing them through an unrelated clock. Godot's own interpolation guidance calls out externally timed/server-style samples as a case where custom interpolation may fit better.
+If a future transport decouples authoritative sample arrival from local physics ticks, re-admit that timing model and introduce explicit custom interpolation/jitter buffering only then. Do not assume the current in-process timing contract is a networking architecture.
 
-If `SpatialEpoch` changes, do not interpolate from the previous epoch. Snap/reset the representation and clear incompatible sample history.
+If `SpatialEpoch` changes, do not interpolate from the previous epoch. Snap/reset the representation and clear incompatible interpolation history.
 
 Prediction is optional. If later playtests justify it:
 
@@ -258,7 +266,7 @@ Prediction is optional. If later playtests justify it:
 
 `WorldPresentation` rejects an observed-world projection older than its last applied revision.
 
-The next continuous spatial buffer must consume the explicit sample-batch contract and reject impossible regressions/duplicates according to its own rules. It must preserve the distinction between movement tick order and global world revision order rather than substituting local frame counters.
+For controlled continuous movement it additionally requires the exact next locomotion tick and a revision newer than both the previous controlled spatial sample and the latest applied world revision. Duplicate/stale movement batches are rejected before they can move the presentation.
 
 This is an ordering guard, not networking architecture or rollback.
 
@@ -310,11 +318,13 @@ Current surface:
 ```text
 observed_world_projection()
 controlled_actor_spatial_projection()
+controlled_actor_submit_move_intent(x, z)
+advance_locomotion_tick()
 bootstrap_submit_move(...)      # smoke only
 bootstrap_debug_projection()    # smoke/debug only
 ```
 
-`AuthoritativeMovementSampleBatch` is native-only in the current slice. Adding its GDExtension method is the next explicit boundary change; review the shared protocol version at that point because the sample contract will become client-facing.
+Protocol v5 was introduced when the movement intent/batch surface became client-facing. A future breaking DTO/semantic change must update the shared protocol version and affected native/Godot evidence together.
 
 ## Extension checklist
 
@@ -345,5 +355,6 @@ If the answer begins with “Godot sets the world state”, stop and move the de
 - generic Godot entity-scene factory;
 - production content-location collision/index representation;
 - authoritative facing/orientation;
+- authoritative sprint/acceleration/deceleration semantics;
 - automatic origin rebasing;
-- prediction/reconciliation framework.
+- local prediction/rollback framework.

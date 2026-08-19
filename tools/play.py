@@ -5,6 +5,7 @@ import argparse
 from contextlib import AbstractContextManager
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -82,6 +83,19 @@ def terminate_owned_process(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=3)
 
 
+def require_close_vector(actual: object, expected: list[float], label: str) -> None:
+    if not isinstance(actual, list) or len(actual) != len(expected):
+        raise SystemExit(f"unexpected {label}: expected {expected}, got {actual}")
+    for index, expected_value in enumerate(expected):
+        value = actual[index]
+        if not isinstance(value, (int, float)) or not math.isclose(
+            float(value), expected_value, rel_tol=0.0, abs_tol=1e-5
+        ):
+            raise SystemExit(
+                f"unexpected {label}[{index}]: expected {expected_value}, got {value}"
+            )
+
+
 def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, object]:
     debug_path = path / "debug.json"
     screenshot_path = path / "final.png"
@@ -95,14 +109,21 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
     bootstrap = evidence.get("bootstrap_projection")
     observed = evidence.get("observed_world_projection")
     spatial = evidence.get("controlled_actor_spatial_projection")
+    movement_stream = evidence.get("movement_stream")
     presentation = evidence.get("presentation")
     localization = evidence.get("localization")
-    if not all(isinstance(section, dict) for section in (bootstrap, observed, spatial, presentation, localization)):
-        raise SystemExit("debug artifact is missing bootstrap/observed/spatial/presentation/localization sections")
+    if not all(
+        isinstance(section, dict)
+        for section in (bootstrap, observed, spatial, movement_stream, presentation, localization)
+    ):
+        raise SystemExit(
+            "debug artifact is missing bootstrap/observed/spatial/movement/presentation/localization sections"
+        )
 
     assert isinstance(bootstrap, dict)
     assert isinstance(observed, dict)
     assert isinstance(spatial, dict)
+    assert isinstance(movement_stream, dict)
     assert isinstance(presentation, dict)
     assert isinstance(localization, dict)
 
@@ -113,7 +134,7 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "tick": 0,
         "revision": 2,
         "seed": 1,
-        "protocol_version": 4,
+        "protocol_version": 5,
     }
     for key, value in expected_bootstrap.items():
         if bootstrap.get(key) != value:
@@ -121,9 +142,9 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
 
     expected_observed = {
         "controlled_actor_id": 1,
-        "tick": 0,
-        "revision": 2,
-        "protocol_version": 4,
+        "tick": 1,
+        "revision": 3,
+        "protocol_version": 5,
     }
     for key, value in expected_observed.items():
         if observed.get(key) != value:
@@ -131,43 +152,72 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
     if observed.get("entities") != [{"entity_id": 1}]:
         raise SystemExit(f"unexpected observed entities: {observed.get('entities')}")
 
-    expected_spatial = {
+    expected_spatial_scalars = {
         "entity_id": 1,
-        "position_m": [0.0, 0.0, 0.0],
-        "velocity_mps": [0.0, 0.0, 0.0],
         "spatial_epoch": 1,
-        "tick": 0,
-        "revision": 2,
-        "protocol_version": 4,
+        "tick": 1,
+        "revision": 3,
+        "protocol_version": 5,
     }
-    for key, value in expected_spatial.items():
+    for key, value in expected_spatial_scalars.items():
         if spatial.get(key) != value:
             raise SystemExit(f"unexpected controlled spatial {key}: expected {value}, got {spatial.get(key)}")
+    require_close_vector(spatial.get("position_m"), [0.096, 0.0, 0.0], "controlled spatial position")
+    require_close_vector(spatial.get("velocity_mps"), [5.8, 0.0, 0.0], "controlled spatial velocity")
+
+    if movement_stream.get("duplicate_batch_rejected") is not True:
+        raise SystemExit("WorldPresentation did not prove duplicate movement-batch rejection")
+    batch = movement_stream.get("batch")
+    if not isinstance(batch, dict):
+        raise SystemExit("movement stream is missing its authoritative batch")
+    expected_batch_header = {"tick": 1, "revision": 3, "protocol_version": 5}
+    for key, value in expected_batch_header.items():
+        if batch.get(key) != value:
+            raise SystemExit(f"unexpected movement batch {key}: expected {value}, got {batch.get(key)}")
+    samples = batch.get("samples")
+    if not isinstance(samples, list) or len(samples) != 1 or not isinstance(samples[0], dict):
+        raise SystemExit(f"unexpected movement samples: {samples}")
+    sample = samples[0]
+    if sample.get("entity_id") != 1 or sample.get("spatial_epoch") != 1:
+        raise SystemExit(f"unexpected controlled movement sample identity/epoch: {sample}")
+    require_close_vector(sample.get("position_m"), [0.096, 0.0, 0.0], "movement sample position")
+    require_close_vector(sample.get("velocity_mps"), [5.8, 0.0, 0.0], "movement sample velocity")
 
     expected_presentation = {
         "controlled_entity_id": 1,
-        "last_tick": 0,
-        "last_revision": 2,
-        "protocol_version": 4,
+        "last_tick": 1,
+        "last_revision": 3,
+        "protocol_version": 5,
         "observed_entity_ids": [1],
         "bound_entity_ids": [1],
         "controlled_spatial_initialized": True,
         "controlled_spatial_epoch": 1,
-        "controlled_spatial_tick": 0,
-        "controlled_spatial_revision": 1,
+        "controlled_spatial_tick": 1,
+        "controlled_spatial_revision": 3,
+        "movement_batches_applied": 1,
     }
     for key, value in expected_presentation.items():
         if presentation.get(key) != value:
             raise SystemExit(f"unexpected presentation {key}: expected {value}, got {presentation.get(key)}")
+    require_close_vector(
+        presentation.get("controlled_authoritative_position_m"),
+        [0.096, 0.0, 0.0],
+        "presentation authoritative position",
+    )
+    require_close_vector(
+        presentation.get("controlled_authoritative_velocity_mps"),
+        [5.8, 0.0, 0.0],
+        "presentation authoritative velocity",
+    )
 
     expected_localized_text = {
         "ru": {
             "hud_title": "Диагностика выполнения",
-            "controls_hint": "WASD / левый стик — движение  ·  мышь / правый стик — обзор  ·  Shift / L3 — бег  ·  Esc — освободить курсор",
+            "controls_hint": "WASD / левый стик — движение  ·  мышь / правый стик — обзор  ·  Esc — освободить курсор",
         },
         "en": {
             "hud_title": "Runtime diagnostics",
-            "controls_hint": "WASD / left stick move  ·  mouse / right stick look  ·  Shift / L3 sprint  ·  Esc releases pointer",
+            "controls_hint": "WASD / left stick move  ·  mouse / right stick look  ·  Esc releases pointer",
         },
     }
     if localization.get("locale") != expected_locale:

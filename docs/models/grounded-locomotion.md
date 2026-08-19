@@ -36,10 +36,18 @@ Implemented in the Godot-free native transition:
 - semantic controlled-actor protocol intent whose submission does not itself mutate world state, followed by a separate authoritative locomotion tick through the same `World` transition;
 - one post-transition authoritative sample batch per successful locomotion tick, with samples canonically ordered by ascending `EntityId` and shared tick/revision metadata.
 
+Implemented across the presentation boundary:
+
+- protocol v5 GDExtension methods for semantic controlled movement intent and authoritative sample-batch advancement;
+- Godot validation of protocol version, consecutive locomotion tick, newer revision, canonical `EntityId` order, observed identity and valid spatial sample payload before presentation mutation;
+- controlled physics-root position/velocity driven by Simulation samples on Godot physics ticks;
+- same-epoch smoothing through the project's enabled Godot physics interpolation and interpolation reset on `SpatialEpoch` discontinuity;
+- removal of local `move_and_slide()`, Godot gravity, acceleration/deceleration and sprint displacement from the controlled physics-root movement path.
+
 Still deliberately pending:
 
-- GDExtension/Godot movement wiring, buffering and reconciliation;
-- prediction/navigation and the first content location;
+- local prediction only if measured playtest latency proves it necessary;
+- production navigation/content-location geometry and indexing chosen from a real location requirement;
 - an actual NPC decision source feeding the already actor-generic `World` movement batch.
 
 ## Authoritative invariants
@@ -55,6 +63,7 @@ Still deliberately pending:
 9. **Intent submission is not time advancement.** Protocol/controller state may replace a desired planar intent without mutating `World`; the fixed locomotion tick is the authoritative mutation boundary.
 10. **A world tick is not an actor call count.** One movement batch may contain multiple actor intents and advances tick/revision once after the entire batch succeeds.
 11. **Sample order is authoritative and source-independent.** A successful locomotion result contains each moved actor at most once, sorted by ascending `EntityId`, so downstream presentation never inherits arbitrary player/NPC intent collection order.
+12. **Presentation cannot resolve movement law.** Godot may validate/order/interpolate authoritative samples, but scene colliders, `CharacterBody3D` contact state and presentation transforms cannot choose the authoritative outcome.
 
 ## Current native representation
 
@@ -92,7 +101,7 @@ The gravity baseline is a physical non-magical starting point rather than a Godo
 
 These are repository migration/acceptance values, not immutable final feel tuning.
 
-Acceleration/deceleration, sprint, facing/turn response, grounding snap, jump semantics and airborne steering are not yet authoritative.
+Acceleration/deceleration, sprint, facing/turn response, grounding snap, jump semantics and airborne steering are not yet authoritative. The former local Godot acceleration/deceleration/sprint displacement has been removed rather than retained as a second movement law.
 
 ### Input
 
@@ -101,6 +110,8 @@ Acceleration/deceleration, sprint, facing/turn response, grounding snap, jump se
 While grounded, current intent directly defines the existing constant-speed planar fixture. When support is lost, the fall slice preserves takeoff planar velocity and deliberately does not invent airborne steering. A later air-control rule, if wanted, must be explicit rather than silently reusing grounded intent semantics.
 
 The application protocol exposes the same semantic shape as `ControlledActorMoveIntent`. Valid submission only replaces session/controller intent. It cannot choose entity identity, position, velocity, support state or final displacement. `Simulation::advance_locomotion_tick()` binds that controller intent to the controlled actor and invokes the actor-generic `World` batch transition.
+
+The Godot client converts camera-relative analog control to that semantic X/Z intent and quantizes it to the fixed scale before submission. The resulting transform is never read back as authoritative input.
 
 ### Integer integration and continuation
 
@@ -193,7 +204,23 @@ The successful Core result is one `GroundedLocomotionTickResult`: one shared pos
 
 At the protocol boundary, `submit_controlled_actor_move_intent()` validates and stores only desired planar intent. It does not advance time or mutate `SpatialState`. `advance_locomotion_tick()` is the authoritative tick boundary: it binds the stored controller intent to the controlled `EntityId`, invokes the shared World batch and maps the Core result to one `AuthoritativeMovementSampleBatch`. The batch carries shared post-transition `tick`, `revision` and `protocol_version`; each sample carries entity identity, position, velocity and `SpatialEpoch`. Repeated movement batches are ordered by strictly increasing locomotion tick, while revision positions each batch relative to other authoritative World mutations. There is no extra sequence counter and still no `SetPosition`, `SetVelocity`, `SetTransform` or final-displacement command.
 
-The current native application protocol version remains 4 because this sample batch is not yet part of the GDExtension/Godot runtime surface and does not break an existing client-facing movement method. The bridge version must be reviewed when the next slice actually exposes the new movement contract through GDExtension.
+Protocol **v5** exposes this semantic intent and ordered transition result through GDExtension. The adapter only maps errors/units/DTOs; it does not resolve collision or movement.
+
+### Godot sample application
+
+The local Godot client currently runs at the same project-owned **60 Hz** fixed baseline as the authoritative locomotion fixture. Each Godot physics tick submits the sampled camera-relative semantic intent, advances one Simulation locomotion tick, and receives one post-transition authoritative batch.
+
+Before moving any bound presentation node, `WorldPresentation` validates the full batch and all applicable bindings/roots. The controlled stream requires the exact next locomotion tick, a strictly newer revision, the matching protocol version, strictly ascending observed `EntityId` samples, valid vector/epoch payloads and a controlled-actor sample. Duplicate/stale/non-consecutive batches are rejected before presentation mutation.
+
+For a valid controlled sample:
+
+- the `CharacterBody3D` physics-root position and velocity are set from the authoritative sample;
+- same-epoch updates rely on the project's enabled Godot physics interpolation for rendered smoothing;
+- an epoch change applies the discontinuous authoritative relocation and resets physics interpolation rather than blending across it;
+- Godot scene collision results are not fed back into Simulation;
+- the visual child may turn toward authoritative velocity because facing is still presentation-only.
+
+This in-process 60 Hz timing contract is not a networking design. If authoritative samples later arrive independently from local Godot physics ticks, custom interpolation/jitter buffering must be re-admitted from that actual timing requirement.
 
 ### Deterministic replay
 
@@ -226,7 +253,7 @@ Rules:
 - tests assert outcomes rather than duplicating solver classification logic;
 - do not generalize the tiny fixture representation into arbitrary-world collision before a real location requires it.
 
-The protocol's temporary flat acceptance context is a Stage C2 integration fixture only. It demonstrates the command-to-World route; it is not evidence that the current visible Godot floor has become Simulation content.
+The protocol's temporary flat acceptance context is a Stage C2 integration fixture only. It demonstrates the command-to-World route and currently drives the controlled Godot sample bridge; it is not evidence that the visible Godot floor/colliders have become Simulation content.
 
 ## Parameters deliberately unresolved
 
@@ -244,16 +271,17 @@ Defaults from Godot, Unreal or Unity remain references, not project values.
 
 ## Godot presentation contract
 
-Authoritative continuous movement samples now exist at the native World/protocol boundary. When GDExtension/Godot consumes them, Godot must:
+Godot now consumes ordered authoritative movement batches through the v5 GDExtension boundary. It must continue to:
 
 - consume the ordered `EntityId`-keyed sample batches rather than poll the read projection as an accidental stream;
-- reject/reconcile non-monotonic batch tick/revision according to the presentation buffer contract;
-- smooth compatible samples without changing Simulation truth;
+- reject duplicate, stale, malformed or non-consecutive controlled batches before moving presentation roots;
+- smooth compatible same-epoch movement without changing Simulation truth;
 - snap/reset only across real `SpatialEpoch` discontinuities;
 - never decide authoritative wall/slope/step/landing results;
-- remove duplicate local world-law movement as authoritative migration completes.
+- keep local facing/camera state presentation-only;
+- avoid reintroducing local `move_and_slide()`, Godot gravity, sprint or acceleration as a competing physics-root movement law.
 
-The current local `ThirdPersonPlayer` remains a temporary presentation/feel shell. The ordered native sample API is intentionally not exposed through GDExtension in this bounded slice.
+Prediction is not currently present. Add it only if measured playtest latency shows a real need, and keep predicted state disposable/reconcilable to authoritative samples.
 
 ## Performance contract
 
@@ -288,9 +316,9 @@ The 50° slope migration baseline and the numerical 0.3 m reference used to sele
 
 ## Next bounded task
 
-Expose `AuthoritativeMovementSampleBatch` through GDExtension and establish the Godot sample buffer/interpolation/reconciliation path. The bridge must preserve batch tick/revision, per-actor `SpatialEpoch`, and canonical `EntityId` order without copying local `CharacterBody3D` collision results back into Simulation.
+Prove an actual **NPC decision source** produces equivalent `PlanarMoveIntent` and enters the same actor-generic `World::advance_grounded_locomotion_tick()` batch as human-controlled intent, without introducing a player-only world path.
 
-Do not add prediction unless measured playtest latency requires it, and do not expose a final-position setter.
+Do not add prediction unless measured playtest latency requires it, and do not choose production navigation/geometry architecture until a real location/reachability requirement demands it.
 
 ## Falsifiers
 
