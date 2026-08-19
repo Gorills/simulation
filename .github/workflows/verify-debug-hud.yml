@@ -19,10 +19,6 @@ jobs:
           python-version: "3.12"
       - name: Install pinned build tools
         run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements-dev.txt
-      - name: Install virtual display
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
       - name: Install pinned Godot
         run: |
           python - <<'PY'
@@ -41,16 +37,67 @@ jobs:
           PY
           chmod +x .tools/Godot_v4.7.1-stable_linux.x86_64
           .tools/Godot_v4.7.1-stable_linux.x86_64 --version
+      - name: Adapt metadata import to Xvfb
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/godot_runtime.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'command = [godot, "--headless", "--path", str(PROJECT), "--import"]'
+          new = 'command = [godot, "--path", str(PROJECT), "--import"]'
+          if old not in text:
+              raise SystemExit('expected headless import command not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
       - name: Build development graph
         run: python tools/dev.py check --preset dev
-      - name: Run smoke screenshot
+      - name: Run baseline smoke screenshot
         env:
           GODOT_BIN: ${{ github.workspace }}/.tools/Godot_v4.7.1-stable_linux.x86_64
-        run: xvfb-run -a python tools/play.py --scenario smoke
+        run: |
+          xvfb-run -a python tools/play.py --scenario smoke
+          mkdir -p verification-artifacts/baseline
+          latest="$(find .cache/play -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          cp -a "$latest"/. verification-artifacts/baseline/
+      - name: Run narrow smoke screenshot
+        env:
+          GODOT_BIN: ${{ github.workspace }}/.tools/Godot_v4.7.1-stable_linux.x86_64
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('godot/project.godot')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('window/size/viewport_width=1920', 'window/size/viewport_width=1440')
+          text = text.replace('window/size/viewport_height=1080', 'window/size/viewport_height=1080')
+          text = text.replace('window/size/window_width_override=1920', 'window/size/window_width_override=1440')
+          text = text.replace('window/size/window_height_override=1080', 'window/size/window_height_override=1080')
+          path.write_text(text, encoding='utf-8')
+          PY
+          xvfb-run -a python tools/play.py --scenario smoke
+          mkdir -p verification-artifacts/narrow
+          latest="$(find .cache/play -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          cp -a "$latest"/. verification-artifacts/narrow/
+      - name: Run wide smoke screenshot
+        env:
+          GODOT_BIN: ${{ github.workspace }}/.tools/Godot_v4.7.1-stable_linux.x86_64
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('godot/project.godot')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('window/size/viewport_width=1440', 'window/size/viewport_width=2560')
+          text = text.replace('window/size/window_width_override=1440', 'window/size/window_width_override=2560')
+          path.write_text(text, encoding='utf-8')
+          PY
+          xvfb-run -a python tools/play.py --scenario smoke
+          mkdir -p verification-artifacts/wide
+          latest="$(find .cache/play -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          cp -a "$latest"/. verification-artifacts/wide/
       - name: Upload smoke evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: debug-hud-smoke
-          path: .cache/play/**
+          path: verification-artifacts/**
           if-no-files-found: warn
