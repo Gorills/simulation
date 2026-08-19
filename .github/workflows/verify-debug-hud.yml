@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: 2ec8e1264c8ea1f18adb21a330f47c2d97c5e9e5
+          ref: c5eb1539463a7586b87fa9c082b30732db97391a
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -69,9 +69,7 @@ jobs:
           path = Path('godot/project.godot')
           text = path.read_text(encoding='utf-8')
           text = text.replace('window/size/viewport_width=1920', 'window/size/viewport_width=1440')
-          text = text.replace('window/size/viewport_height=1080', 'window/size/viewport_height=1080')
           text = text.replace('window/size/window_width_override=1920', 'window/size/window_width_override=1440')
-          text = text.replace('window/size/window_height_override=1080', 'window/size/window_height_override=1080')
           path.write_text(text, encoding='utf-8')
           PY
           xvfb-run -a python tools/play.py --scenario smoke
