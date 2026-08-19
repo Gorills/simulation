@@ -19,7 +19,7 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
-SUPPORTED_SCENARIOS = ("smoke", "offscreen")
+SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference")
 SMOKE_AUDIO_DRIVER = "Dummy"
 
 
@@ -391,6 +391,107 @@ def validate_offscreen_artifact(path: Path, expected_locale: str) -> dict[str, o
     return evidence
 
 
+def validate_rest_interference_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+    evidence = load_playtest_artifact(path)
+    if not (path / "blocked.png").is_file():
+        raise SystemExit("rest interference scenario did not capture blocked.png")
+
+    interaction = evidence.get("rest_interference")
+    living_need = evidence.get("living_need_projection")
+    localization = evidence.get("localization")
+    presentation = evidence.get("presentation")
+    movement_stream = evidence.get("movement_stream")
+    if not all(
+        isinstance(section, dict)
+        for section in (interaction, living_need, localization, presentation, movement_stream)
+    ):
+        raise SystemExit("rest interference artifact is missing interaction/need/localization/presentation/movement sections")
+
+    assert isinstance(interaction, dict)
+    assert isinstance(living_need, dict)
+    assert isinstance(localization, dict)
+    assert isinstance(presentation, dict)
+    assert isinstance(movement_stream, dict)
+
+    if interaction.get("entity_id") != 2 or interaction.get("initial_status") != "traveling":
+        raise SystemExit("rest interference did not begin with the expected traveling NPC need")
+    blocked = interaction.get("blocked_projection")
+    satisfied = interaction.get("satisfied_projection")
+    if not isinstance(blocked, dict) or not isinstance(satisfied, dict):
+        raise SystemExit("rest interference is missing blocked/satisfied projections")
+    if blocked.get("entity_id") != 2 or blocked.get("status") != "blocked":
+        raise SystemExit(f"unexpected blocked need projection: {blocked}")
+    if satisfied.get("entity_id") != 2 or satisfied.get("status") != "satisfied":
+        raise SystemExit(f"unexpected satisfied need projection: {satisfied}")
+    if blocked.get("protocol_version") != 6 or satisfied.get("protocol_version") != 6:
+        raise SystemExit("rest interference need projection protocol mismatch")
+
+    blocked_tick = blocked.get("tick")
+    satisfied_tick = satisfied.get("tick")
+    blocked_revision = blocked.get("revision")
+    satisfied_revision = satisfied.get("revision")
+    if not all(isinstance(value, int) for value in (
+        blocked_tick,
+        satisfied_tick,
+        blocked_revision,
+        satisfied_revision,
+    )):
+        raise SystemExit("rest interference need projections have invalid temporal fields")
+    assert isinstance(blocked_tick, int)
+    assert isinstance(satisfied_tick, int)
+    assert isinstance(blocked_revision, int)
+    assert isinstance(satisfied_revision, int)
+    if satisfied_tick <= blocked_tick or satisfied_revision <= blocked_revision:
+        raise SystemExit("rest interference did not progress from blocked to a later satisfied state")
+
+    blocked_position = interaction.get("blocked_player_position_m")
+    satisfied_position = interaction.get("satisfied_player_position_m")
+    if not all(isinstance(position, list) and len(position) == 2 for position in (
+        blocked_position,
+        satisfied_position,
+    )):
+        raise SystemExit("rest interference has invalid controlled-actor positions")
+    assert isinstance(blocked_position, list)
+    assert isinstance(satisfied_position, list)
+    if not all(isinstance(value, (int, float)) for value in blocked_position + satisfied_position):
+        raise SystemExit("rest interference controlled-actor positions must be numeric")
+    if abs(float(blocked_position[0]) + 3.0) > 0.15 or abs(float(blocked_position[1]) + 3.0) > 0.15:
+        raise SystemExit(f"controlled actor was not inside the rest tolerance when blocked: {blocked_position}")
+    if (
+        abs(float(satisfied_position[0]) + 3.0) <= 0.15
+        and abs(float(satisfied_position[1]) + 3.0) <= 0.15
+    ):
+        raise SystemExit(f"controlled actor did not leave the rest tolerance before satisfaction: {satisfied_position}")
+
+    localized_status = {
+        "ru": {
+            "blocked": "Место отдыха занято",
+            "satisfied": "Место отдыха доступно",
+        },
+        "en": {
+            "blocked": "Rest place blocked",
+            "satisfied": "Rest place available",
+        },
+    }
+    if interaction.get("blocked_hud_text") != localized_status[expected_locale]["blocked"]:
+        raise SystemExit("blocked HUD feedback did not match the active locale")
+    if localization.get("locale") != expected_locale:
+        raise SystemExit(f"unexpected rest interference locale: {localization.get('locale')}")
+    if localization.get("living_need_status_text") != localized_status[expected_locale]["satisfied"]:
+        raise SystemExit("final satisfied HUD feedback did not match the active locale")
+
+    if living_need.get("entity_id") != 2 or living_need.get("status") != "satisfied":
+        raise SystemExit(f"final living-need projection is not satisfied: {living_need}")
+    if living_need.get("tick") != presentation.get("last_tick"):
+        raise SystemExit("final need projection tick does not match presented world tick")
+    if living_need.get("revision") != presentation.get("last_revision"):
+        raise SystemExit("final need projection revision does not match presented world revision")
+    batch = movement_stream.get("batch")
+    if not isinstance(batch, dict) or batch.get("tick") != living_need.get("tick"):
+        raise SystemExit("final movement batch does not align with the satisfied need projection")
+    return evidence
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded Godot playtest owned by this repository")
     parser.add_argument("--scenario", default="smoke", choices=SUPPORTED_SCENARIOS)
@@ -463,6 +564,8 @@ def main() -> int:
 
     if args.scenario == "offscreen":
         evidence = validate_offscreen_artifact(artifact_dir, args.locale)
+    elif args.scenario == "rest_interference":
+        evidence = validate_rest_interference_artifact(artifact_dir, args.locale)
     else:
         evidence = validate_smoke_artifact(artifact_dir, args.locale)
     metadata.update({"status": "passed", "evidence": evidence})
