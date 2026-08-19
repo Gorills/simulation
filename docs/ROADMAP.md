@@ -8,7 +8,7 @@ Milestone 0's executable spine is present in source: CMake presets, separated `s
 
 The architecture foundation establishes stable positive `EntityId`, actor parity, protocol-owned human-control binding, separate `SimulationTick` / `WorldRevision`, `ObservedWorldProjection`, and one Godot `WorldPresentation` identity/presence owner. Godot is a presentation replica rather than world authority.
 
-The historical/magic/causal-fidelity foundation is accepted. The authoritative spatial bridge is now in progress: Simulation has the first exact spatial value/state contract and controlled-actor spatial read model, while the real deterministic movement/collision solver is still pending.
+The historical/magic/causal-fidelity foundation is accepted. The authoritative spatial representation contract is accepted, and the grounded locomotion acceptance/test-arena contract is now accepted. The real deterministic movement/collision solver is still pending.
 
 The current `CharacterBody3D` motor remains a responsive presentation/prediction shell. It is not authoritative world movement.
 
@@ -68,9 +68,9 @@ No empty `MagicSystem`, `SocialClass`, `FidelityManager`, universal modifier bus
 
 The bridge is split deliberately so a guessed physics framework does not become the architecture.
 
-### Stage A — durable spatial contract
+### Stage A — durable spatial contract — accepted
 
-Implemented in the current stage:
+Implemented:
 
 1. exact identity-resolved Simulation spatial state uses signed 64-bit millimeters / millimeters-per-second;
 2. axes match the Godot metric Y-up/right-handed 3D convention, while Godot types stay outside Simulation;
@@ -83,19 +83,40 @@ Implemented in the current stage:
 
 See [`decisions/0006-authoritative-spatial-contract.md`](decisions/0006-authoritative-spatial-contract.md) and [`models/spatial-location.md`](models/spatial-location.md).
 
-### Stage B — next bounded spatial implementation
+### Stage B — grounded locomotion acceptance contract — accepted
+
+Before selecting a solver, the repository now defines the minimum native/test-arena outcomes it must prove:
+
+1. stable flat-ground movement/rest;
+2. blocking head-on wall contact;
+3. preserved tangential movement on an oblique wall;
+4. a paired walkable/unwalkable slope fixture around the solver's explicit threshold;
+5. a paired traversable/blocking step fixture around the solver's explicit threshold;
+6. ledge -> falling -> landing behavior;
+7. deterministic replay from identical initial state, fixture and ordered intent stream;
+8. no Godot scene/collider as authoritative collision input;
+9. ordinary movement remains in one `SpatialEpoch`;
+10. the same world-rule transition remains usable for NPC intent later.
+
+No body shape, tick rate, slope angle, step height, gravity magnitude or collision algorithm is chosen by this stage.
+
+See [`models/grounded-locomotion.md`](models/grounded-locomotion.md).
+
+### Stage C — next bounded solver implementation
 
 Still required before locomotion is authoritative:
 
-1. define the first neutral Simulation-owned collision/environment representation from the real demo terrain need;
-2. implement one deterministic authoritative movement/collision transition in `sim_core`;
-3. send semantic controlled-actor movement intent through protocol — never a final-position setter;
-4. produce ordered authoritative movement samples;
-5. buffer/interpolate those samples in Godot and reconcile the existing presentation shell;
-6. add local prediction only if real playtest latency requires it;
-7. prove the same movement rule can later be driven by NPC intent without a player-only world path.
+1. choose the **smallest neutral static collision representation** that can express the accepted flat/wall/slope/step/ledge fixtures deterministically;
+2. choose only the minimum grounded-body/contact/timing parameters needed by that representation and record them as repository-owned values rather than copied engine defaults;
+3. implement flat-ground + wall collision as the first deterministic `sim_core` vertical slice;
+4. extend the same representation to the accepted slope/step/fall fixtures only after the first slice is stable;
+5. send semantic controlled-actor movement intent through protocol — never a final-position setter;
+6. produce ordered authoritative movement samples;
+7. buffer/interpolate those samples in Godot and reconcile the existing presentation shell;
+8. add local prediction only if real playtest latency requires it;
+9. prove equivalent NPC intent can drive the same movement rule without a player-only world path.
 
-Do not turn this bridge into ECS, networking, sharding, a general rigid-body engine or automatic regional simulation LOD work.
+Do not build the visual first location before the native fixture/solver slice proves the collision representation. Do not turn this bridge into ECS, networking, sharding, a general rigid-body engine or automatic regional simulation LOD work.
 
 Acceptance for the full bridge:
 
