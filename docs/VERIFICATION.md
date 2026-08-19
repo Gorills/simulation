@@ -80,12 +80,14 @@ python tools/play.py --scenario smoke --locale en
 The supervisor owns:
 
 - pinned Godot resolution/version validation;
-- headless project metadata import before the visual run;
+- project metadata import before the visual run;
 - a non-blocking repository playtest lock;
 - one owned Godot process group;
 - bounded timeout and cleanup;
 - required debug/screenshot artifacts;
 - semantic validation of the authoritative Simulation ↔ protocol ↔ GDExtension ↔ Godot round-trip.
+
+The default/local metadata-import path is headless. Linux CI may explicitly opt into the bounded Xvfb import path through the repository runtime helper when the pinned Godot editor cannot complete `--headless --import` on that runner. That exception is CI infrastructure, not a second gameplay runner.
 
 The exact fixture values and debug JSON assertions are executable truth in `tools/play.py` and the relevant native/protocol tests. Do not copy those values into architecture/roadmap prose.
 
@@ -106,9 +108,11 @@ The smoke is boundary/runtime evidence. It does **not** prove subjective control
 
 ## Godot process/environment policy
 
-Metadata import is non-visual CI work and uses Godot headless mode. The repository must not require X11, VSync, a physical GPU or an audio device merely to import project metadata.
+Metadata import must remain non-interactive and bounded. The ordinary/default path uses Godot headless mode and therefore requires neither X11 nor a physical audio device. On the current Linux CI runner, pinned Godot 4.7.1 aborts during this project's `--headless --import`; the persistent smoke lane therefore performs that import under the same Xvfb display already required for screenshot evidence.
 
-The visual screenshot smoke intentionally runs with a virtual display in Linux CI. Its renderer comes from the canonical Godot project configuration rather than a second smoke-specific renderer setting. The supervisor uses the `Dummy` audio driver and disables VSync so missing ALSA/Pulse devices and virtual-display VSync limitations do not masquerade as gameplay failures. The headless metadata-import path also avoids requiring a Vulkan/X11 surface merely to import the project.
+The CI display-import workaround reads the renderer from canonical `godot/project.godot`, uses the `Dummy` audio driver and disables VSync. It must not introduce a second renderer setting or make CI scene state authoritative. If a later pinned Godot revision makes the headless path reliable on CI, prefer removing the workaround rather than preserving it by habit.
+
+The visual screenshot smoke likewise runs under Xvfb, keeps its renderer owned by `project.godot`, uses `Dummy` audio and disables VSync. Missing ALSA/Pulse devices and virtual-display VSync limitations therefore do not masquerade as gameplay failures.
 
 CI software rendering is compatibility evidence only. A successful llvmpipe/Mesa run does not prove real-GPU performance or driver-specific rendering correctness.
 
@@ -183,7 +187,7 @@ build affected target
 ```text
 native/protocol tests
 -> development adapter build
--> headless Godot import
+-> bounded Godot metadata import
 -> bounded Godot smoke
 -> inspect evidence/artifacts when the change affects presentation
 ```
