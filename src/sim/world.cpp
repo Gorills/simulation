@@ -14,6 +14,16 @@ struct PendingGroundedMove final {
     GroundedStepState next{};
 };
 
+[[nodiscard]] constexpr std::uint64_t unsigned_distance(
+    const std::int64_t first,
+    const std::int64_t second
+) noexcept {
+    if (first >= second) {
+        return static_cast<std::uint64_t>(first) - static_cast<std::uint64_t>(second);
+    }
+    return static_cast<std::uint64_t>(second) - static_cast<std::uint64_t>(first);
+}
+
 [[nodiscard]] GroundedLocomotionTickError map_step_error(const GroundedStepError error) noexcept {
     switch (error) {
     case GroundedStepError::invalid_environment:
@@ -348,6 +358,31 @@ std::optional<RestNeedState> World::actor_rest_need(const EntityId id) const noe
         return std::nullopt;
     }
     return actors_[*index].rest_need;
+}
+
+bool World::is_planar_position_occupied_by_other_actor(
+    const EntityId excluded_actor,
+    const Millimeters x,
+    const Millimeters z,
+    const Millimeters axis_tolerance
+) const noexcept {
+    if (!excluded_actor.is_valid() || axis_tolerance.value < 0) {
+        return false;
+    }
+
+    const auto tolerance = static_cast<std::uint64_t>(axis_tolerance.value);
+    for (const auto &actor : actors_) {
+        if (actor.id == excluded_actor || !actor.spatial.has_value()) {
+            continue;
+        }
+        if (
+            unsigned_distance(actor.spatial->position.x.value, x.value) <= tolerance &&
+            unsigned_distance(actor.spatial->position.z.value, z.value) <= tolerance
+        ) {
+            return true;
+        }
+    }
+    return false;
 }
 
 SimulationTick World::tick() const noexcept {

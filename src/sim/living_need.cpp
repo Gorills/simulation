@@ -43,8 +43,18 @@ decide_npc_rest_need(const World &world, const EntityId actor) noexcept {
         return std::unexpected(NpcRestNeedDecisionError::invalid_rest_need_state);
     }
 
+    const bool at_assigned_rest_point = movement->move == PlanarMoveIntent{};
+    const bool blocked_by_other_actor = at_assigned_rest_point
+        && world.is_planar_position_occupied_by_other_actor(
+            actor,
+            need->rest_x,
+            need->rest_z,
+            need->axis_arrival_tolerance
+        );
+
     return NpcRestNeedDecision{
-        .satisfied = movement->move == PlanarMoveIntent{},
+        .satisfied = at_assigned_rest_point && !blocked_by_other_actor,
+        .blocked_by_other_actor = blocked_by_other_actor,
         .movement = *movement,
     };
 }
