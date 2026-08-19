@@ -289,6 +289,18 @@ public:
     [[nodiscard]] std::optional<SpatialState> actor_spatial_state(EntityId id) const noexcept;
     [[nodiscard]] std::optional<ActorLocomotionCapability> actor_locomotion_capability(EntityId id) const noexcept;
     [[nodiscard]] std::optional<RestNeedState> actor_rest_need(EntityId id) const noexcept;
+
+    // Bounded exact-spatial presence query for a concrete local causal condition.
+    // It considers only other authoritative actors that currently have exact
+    // SpatialState and uses the caller's per-axis X/Z tolerance. This is not
+    // body collision, navigation, observation policy or a general spatial index.
+    [[nodiscard]] bool is_planar_position_occupied_by_other_actor(
+        EntityId excluded_actor,
+        Millimeters x,
+        Millimeters z,
+        Millimeters axis_tolerance
+    ) const noexcept;
+
     [[nodiscard]] SimulationTick tick() const noexcept;
     [[nodiscard]] WorldRevision revision() const noexcept;
     [[nodiscard]] WorldSeed seed() const noexcept;
