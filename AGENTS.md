@@ -8,7 +8,8 @@ Use this file as the always-on project context. Keep it short. Load deeper docum
 2. Apply [`docs/CHANGE_ADMISSION.md`](docs/CHANGE_ADMISSION.md) before implementation. Treat the request as a desired outcome, not guaranteed implementation order; verify that load-bearing prerequisites and current architecture/model contracts make the change coherent now.
 3. Use [`docs/INDEX.md`](docs/INDEX.md) to select the canonical document for the concern.
 4. Read only the relevant stack guide / model / ADR/research source after that.
-5. Never invent an API, target, path, installed tool, dependency version, historical fact, or successful verification result.
+5. For non-trivial runtime/simulation work, apply [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): identify scaling and critical-path work before implementation and require measurement for performance claims.
+6. Never invent an API, target, path, installed tool, dependency version, historical fact, performance result, or successful verification result.
 
 If admission is `PREMATURE`, `CONFLICT`, or `RESEARCH REQUIRED`, stop before production implementation and explain the concrete blocker plus the smallest correct enabling step. Current executable behavior wins over prose. Accepted ADRs record intentional architectural choices. If documentation disagrees with current executable behavior, treat the documentation as stale and correct it in the same bounded change when relevant.
 
@@ -23,6 +24,7 @@ If admission is `PREMATURE`, `CONFLICT`, or `RESEARCH REQUIRED`, stop before pro
 - `src/sim` and `src/protocol` remain Godot-free.
 - The GDExtension adapter is the only Godot ↔ protocol runtime seam.
 - Gameplay work is a small playable vertical capability: rule → contract → experience → proof.
+- Performance is correctness: do not add unjustified per-frame/tick work, full-world scans, hot-path serialization/allocation, per-entity bridge chatter, or synchronous multi-millisecond jobs without an explicit bounded need and measurement. Long calculations must not freeze the interactive main thread.
 - A user request does not waive missing prerequisites or project invariants. Do not fake a downstream capability with hardcoded stand-ins, wrong-layer state, player-only shortcuts, or temporary APIs likely to become accidental contracts.
 - Verification is local-only. Do not add project CI services, committed CI workflow files, or CI configuration; use the repository bootstrap, CMake/CTest presets, and bounded Godot playtests on the developer machine.
 - Do not restore the deleted Fenster / TypeScript / WASM / Playwright architecture.
@@ -43,6 +45,7 @@ If admission is `PREMATURE`, `CONFLICT`, or `RESEARCH REQUIRED`, stop before pro
 - Change readiness / dependency admission: [`docs/CHANGE_ADMISSION.md`](docs/CHANGE_ADMISSION.md)
 - Product/gameplay intent: [`docs/PRODUCT.md`](docs/PRODUCT.md)
 - Runtime boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Performance budgets / profiling / hot-path rules: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
 - Simulation/modeling policy: [`docs/MODELING.md`](docs/MODELING.md)
 - Historical baseline: [`docs/research/high-medieval-baseline-c1200.md`](docs/research/high-medieval-baseline-c1200.md)
 - Tests/playtest/evidence: [`docs/VERIFICATION.md`](docs/VERIFICATION.md)

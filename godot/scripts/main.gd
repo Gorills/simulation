@@ -1,5 +1,7 @@
 extends Node3D
 
+const DEBUG_REFRESH_INTERVAL_SECONDS := 0.25
+
 @onready var controls: PlayerControls = %PlayerControls
 @onready var world_presentation: WorldPresentation = %WorldPresentation
 @onready var player: ThirdPersonPlayer = %Player
@@ -9,8 +11,10 @@ extends Node3D
 
 var sim := SimFacade.new()
 var _bootstrap_projection: Dictionary = {}
+var _bootstrap_projection_text := "{}"
 var _observed_world_projection: Dictionary = {}
 var _controlled_actor_spatial_projection: Dictionary = {}
+var _debug_refresh_elapsed := 0.0
 
 
 func _ready() -> void:
@@ -37,7 +41,7 @@ func _ready() -> void:
     controls.input_device_changed.connect(_on_input_device_changed)
     controls.capture_pointer()
 
-    _bootstrap_projection = sim.bootstrap_debug_projection()
+    _set_bootstrap_projection(sim.bootstrap_debug_projection())
     _refresh_debug_text()
 
     var scenario := _user_arg_value("--scenario")
@@ -50,7 +54,11 @@ func _ready() -> void:
         call_deferred("_run_smoke", artifact_dir)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+    _debug_refresh_elapsed += delta
+    if _debug_refresh_elapsed < DEBUG_REFRESH_INTERVAL_SECONDS:
+        return
+    _debug_refresh_elapsed = 0.0
     _refresh_debug_text()
 
 
@@ -58,10 +66,19 @@ func _on_input_device_changed(_device: int) -> void:
     _refresh_debug_text()
 
 
+func _set_bootstrap_projection(projection: Dictionary) -> void:
+    _bootstrap_projection = projection
+    _bootstrap_projection_text = JSON.stringify(projection)
+
+
 func _refresh_debug_text() -> void:
     var authoritative_position := _spatial_position_or_zero(_controlled_actor_spatial_projection)
+    var fps := int(Performance.get_monitor(Performance.TIME_FPS))
+    var process_ms := float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
+    var physics_ms := float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
     debug_label.text = (
         "controls: %s\n"
+        + "performance: %d fps · process %.2f ms · physics %.2f ms\n"
         + "authoritative entity: %d · tick: %d · revision: %d · protocol: %d\n"
         + "authoritative spatial: (%.2f, %.2f, %.2f)m · epoch: %d\n"
         + "player presentation: (%.2f, %.2f, %.2f)\n"
@@ -69,6 +86,9 @@ func _refresh_debug_text() -> void:
         + "WASD / left stick move · mouse / right stick look · Shift / L3 sprint · Esc releases mouse"
     ) % [
         controls.active_device_name(),
+        fps,
+        process_ms,
+        physics_ms,
         world_presentation.controlled_entity_id(),
         world_presentation.last_tick(),
         world_presentation.last_revision(),
@@ -80,7 +100,7 @@ func _refresh_debug_text() -> void:
         player.global_position.x,
         player.global_position.y,
         player.global_position.z,
-        JSON.stringify(_bootstrap_projection),
+        _bootstrap_projection_text,
     ]
 
 
@@ -92,7 +112,7 @@ func _run_smoke(artifact_dir: String) -> void:
         get_tree().quit(3)
         return
 
-    _bootstrap_projection = response.get("projection", {})
+    _set_bootstrap_projection(response.get("projection", {}))
     _observed_world_projection = sim.observed_world_projection()
     _controlled_actor_spatial_projection = sim.controlled_actor_spatial_projection()
     if not world_presentation.apply_observed_world_projection(
