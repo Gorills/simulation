@@ -18,17 +18,34 @@ Playable systemic RPG with one authoritative C++23 Simulation Core and one Godot
 
 ```text
 Godot 4
-  -> GDExtension adapter
-  -> application protocol
-  -> C++23 Simulation Core
+  -> world_sim_gdextension
+  -> protocol
+  -> sim_core
 ```
 
-`src/sim` owns world truth. Godot owns presentation/input/UI. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+`src/sim` owns world truth. Godot owns presentation/input/UI. The first implemented path is a semantic move command whose returned native projection drives the client position.
 
 ## Local development
 
-Runtime/build bootstrap has not landed yet. Do not infer available tools or successful builds from documentation.
+Requirements: Python 3.12+ and the exact Godot baseline recorded in [`tools/toolchain.lock.json`](tools/toolchain.lock.json). `GODOT_BIN` may point to the editor binary when it is not on `PATH`.
 
-The selected client split is **GDScript + C++ GDExtension**, not C#. Exact Godot/GDExtension policy is in [`docs/engineering/VERSIONS.md`](docs/engineering/VERSIONS.md).
+Bootstrap the pinned CMake/Ninja environment and acquire pinned native dependencies:
 
-The next implementation target is [`docs/ROADMAP.md`](docs/ROADMAP.md#milestone-0--toolchain--playable-spine).
+```bash
+python3 tools/bootstrap.py
+```
+
+Canonical front door after bootstrap:
+
+```bash
+.venv/bin/python tools/dev.py check --preset native
+.venv/bin/python tools/dev.py build --preset dev
+.venv/bin/python tools/dev.py test --preset dev
+.venv/bin/python tools/dev.py play --scenario smoke
+```
+
+On Windows use `.venv\\Scripts\\python.exe` instead.
+
+`native` omits GDExtension but still builds/tests the Godot-free core. `dev` builds the debug GDExtension against the exact immutable godot-cpp revision in [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake). The smoke playtest is bounded, owns only its Godot process, and validates `debug.json` plus `final.png` under `.cache/play/`.
+
+The selected client split is **GDScript + C++ GDExtension**, not C#. Version semantics and verification status live in [`docs/engineering/VERSIONS.md`](docs/engineering/VERSIONS.md).

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "python_minimum": "3.12",
+  "cmake": "3.31.6",
+  "ninja": "1.12.1",
+  "godot": "4.7.1",
+  "godot_api": "4.7"
+}

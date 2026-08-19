@@ -13,6 +13,9 @@ CMakeUserPresets.json
 # Godot
 godot/.godot/
 godot/.import/
+godot/bin/*.so
+godot/bin/*.dll
+godot/bin/*.dylib
 *.translation
 
 # Agent local

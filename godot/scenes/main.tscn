@@ -1,0 +1,27 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Player" type="Polygon2D" parent="."]
+position = Vector2(480, 270)
+polygon = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
+color = Color(0.94, 0.74, 0.24, 1)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Title" type="Label" parent="HUD"]
+offset_left = 20.0
+offset_top = 18.0
+offset_right = 420.0
+offset_bottom = 46.0
+text = "World Simulation — WASD moves through C++"
+
+[node name="Debug" type="Label" parent="HUD"]
+offset_left = 20.0
+offset_top = 54.0
+offset_right = 700.0
+offset_bottom = 160.0
+text = "Waiting for native projection…"

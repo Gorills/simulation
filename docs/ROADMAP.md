@@ -4,31 +4,39 @@ This roadmap describes **product/build milestones**, not AI Layer Work/Task/Epic
 
 ## Current state
 
-The repository is greenfield: architecture, product/modeling/verification contracts and stack guidance exist, but the runtime CMake/Godot implementation has not landed yet.
+Milestone 0's executable spine is now present in source: CMake presets, `sim_core`, protocol, deterministic GoogleTest coverage, pinned dependencies, the GDExtension adapter, a Godot 4.7 client, InputMap movement and a bounded smoke-playtest supervisor.
 
-The next implementation milestone is **Milestone 0 — Toolchain & Playable Spine**.
+**Milestone 0 is not accepted merely because the files exist.** Acceptance still requires a complete pinned dependency build, Godot 4.7.1 extension load and the smoke playtest artifact round-trip described below.
+
+Capability acceptance follows [`VERIFICATION.md`](VERIFICATION.md).
 
 ## Milestone rule
 
 Every milestone becomes playable. Simulation-only depth may not silently accumulate several milestones ahead of the player experience.
 
-Capability acceptance follows [`VERIFICATION.md`](VERIFICATION.md).
-
 ## Milestone 0 — Toolchain & Playable Spine
 
-Deliver the smallest real native-to-Godot path:
+Implemented path:
 
-- explicit local bootstrap for missing build tools;
+- explicit bootstrap in `tools/bootstrap.py`;
 - C++23 native `sim_core`;
 - CMake/Ninja presets and CTest;
-- a Godot 4.7 project using the exact engine baseline from [`engineering/VERSIONS.md`](engineering/VERSIONS.md);
-- an immutable godot-cpp v10 revision targeting API 4.7, verified by build/load rather than prose;
-- one protocol command/result/projection round-trip;
-- InputMap movement that produces an authoritative command;
-- one deterministic native test;
-- one read-only debug projection;
-- one bounded playtest entry/supervisor;
-- one screenshot/debug artifact proving the player-visible state came from C++ rather than GDScript truth.
+- Godot 4.7 project using the baseline from [`engineering/VERSIONS.md`](engineering/VERSIONS.md);
+- immutable GoogleTest and godot-cpp revisions in `cmake/Dependencies.cmake`;
+- one move command/result/projection round-trip;
+- InputMap movement that invokes the authoritative command;
+- deterministic native tests;
+- a read-only native projection rendered by Godot;
+- bounded `tools/play.py --scenario smoke` ownership/timeouts/artifacts;
+- smoke assertions for `debug.json` plus `final.png`.
+
+Pending acceptance evidence:
+
+1. acquire the pinned dependencies in a network-enabled local environment;
+2. build and run CTest through the normal presets;
+3. build the GDExtension against the pinned godot-cpp revision targeting API 4.7;
+4. load it in the pinned Godot 4.7.1 engine;
+5. run `tools/play.py --scenario smoke` and retain the generated projection/screenshot evidence.
 
 Acceptance:
 
