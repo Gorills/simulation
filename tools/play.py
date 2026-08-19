@@ -17,6 +17,7 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
+SUPPORTED_LOCALES = ("ru", "en")
 
 
 class PlayLock(AbstractContextManager["PlayLock"]):
@@ -81,7 +82,7 @@ def terminate_owned_process(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=3)
 
 
-def validate_smoke_artifact(path: Path) -> dict[str, object]:
+def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, object]:
     debug_path = path / "debug.json"
     screenshot_path = path / "final.png"
     if not debug_path.is_file() or not screenshot_path.is_file():
@@ -95,13 +96,15 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
     observed = evidence.get("observed_world_projection")
     spatial = evidence.get("controlled_actor_spatial_projection")
     presentation = evidence.get("presentation")
-    if not all(isinstance(section, dict) for section in (bootstrap, observed, spatial, presentation)):
-        raise SystemExit("debug artifact is missing bootstrap/observed/spatial/presentation sections")
+    localization = evidence.get("localization")
+    if not all(isinstance(section, dict) for section in (bootstrap, observed, spatial, presentation, localization)):
+        raise SystemExit("debug artifact is missing bootstrap/observed/spatial/presentation/localization sections")
 
     assert isinstance(bootstrap, dict)
     assert isinstance(observed, dict)
     assert isinstance(spatial, dict)
     assert isinstance(presentation, dict)
+    assert isinstance(localization, dict)
 
     expected_bootstrap = {
         "entity_id": 1,
@@ -157,12 +160,35 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
         if presentation.get(key) != value:
             raise SystemExit(f"unexpected presentation {key}: expected {value}, got {presentation.get(key)}")
 
+    expected_localized_text = {
+        "ru": {
+            "hud_title": "Диагностика выполнения",
+            "controls_hint": "WASD / левый стик — движение  ·  мышь / правый стик — обзор  ·  Shift / L3 — бег  ·  Esc — освободить курсор",
+        },
+        "en": {
+            "hud_title": "Runtime diagnostics",
+            "controls_hint": "WASD / left stick move  ·  mouse / right stick look  ·  Shift / L3 sprint  ·  Esc releases pointer",
+        },
+    }
+    if localization.get("locale") != expected_locale:
+        raise SystemExit(
+            f"unexpected localization locale: expected {expected_locale}, got {localization.get('locale')}"
+        )
+    if localization.get("supported_locales") != list(SUPPORTED_LOCALES):
+        raise SystemExit(f"unexpected supported locales: {localization.get('supported_locales')}")
+    for key, value in expected_localized_text[expected_locale].items():
+        if localization.get(key) != value:
+            raise SystemExit(
+                f"unexpected localized {key}: expected {value!r}, got {localization.get(key)!r}"
+            )
+
     return evidence
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded Godot playtest owned by this repository")
     parser.add_argument("--scenario", default="smoke", choices=("smoke",))
+    parser.add_argument("--locale", default="ru", choices=SUPPORTED_LOCALES)
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
 
@@ -180,11 +206,23 @@ def main() -> int:
 
     godot = resolve_godot()
     import_project_metadata(godot)
-    command = [godot, "--path", str(PROJECT), "--", "--scenario", args.scenario, "--artifact-dir", str(artifact_dir)]
+    command = [
+        godot,
+        "--path",
+        str(PROJECT),
+        "--",
+        "--locale",
+        args.locale,
+        "--scenario",
+        args.scenario,
+        "--artifact-dir",
+        str(artifact_dir),
+    ]
     started = time.monotonic()
     metadata: dict[str, object] = {
         "run_id": run_id,
         "scenario": args.scenario,
+        "locale": args.locale,
         "command": command,
         "status": "running",
     }
@@ -214,10 +252,10 @@ def main() -> int:
         run_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         raise SystemExit(f"Godot playtest failed with exit code {return_code}; artifacts: {artifact_dir}")
 
-    evidence = validate_smoke_artifact(artifact_dir)
+    evidence = validate_smoke_artifact(artifact_dir, args.locale)
     metadata.update({"status": "passed", "evidence": evidence})
-    run_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    print(f"PLAYTEST PASSED: {artifact_dir}")
+    run_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"PLAYTEST PASSED ({args.locale}): {artifact_dir}")
     return 0
 
 

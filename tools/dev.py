@@ -10,6 +10,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 VENV_BIN = ROOT / ".venv" / ("Scripts" if os.name == "nt" else "bin")
+SUPPORTED_LOCALES = ("ru", "en")
 
 
 def tool(name: str) -> str:
@@ -41,7 +42,9 @@ def main() -> int:
         )
     play = sub.add_parser("play")
     play.add_argument("--scenario", default="smoke")
-    sub.add_parser("run", help="launch the configured main scene without opening the Godot editor")
+    play.add_argument("--locale", default="ru", choices=SUPPORTED_LOCALES)
+    run_game = sub.add_parser("run", help="launch the configured main scene without opening the Godot editor")
+    run_game.add_argument("--locale", choices=SUPPORTED_LOCALES)
 
     args = parser.parse_args()
     if args.command == "configure":
@@ -54,10 +57,23 @@ def main() -> int:
         run([tool("cmake"), "--preset", args.preset])
         run([tool("cmake"), "--build", "--preset", args.preset])
         run([tool("ctest"), "--preset", args.preset])
+        run([sys.executable, str(ROOT / "tools" / "check_localization.py")])
     elif args.command == "play":
-        run([sys.executable, str(ROOT / "tools" / "play.py"), "--scenario", args.scenario])
+        run(
+            [
+                sys.executable,
+                str(ROOT / "tools" / "play.py"),
+                "--scenario",
+                args.scenario,
+                "--locale",
+                args.locale,
+            ]
+        )
     elif args.command == "run":
-        run([sys.executable, str(ROOT / "tools" / "run_game.py")])
+        argv = [sys.executable, str(ROOT / "tools" / "run_game.py")]
+        if args.locale is not None:
+            argv.extend(["--locale", args.locale])
+        run(argv)
     return 0
 
 

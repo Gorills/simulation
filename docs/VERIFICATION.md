@@ -21,16 +21,19 @@ The executable verification paths now include:
 
 ```bash
 python tools/check_architecture.py
+python tools/check_localization.py
 python tools/dev.py check --preset native
 python tools/dev.py check --preset sanitize
 python tools/dev.py check --preset dev
-python tools/dev.py play --scenario smoke
+python tools/dev.py play --scenario smoke --locale ru
+python tools/dev.py play --scenario smoke --locale en
 ```
 
-- `native` configures/builds/tests the Godot-free native graph.
-- `sanitize` runs the same Godot-free graph with ASan+UBSan under GCC/Clang.
+- `native` configures/builds/tests the Godot-free native graph and also runs localization-catalog integrity through `tools/dev.py check`.
+- `sanitize` runs the same Godot-free graph with ASan+UBSan under GCC/Clang and the same localization-catalog integrity check.
 - `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
-- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed identity, authoritative controlled-actor spatial state, presentation initialization and screenshot evidence.
+- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed identity, authoritative controlled-actor spatial state, presentation initialization, active locale/translated probes and screenshot evidence.
+- localization-affecting runtime UI changes require rendered evidence for every supported locale; catalog parity alone is not visual proof.
 - the third-person control foundation additionally requires real local keyboard/mouse and gamepad playtesting; static authoritative spawn evidence is not proof that continuous locomotion is authoritative yet.
 
 The existence of these commands is not evidence that all of them have run in a particular environment.
@@ -162,10 +165,11 @@ Tune presentation values through `ControlProfile` / `LocomotionProfile` first. C
 `tools/play.py` is the single ordinary automated playtest entry point:
 
 ```bash
-python tools/play.py --scenario smoke
+python tools/play.py --scenario smoke --locale ru
+python tools/play.py --scenario smoke --locale en
 ```
 
-Do not create an alternative long-lived runner merely for convenience.
+Russian is the default when `--locale` is omitted. Do not create an alternative long-lived runner merely for convenience.
 
 ### Preflight
 
@@ -208,7 +212,7 @@ Each run writes under:
   debug.json
 ```
 
-For the `smoke` scenario, `debug.json` is a boundary-evidence object with four sections:
+For the `smoke` scenario, `debug.json` is a boundary-evidence object with five sections:
 
 ```text
 bootstrap_projection:
@@ -236,7 +240,15 @@ presentation:
   controlled_spatial_epoch=1
   controlled_spatial_tick=0
   controlled_spatial_revision=1
+
+localization:
+  locale=ru|en
+  supported_locales=[ru,en]
+  hud_title=<translated UI_DEBUG_TITLE>
+  controls_hint=<translated UI_DEBUG_CONTROLS_HINT>
 ```
+
+The localization section proves the active presentation locale and selected translated runtime strings. The simulation/protocol evidence remains language-independent.
 
 The initial actor spawn creates revision 1. `WorldPresentation` binds identity and performs initial placement from the revision-1 spatial projection, then calls `reset_physics_interpolation()`. The bootstrap step creates revision 2 but mutates only the old grid probe; a fresh production spatial projection therefore still reports origin/zero velocity/epoch 1 at revision 2.
 
@@ -275,6 +287,19 @@ Godot import/load
 -> screenshot/visible-state evidence when useful
 -> confirm no new authoritative state was introduced in Godot
 ```
+
+### Localization / player-visible text change
+
+```text
+localization catalog integrity
+-> Godot import/load
+-> render affected UI in ru
+-> render affected UI in en
+-> inspect glyph coverage, keys, clipping and reflow
+-> pseudolocalization for material layout changes when useful
+```
+
+See [`engineering/localization.md`](engineering/localization.md) for the locale/key ownership contract.
 
 ### Protocol / GDExtension change
 
