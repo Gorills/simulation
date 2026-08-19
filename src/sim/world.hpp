@@ -13,9 +13,53 @@
 
 namespace worldsim::sim {
 
+enum class LocomotionPace : std::uint8_t {
+    walk,
+    run,
+    sprint,
+};
+
+[[nodiscard]] constexpr bool is_valid_locomotion_pace(const LocomotionPace pace) noexcept {
+    switch (pace) {
+    case LocomotionPace::walk:
+    case LocomotionPace::run:
+    case LocomotionPace::sprint:
+        return true;
+    }
+    return false;
+}
+
+// Authoritative base capability for ordinary grounded locomotion. These values
+// are deliberately actor state rather than a global controller profile. Future
+// causal state such as wounds, carried load, progression or concrete magical
+// effects can alter the limits resolved by World without changing intent or
+// creating a player/NPC-specific movement law.
+//
+// The current numbers are first project feel baselines, not biological claims:
+// ordinary walk 1.0 m/s, run 3.0 m/s, sprint 5.8 m/s, with deterministic
+// acceleration/braking. They remain playtest-tunable through actor/content state.
+struct ActorLocomotionCapability final {
+    MillimetersPerSecond walk_speed{1'000};
+    MillimetersPerSecond run_speed{3'000};
+    MillimetersPerSecond sprint_speed{5'800};
+    MillimetersPerSecondSquared acceleration{6'000};
+    MillimetersPerSecondSquared braking{8'000};
+
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return walk_speed.value >= 0
+            && run_speed.value >= walk_speed.value
+            && sprint_speed.value >= run_speed.value
+            && acceleration.value >= 0
+            && braking.value >= 0;
+    }
+
+    constexpr bool operator==(const ActorLocomotionCapability &) const = default;
+};
+
 enum class WorldError : std::uint8_t {
     invalid_entity_id,
     invalid_spatial_state,
+    invalid_locomotion_capability,
     invalid_rest_need_state,
     duplicate_entity,
     unknown_entity,
@@ -27,6 +71,8 @@ enum class GroundedLocomotionTickError : std::uint8_t {
     unknown_entity,
     missing_spatial_state,
     duplicate_actor_intent,
+    invalid_locomotion_capability,
+    invalid_pace,
     invalid_continuation_state,
     incompatible_tick_rate,
     invalid_intent,
@@ -38,6 +84,7 @@ enum class WorldSnapshotError : std::uint8_t {
     unsupported_schema_version,
     invalid_entity_id,
     invalid_spatial_state,
+    invalid_locomotion_capability,
     invalid_rest_need_state,
     invalid_grounded_locomotion_state,
     duplicate_entity,
@@ -53,9 +100,9 @@ struct GroundedLocomotionContext final {
     }
 };
 
-// Temporary Stage C2 integration context. It is neutral Simulation-owned data,
-// not a production content location. Real location content can supply another
-// GroundedLocomotionContext through the same World operation.
+// Temporary Stage C2/Milestone 1 integration context. It owns shared world-law
+// fixture data only. Per-actor speed/acceleration/braking are resolved by World
+// from ActorState + requested pace before each step.
 [[nodiscard]] inline GroundedLocomotionContext make_flat_locomotion_acceptance_context() {
     GroundedLocomotionContext context{
         .body = UprightCapsule{
@@ -64,7 +111,9 @@ struct GroundedLocomotionContext final {
         },
         .config = GroundedStepConfig{
             .ticks_per_second = 60,
-            .move_speed = MillimetersPerSecond{5800},
+            .move_speed = MillimetersPerSecond{0},
+            .acceleration = MillimetersPerSecondSquared{0},
+            .braking = MillimetersPerSecondSquared{0},
             .max_slope_rise_per_1000_run = 1192,
             .max_step_up = Millimeters{300},
             .gravity = kNonMagicalGravityBaseline,
@@ -96,6 +145,8 @@ struct GroundedLocomotionContinuation final {
         return remainder.x > -rate && remainder.x < rate
             && remainder.y > -rate && remainder.y < rate
             && remainder.z > -rate && remainder.z < rate
+            && remainder.velocity_x > -rate && remainder.velocity_x < rate
+            && remainder.velocity_z > -rate && remainder.velocity_z < rate
             && remainder.vertical_velocity > -rate
             && remainder.vertical_velocity < rate;
     }
@@ -128,6 +179,7 @@ struct ActorSpawnState final {
     // depend on this grid position.
     GridPosition bootstrap_position{};
     std::optional<SpatialState> spatial{};
+    ActorLocomotionCapability locomotion_capability{};
     std::optional<RestNeedState> rest_need{};
 };
 
@@ -135,6 +187,7 @@ struct ActorState final {
     EntityId id{};
     GridPosition bootstrap_position{};
     std::optional<SpatialState> spatial{};
+    ActorLocomotionCapability locomotion_capability{};
     std::optional<RestNeedState> rest_need{};
     // Hidden fixed-step continuation state. It affects future authoritative
     // movement and therefore belongs to snapshot truth, but not to presentation
@@ -144,9 +197,14 @@ struct ActorState final {
     constexpr bool operator==(const ActorState &) const = default;
 };
 
+// Intent carries direction/magnitude plus a semantic pace choice. It never
+// carries a requested meters-per-second value: World resolves that from the
+// authoritative actor capability so a client/NPC decision source cannot author
+// the movement outcome directly.
 struct ActorGroundedMoveIntent final {
     EntityId actor{};
     PlanarMoveIntent move{};
+    LocomotionPace pace{LocomotionPace::walk};
 
     constexpr bool operator==(const ActorGroundedMoveIntent &) const = default;
 };
@@ -172,7 +230,7 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 3;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 4;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
 // protocol envelope versions belong to a later persistence layer; this value
@@ -206,9 +264,10 @@ public:
     // Applies one fixed authoritative locomotion tick atomically to the supplied
     // actor intents. One batch advances SimulationTick/WorldRevision once
     // regardless of actor count, so human and NPC intents share the same world
-    // transition rather than advancing time through player-only calls. On
-    // success the returned samples are post-transition and canonically ordered
-    // by EntityId.
+    // transition rather than advancing time through player-only calls. World
+    // resolves each actor's capability + requested pace into solver limits before
+    // computing the step. On success samples are post-transition and canonically
+    // ordered by EntityId.
     [[nodiscard]] std::expected<GroundedLocomotionTickResult, GroundedLocomotionTickError>
     advance_grounded_locomotion_tick(
         const GroundedLocomotionContext &context,
@@ -228,6 +287,7 @@ public:
     [[nodiscard]] bool contains_actor(EntityId id) const noexcept;
     [[nodiscard]] std::optional<GridPosition> actor_bootstrap_position(EntityId id) const noexcept;
     [[nodiscard]] std::optional<SpatialState> actor_spatial_state(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<ActorLocomotionCapability> actor_locomotion_capability(EntityId id) const noexcept;
     [[nodiscard]] std::optional<RestNeedState> actor_rest_need(EntityId id) const noexcept;
     [[nodiscard]] SimulationTick tick() const noexcept;
     [[nodiscard]] WorldRevision revision() const noexcept;

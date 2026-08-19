@@ -5,6 +5,7 @@
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
+#include <optional>
 #include <stdexcept>
 
 namespace worldsim::gdextension {
@@ -30,6 +31,8 @@ constexpr double kMillimetersPerMeter = 1000.0;
     switch (error) {
     case protocol::ControlledActorMovementError::invalid_intent:
         return godot::String("invalid_intent");
+    case protocol::ControlledActorMovementError::invalid_pace:
+        return godot::String("invalid_pace");
     case protocol::ControlledActorMovementError::protocol_integer_exhausted:
         return godot::String("protocol_integer_exhausted");
     case protocol::ControlledActorMovementError::controlled_actor_missing:
@@ -40,6 +43,21 @@ constexpr double kMillimetersPerMeter = 1000.0;
         return godot::String("world_rejected");
     }
     return godot::String("unknown_movement_error");
+}
+
+[[nodiscard]] std::optional<protocol::ControlledActorLocomotionPace> movement_pace(
+    const std::int32_t value
+) noexcept {
+    switch (value) {
+    case 0:
+        return protocol::ControlledActorLocomotionPace::walk;
+    case 1:
+        return protocol::ControlledActorLocomotionPace::run;
+    case 2:
+        return protocol::ControlledActorLocomotionPace::sprint;
+    default:
+        return std::nullopt;
+    }
 }
 
 [[nodiscard]] godot::Dictionary protocol_integer_error_dictionary() {
@@ -86,7 +104,7 @@ void SimFacade::_bind_methods() {
         &SimFacade::controlled_actor_spatial_projection
     );
     godot::ClassDB::bind_method(
-        godot::D_METHOD("controlled_actor_submit_move_intent", "x", "z"),
+        godot::D_METHOD("controlled_actor_submit_move_intent", "x", "z", "pace"),
         &SimFacade::controlled_actor_submit_move_intent
     );
     godot::ClassDB::bind_method(
@@ -142,10 +160,22 @@ godot::Dictionary SimFacade::controlled_actor_spatial_projection() const {
 
 godot::Dictionary SimFacade::controlled_actor_submit_move_intent(
     const std::int32_t x,
-    const std::int32_t z
+    const std::int32_t z,
+    const std::int32_t pace
 ) {
     godot::Dictionary response;
-    const auto outcome = simulation_.submit_controlled_actor_move_intent({.x = x, .z = z});
+    const auto semantic_pace = movement_pace(pace);
+    if (!semantic_pace.has_value()) {
+        response["ok"] = false;
+        response["error"] = godot::String("invalid_pace");
+        return response;
+    }
+
+    const auto outcome = simulation_.submit_controlled_actor_move_intent({
+        .x = x,
+        .z = z,
+        .pace = *semantic_pace,
+    });
     if (!outcome.has_value()) {
         response["ok"] = false;
         response["error"] = movement_error_name(outcome.error());

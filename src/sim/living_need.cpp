@@ -19,6 +19,8 @@ decide_npc_rest_need(const World &world, const EntityId actor) noexcept {
         return std::unexpected(NpcRestNeedDecisionError::invalid_rest_need_state);
     }
 
+    // Rest travel is ordinary walking intent. The decision does not author a
+    // numeric speed; World resolves the actor's current walk capability.
     const auto movement = decide_npc_local_move_toward_waypoint(
         world,
         NpcLocalWaypoint{
@@ -26,6 +28,7 @@ decide_npc_rest_need(const World &world, const EntityId actor) noexcept {
             .x = need->rest_x,
             .z = need->rest_z,
             .axis_arrival_tolerance = need->axis_arrival_tolerance,
+            .pace = LocomotionPace::walk,
         }
     );
     if (!movement.has_value()) {

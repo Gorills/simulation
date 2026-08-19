@@ -12,6 +12,7 @@ TEST(ControlledMovementProtocol, SubmittingIntentDoesNotMutateAuthoritativeWorld
     const auto submitted = simulation.submit_controlled_actor_move_intent({
         .x = 1000,
         .z = 0,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
     });
 
     ASSERT_TRUE(submitted.has_value());
@@ -19,11 +20,12 @@ TEST(ControlledMovementProtocol, SubmittingIntentDoesNotMutateAuthoritativeWorld
     EXPECT_EQ(simulation.observed_world_projection(), observed_before);
 }
 
-TEST(ControlledMovementProtocol, LocomotionTickReturnsPostTransitionAuthoritativeSampleBatch) {
+TEST(ControlledMovementProtocol, LocomotionTickReturnsResolvedPlayerAndNpcSamples) {
     worldsim::protocol::Simulation simulation{42};
     ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({
         .x = 1000,
         .z = 0,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
     }).has_value());
 
     const auto result = simulation.advance_locomotion_tick();
@@ -36,20 +38,20 @@ TEST(ControlledMovementProtocol, LocomotionTickReturnsPostTransitionAuthoritativ
 
     const auto &controlled_sample = result->samples[0];
     EXPECT_EQ(controlled_sample.entity_id, 1);
-    EXPECT_EQ(controlled_sample.x_mm, 96);
+    EXPECT_EQ(controlled_sample.x_mm, 1);
     EXPECT_EQ(controlled_sample.y_mm, 0);
     EXPECT_EQ(controlled_sample.z_mm, 0);
-    EXPECT_EQ(controlled_sample.velocity_x_mm_per_second, 5800);
+    EXPECT_EQ(controlled_sample.velocity_x_mm_per_second, 100);
     EXPECT_EQ(controlled_sample.velocity_y_mm_per_second, 0);
     EXPECT_EQ(controlled_sample.velocity_z_mm_per_second, 0);
     EXPECT_EQ(controlled_sample.spatial_epoch, 1);
 
     const auto &npc_sample = result->samples[1];
     EXPECT_EQ(npc_sample.entity_id, 2);
-    EXPECT_EQ(npc_sample.x_mm, 2'904);
+    EXPECT_EQ(npc_sample.x_mm, 2'999);
     EXPECT_EQ(npc_sample.y_mm, 0);
     EXPECT_EQ(npc_sample.z_mm, -3'000);
-    EXPECT_EQ(npc_sample.velocity_x_mm_per_second, -5800);
+    EXPECT_EQ(npc_sample.velocity_x_mm_per_second, -100);
     EXPECT_EQ(npc_sample.velocity_y_mm_per_second, 0);
     EXPECT_EQ(npc_sample.velocity_z_mm_per_second, 0);
     EXPECT_EQ(npc_sample.spatial_epoch, 1);
@@ -59,18 +61,9 @@ TEST(ControlledMovementProtocol, LocomotionTickReturnsPostTransitionAuthoritativ
     EXPECT_EQ(projection.x_mm, controlled_sample.x_mm);
     EXPECT_EQ(projection.y_mm, controlled_sample.y_mm);
     EXPECT_EQ(projection.z_mm, controlled_sample.z_mm);
-    EXPECT_EQ(
-        projection.velocity_x_mm_per_second,
-        controlled_sample.velocity_x_mm_per_second
-    );
-    EXPECT_EQ(
-        projection.velocity_y_mm_per_second,
-        controlled_sample.velocity_y_mm_per_second
-    );
-    EXPECT_EQ(
-        projection.velocity_z_mm_per_second,
-        controlled_sample.velocity_z_mm_per_second
-    );
+    EXPECT_EQ(projection.velocity_x_mm_per_second, controlled_sample.velocity_x_mm_per_second);
+    EXPECT_EQ(projection.velocity_y_mm_per_second, controlled_sample.velocity_y_mm_per_second);
+    EXPECT_EQ(projection.velocity_z_mm_per_second, controlled_sample.velocity_z_mm_per_second);
     EXPECT_EQ(projection.spatial_epoch, controlled_sample.spatial_epoch);
     EXPECT_EQ(projection.tick, result->tick);
     EXPECT_EQ(projection.revision, result->revision);
@@ -81,46 +74,78 @@ TEST(ControlledMovementProtocol, InvalidIntentDoesNotReplaceLastAcceptedIntent) 
     ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({
         .x = 1000,
         .z = 0,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
     }).has_value());
 
     const auto invalid = simulation.submit_controlled_actor_move_intent({
         .x = 1000,
         .z = 1000,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::sprint,
     });
 
     ASSERT_FALSE(invalid.has_value());
-    EXPECT_EQ(
-        invalid.error(),
-        worldsim::protocol::ControlledActorMovementError::invalid_intent
-    );
+    EXPECT_EQ(invalid.error(), worldsim::protocol::ControlledActorMovementError::invalid_intent);
 
     const auto result = simulation.advance_locomotion_tick();
     ASSERT_TRUE(result.has_value());
     ASSERT_EQ(result->samples.size(), 2U);
     EXPECT_EQ(result->samples[0].entity_id, 1);
-    EXPECT_EQ(result->samples[0].x_mm, 96);
-    EXPECT_EQ(result->samples[0].velocity_x_mm_per_second, 5800);
+    EXPECT_EQ(result->samples[0].x_mm, 1);
+    EXPECT_EQ(result->samples[0].velocity_x_mm_per_second, 100);
 }
 
-TEST(ControlledMovementProtocol, ZeroIntentStopsGroundedMotionOnNextWorldTick) {
+TEST(ControlledMovementProtocol, InvalidPaceDoesNotReplaceLastAcceptedIntent) {
     worldsim::protocol::Simulation simulation{42};
     ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({
         .x = 1000,
         .z = 0,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
     }).has_value());
-    ASSERT_TRUE(simulation.advance_locomotion_tick().has_value());
 
-    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
-    const auto stopped = simulation.advance_locomotion_tick();
+    const auto invalid = simulation.submit_controlled_actor_move_intent({
+        .x = 1000,
+        .z = 0,
+        .pace = static_cast<worldsim::protocol::ControlledActorLocomotionPace>(99),
+    });
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_EQ(invalid.error(), worldsim::protocol::ControlledActorMovementError::invalid_pace);
 
-    ASSERT_TRUE(stopped.has_value());
-    ASSERT_EQ(stopped->samples.size(), 2U);
-    EXPECT_EQ(stopped->samples[0].entity_id, 1);
-    EXPECT_EQ(stopped->samples[0].x_mm, 96);
-    EXPECT_EQ(stopped->samples[0].velocity_x_mm_per_second, 0);
-    EXPECT_EQ(stopped->tick, 2);
-    EXPECT_EQ(stopped->revision, 4);
-    EXPECT_EQ(stopped->samples[0].spatial_epoch, 1);
+    const auto result = simulation.advance_locomotion_tick();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->samples[0].velocity_x_mm_per_second, 100);
+}
+
+TEST(ControlledMovementProtocol, ZeroIntentBrakesGroundedMotionBeforeStopping) {
+    worldsim::protocol::Simulation simulation{42};
+    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({
+        .x = 1000,
+        .z = 0,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
+    }).has_value());
+    for (int tick = 0; tick < 30; ++tick) {
+        ASSERT_TRUE(simulation.advance_locomotion_tick().has_value());
+    }
+
+    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
+    }).has_value());
+    const auto braking = simulation.advance_locomotion_tick();
+    ASSERT_TRUE(braking.has_value());
+    EXPECT_EQ(braking->samples[0].entity_id, 1);
+    EXPECT_EQ(braking->samples[0].x_mm, 822);
+    EXPECT_EQ(braking->samples[0].velocity_x_mm_per_second, 2'867);
+
+    worldsim::protocol::AuthoritativeMovementSampleBatch stopped{};
+    for (int tick = 0; tick < 22; ++tick) {
+        const auto next = simulation.advance_locomotion_tick();
+        ASSERT_TRUE(next.has_value());
+        stopped = *next;
+    }
+    EXPECT_EQ(stopped.samples[0].x_mm, 1'312);
+    EXPECT_EQ(stopped.samples[0].velocity_x_mm_per_second, 0);
+    EXPECT_EQ(stopped.tick, 53);
+    EXPECT_EQ(stopped.revision, 55);
+    EXPECT_EQ(stopped.samples[0].spatial_epoch, 1);
 }
 
 TEST(ControlledMovementProtocol, RepeatedBatchesAreStrictlyOrderedByTickAndRevision) {
@@ -129,6 +154,7 @@ TEST(ControlledMovementProtocol, RepeatedBatchesAreStrictlyOrderedByTickAndRevis
     const worldsim::protocol::ControlledActorMoveIntent intent{
         .x = 1000,
         .z = 0,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
     };
     ASSERT_TRUE(first.submit_controlled_actor_move_intent(intent).has_value());
     ASSERT_TRUE(second.submit_controlled_actor_move_intent(intent).has_value());
@@ -151,19 +177,21 @@ TEST(ControlledMovementProtocol, RepeatedBatchesAreStrictlyOrderedByTickAndRevis
     }
 
     const auto spatial = first.controlled_actor_spatial_projection();
-    EXPECT_EQ(spatial.x_mm, 5800);
-    EXPECT_EQ(spatial.velocity_x_mm_per_second, 5800);
+    EXPECT_EQ(spatial.x_mm, 2'275);
+    EXPECT_EQ(spatial.velocity_x_mm_per_second, 3'000);
     EXPECT_EQ(spatial.tick, 60);
     EXPECT_EQ(spatial.revision, 62);
     EXPECT_EQ(spatial.spatial_epoch, 1);
 }
 
-TEST(ControlledMovementProtocol, LivingNeedNpcStopsWhenAssignedRestPointIsSatisfied) {
+TEST(ControlledMovementProtocol, LivingNeedNpcWalksAndBrakesInsideAssignedRestTolerance) {
     worldsim::protocol::Simulation simulation{42};
-    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
+    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
+    }).has_value());
 
     worldsim::protocol::AuthoritativeMovementSampleBatch last{};
-    for (int tick = 0; tick < 62; ++tick) {
+    for (int tick = 0; tick < 364; ++tick) {
         const auto advanced = simulation.advance_locomotion_tick();
         ASSERT_TRUE(advanced.has_value());
         ASSERT_EQ(advanced->samples.size(), 2U);
@@ -172,9 +200,9 @@ TEST(ControlledMovementProtocol, LivingNeedNpcStopsWhenAssignedRestPointIsSatisf
         last = *advanced;
     }
 
-    EXPECT_EQ(last.tick, 62);
-    EXPECT_EQ(last.revision, 64);
-    EXPECT_EQ(last.samples[1].x_mm, -2'896);
+    EXPECT_EQ(last.tick, 364);
+    EXPECT_EQ(last.revision, 366);
+    EXPECT_EQ(last.samples[1].x_mm, -2'912);
     EXPECT_EQ(last.samples[1].z_mm, -3'000);
     EXPECT_EQ(last.samples[1].velocity_x_mm_per_second, 0);
     EXPECT_EQ(last.samples[1].velocity_z_mm_per_second, 0);

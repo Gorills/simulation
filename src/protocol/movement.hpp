@@ -10,9 +10,31 @@ namespace worldsim::protocol {
 
 inline constexpr std::int32_t kPlanarMoveIntentScale = 1000;
 
+enum class ControlledActorLocomotionPace : std::uint8_t {
+    walk = 0,
+    run = 1,
+    sprint = 2,
+};
+
+[[nodiscard]] constexpr bool is_valid_controlled_actor_locomotion_pace(
+    const ControlledActorLocomotionPace pace
+) noexcept {
+    switch (pace) {
+    case ControlledActorLocomotionPace::walk:
+    case ControlledActorLocomotionPace::run:
+    case ControlledActorLocomotionPace::sprint:
+        return true;
+    }
+    return false;
+}
+
+// Direction/magnitude + semantic pace only. The application client cannot submit
+// a desired velocity or displacement; authoritative actor capability resolves the
+// actual movement limits inside Simulation World.
 struct ControlledActorMoveIntent final {
     std::int32_t x{};
     std::int32_t z{};
+    ControlledActorLocomotionPace pace{ControlledActorLocomotionPace::run};
 
     constexpr bool operator==(const ControlledActorMoveIntent &) const = default;
 };
@@ -48,6 +70,7 @@ struct AuthoritativeMovementSampleBatch final {
 
 enum class ControlledActorMovementError : std::uint8_t {
     invalid_intent,
+    invalid_pace,
     protocol_integer_exhausted,
     controlled_actor_missing,
     controlled_actor_spatial_state_missing,

@@ -2,6 +2,9 @@ extends Node3D
 
 const DEBUG_REFRESH_INTERVAL_SECONDS := 0.25
 const MOVE_INTENT_SCALE := 1000
+const LOCOMOTION_PACE_WALK := 0
+const LOCOMOTION_PACE_RUN := 1
+const LOCOMOTION_PACE_SPRINT := 2
 
 @onready var controls: PlayerControls = %PlayerControls
 @onready var world_presentation: WorldPresentation = %WorldPresentation
@@ -83,7 +86,8 @@ func _physics_process(_delta: float) -> void:
     if _smoke_movement_requested:
         _smoke_movement_requested = false
         _smoke_movement_succeeded = _advance_authoritative_locomotion(
-            Vector2i(MOVE_INTENT_SCALE, 0)
+            Vector2i(MOVE_INTENT_SCALE, 0),
+            LOCOMOTION_PACE_RUN
         )
         _smoke_movement_finished = true
         return
@@ -92,7 +96,8 @@ func _physics_process(_delta: float) -> void:
         return
 
     var intent := _camera_relative_move_intent()
-    if not _advance_authoritative_locomotion(intent):
+    var pace := LOCOMOTION_PACE_SPRINT if controls.is_sprinting() else LOCOMOTION_PACE_RUN
+    if not _advance_authoritative_locomotion(intent, pace):
         _locomotion_runtime_enabled = false
         push_error("authoritative locomotion disabled after bridge failure")
 
@@ -117,8 +122,8 @@ func _set_bootstrap_projection(projection: Dictionary) -> void:
     _bootstrap_projection = projection
 
 
-func _advance_authoritative_locomotion(intent: Vector2i) -> bool:
-    var submitted: Dictionary = sim.controlled_actor_submit_move_intent(intent.x, intent.y)
+func _advance_authoritative_locomotion(intent: Vector2i, pace: int) -> bool:
+    var submitted: Dictionary = sim.controlled_actor_submit_move_intent(intent.x, intent.y, pace)
     if not bool(submitted.get("ok", false)):
         push_error(
             "controlled move intent rejected: %s"

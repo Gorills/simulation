@@ -26,6 +26,8 @@ NPC decision -------------------------------+-> same domain action path
 
 Do not add `is_player` branches to movement, economy, relationships, institutions, inventory, ownership, damage or other world laws.
 
+For locomotion specifically, the intent source may choose direction/magnitude and a semantic pace. Numeric movement limits come from authoritative actor state and the same `World` resolver for both player and NPC.
+
 ## Write path: intent into world change
 
 A Godot feature that wants to change the world submits semantic intent through `SimFacade`/protocol.
@@ -38,7 +40,7 @@ OfferTrade
 Attack
 Travel
 GiveGift
-ControlledActorMoveIntent
+ControlledActorMoveIntent{x,z,pace}
 ```
 
 Bad:
@@ -49,27 +51,30 @@ SetInventory
 SetRelationship
 SetPosition
 SetVelocity
+SetSpeed
 SetTransform
 ```
 
 The client may describe what an actor attempts. Simulation computes the resulting world state.
 
-The controlled locomotion path is now executable end-to-end:
+The controlled locomotion path is executable end-to-end:
 
 ```text
-PlayerControls camera-relative analog intent
-  -> SimFacade.controlled_actor_submit_move_intent(x, z)
+PlayerControls camera-relative analog direction + semantic pace
+  -> SimFacade.controlled_actor_submit_move_intent(x, z, pace)
   -> protocol/session intent state
   -> SimFacade.advance_locomotion_tick()
   -> Simulation::advance_locomotion_tick()
   -> World::advance_grounded_locomotion_tick(actor-keyed batch)
-  -> authoritative movement/collision transition
+       -> ActorLocomotionCapability + LocomotionPace
+       -> World resolves move speed / acceleration / braking
+       -> authoritative movement/collision transition
   -> AuthoritativeMovementSampleBatch
   -> GDExtension unit/DTO translation
   -> WorldPresentation
 ```
 
-Submitting movement intent alone is not a world mutation. The fixed locomotion tick is the authoritative time/state transition.
+Submitting movement intent alone is not a world mutation. The fixed locomotion tick is the authoritative time/state transition. The client never sends meters per second.
 
 ## Read path: purpose-built projections
 
@@ -128,7 +133,7 @@ The batch is the post-transition result of one atomic World locomotion tick. Eve
 
 Across locomotion batches, `SimulationTick` provides movement-time order. `WorldRevision` locates that batch relative to other authoritative world mutations. Do not add a second sequence counter until a concrete transport/presentation requirement proves that tick + revision are insufficient.
 
-Protocol **v5** makes this transition-result contract Godot-facing through `SimFacade.advance_locomotion_tick()`. `ControlledActorSpatialProjection` remains useful for initial/debug reads; it is not the continuous frame stream.
+Protocol **v5** made the movement transition-result contract Godot-facing. Protocol **v6** adds semantic controlled locomotion pace. `ControlledActorSpatialProjection` remains useful for initial/debug reads; it is not the continuous frame stream.
 
 ## Identity and presentation replicas
 
@@ -214,9 +219,12 @@ Godot's interpolation contract requires resetting physics interpolation after in
 The active movement path is:
 
 ```text
-PlayerControls semantic movement intent + Core NPC need decision
+PlayerControls direction + run/sprint pace
+Core NPC need decision + walk pace
         ↓
-protocol v5 collects actor-keyed movement intents
+protocol v6 collects actor-keyed semantic movement intents
+        ↓
+World resolves each actor's authoritative locomotion capability
         ↓
 Godot-free Simulation movement/collision solver
         ↓
@@ -243,7 +251,9 @@ Godot physics interpolation for same-epoch rendering
 
 A same-epoch controlled sample updates the physics-root position/velocity during `_physics_process()`. A changed `SpatialEpoch` is a discontinuity: the new authoritative position is applied and interpolation is reset rather than blending across the relocation.
 
-The controlled `ThirdPersonPlayer` no longer calls `move_and_slide()` or computes local gravity, acceleration/deceleration or sprint displacement. Its physics-root position therefore cannot create a competing location outcome. The visual child may rotate toward authoritative velocity because facing is still presentation-only.
+The controlled `ThirdPersonPlayer` does not call `move_and_slide()` or compute local gravity, acceleration/deceleration or sprint displacement. `LocomotionProfile` now contains presentation-only turn response. The visual child may rotate toward authoritative velocity because facing is still presentation-only.
+
+The current authoritative actor capability supplies project feel baselines for `walk/run/sprint` and acceleration/braking. Those values are Simulation state, not client configuration. Future wounds, carried load, progression or concrete magical effects may alter resolved capability only when those mechanics exist; GDExtension/Godot must remain unaware of the formula.
 
 The implemented solver uses neutral Simulation-owned acceptance geometry. Production content-location geometry/query representation is still deliberately unresolved; choose it from a concrete terrain/reachability requirement. Do not make Godot Physics/Jolt, `StaticBody3D`, a navmesh or `CharacterBody3D` authoritative by convenience.
 
@@ -307,6 +317,7 @@ Allowed:
 Not allowed:
 
 - collision/movement resolution;
+- actor speed/capability calculation;
 - prices/trade decisions;
 - relationship changes;
 - authoritative spawning;
@@ -318,13 +329,13 @@ Current surface:
 ```text
 observed_world_projection()
 controlled_actor_spatial_projection()
-controlled_actor_submit_move_intent(x, z)
+controlled_actor_submit_move_intent(x, z, pace)
 advance_locomotion_tick()
 bootstrap_submit_move(...)      # smoke only
 bootstrap_debug_projection()    # smoke/debug only
 ```
 
-Protocol v5 was introduced when the movement intent/batch surface became client-facing. A future breaking DTO/semantic change must update the shared protocol version and affected native/Godot evidence together.
+Protocol v5 was introduced when the movement intent/batch surface became client-facing. Protocol **v6** introduces semantic locomotion pace. Future breaking DTO/semantic changes must update the shared protocol version and affected native/Godot evidence together.
 
 ## Extension checklist
 
@@ -355,6 +366,9 @@ If the answer begins with “Godot sets the world state”, stop and move the de
 - universal multi-kind Godot entity-scene factory;
 - production content-location collision/index representation;
 - authoritative facing/orientation;
-- authoritative sprint/acceleration/deceleration semantics;
+- stamina/endurance or carried-load locomotion effects;
+- wound/progression locomotion formulas;
+- generic movement modifier/effect stack;
+- generic `magic_speed_multiplier` or magic movement hierarchy;
 - automatic origin rebasing;
 - local prediction/rollback framework.

@@ -88,6 +88,7 @@ if(WORLD_SIM_BUILD_TESTS)
         sim_core_tests
         tests/sim/grounded_locomotion_test.cpp
         tests/sim/living_need_test.cpp
+        tests/sim/locomotion_capability_test.cpp
         tests/sim/npc_locomotion_test.cpp
         tests/sim/world_test.cpp
         tests/sim/world_locomotion_test.cpp
