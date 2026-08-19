@@ -1,0 +1,22 @@
+name: Verify protocol integer GDExtension
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dev-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: dde7cbe5716d426aebd63b9e18d7adeb9a6f52f2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install pinned build tools
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements-dev.txt
+      - name: Build and test dev graph
+        run: python tools/dev.py check --preset dev
