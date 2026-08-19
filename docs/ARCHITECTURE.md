@@ -150,7 +150,7 @@ NPC decision -------------------------------+-> same authoritative action/rule p
 
 Human control is a relationship outside the actor's world identity. It must not grant alternate economy, inventory, relationship, institution, ownership, law, combat or movement rules.
 
-For locomotion, the shared Core seam is concrete: `World::advance_grounded_locomotion_tick()` consumes an actor-keyed batch. Tests prove two actors can move in one world tick, invalid batches do not partially mutate actors, and returned samples are canonically ordered by ascending `EntityId` even when input intent order is reversed. The protocol/Godot session currently binds only the human-controlled actor to that generic operation. A real NPC decision source feeding the same batch remains the next integration proof, not a separate movement law.
+For locomotion, the shared Core seam is concrete: `World::advance_grounded_locomotion_tick()` consumes an actor-keyed batch. Tests prove two actors can move in one world tick, invalid batches do not partially mutate actors, and returned samples are canonically ordered by ascending `EntityId` even when input intent order is reversed. Core now also provides `decide_npc_local_move_toward_waypoint()`: it reads authoritative actor spatial state and emits the same `ActorGroundedMoveIntent` shape rather than moving the NPC itself. Native parity evidence batches an NPC-produced full-strength +X intent with an equivalent human +X intent through the same World transition and requires equivalent movement/velocity results. The protocol/Godot session still binds only the human-controlled actor; why an NPC chooses a waypoint belongs to Milestone 1 causal need/task logic, not to a second locomotion law.
 
 If an NPC can open a shop, buy an item, attack a traveler, join an institution, acquire property or move through a place, a human-controlled actor uses the same world capability when the same prerequisites hold.
 
@@ -169,11 +169,12 @@ Durable distinctions now include:
 - `SpatialEpoch` — continuity identity for interpolation/snap semantics;
 - `SpatialState` — optional exact spatial state when current causal fidelity requires it;
 - `PlanarMoveIntent` — bounded semantic X/Z movement intent, never displacement or final state;
+- `NpcLocalWaypoint` — already-selected local planar waypoint plus caller-owned arrival tolerance used only to produce NPC movement intent;
 - `GroundedLocomotionContinuation` — hidden per-actor fixed-step remainder/tick-rate state that affects the next authoritative movement result and therefore belongs to snapshot truth;
 - `GroundedLocomotionTickResult` — one post-transition temporal batch with actor samples canonically ordered by `EntityId`;
 - bootstrap grid/cardinal types — explicitly temporary transport probes.
 
-A command changing an actor does not automatically mean time advanced. A world revision changing does not automatically mean spatial position changed. A spatial epoch changing means presentation must treat the relocation as discontinuous. Controller intent submission is specifically non-mutating; the fixed locomotion tick is the world-time mutation boundary.
+A command changing an actor does not automatically mean time advanced. A world revision changing does not automatically mean spatial position changed. A spatial epoch changing means presentation must treat the relocation as discontinuous. Controller intent submission is specifically non-mutating; the fixed locomotion tick is the world-time mutation boundary. NPC local steering is also non-mutating decision output: the shared World tick remains the authoritative movement boundary.
 
 Do not introduce a strong type merely to wrap every scalar. Add one when it prevents mixing different meanings, removes invalid states or makes an authoritative contract materially clearer.
 
@@ -434,6 +435,8 @@ Current executable structure establishes load-bearing boundaries:
 - `SimulationTick`, `WorldRevision` and `SpatialEpoch` have separate meanings;
 - exact `SpatialState` is optional and Godot-free;
 - actor-generic `World::advance_grounded_locomotion_tick()` applies multiple actor intents atomically and advances time/revision once per batch;
+- Core `decide_npc_local_move_toward_waypoint()` is read-only/deterministic and produces the existing actor-keyed movement-intent shape from authoritative state rather than mutating position;
+- native parity tests batch NPC-produced and equivalent human intents through the same World transition and require equivalent movement/velocity outcomes;
 - `GroundedLocomotionTickResult` returns post-transition samples canonically sorted by `EntityId`, independent of intent collection order;
 - fixed-step locomotion continuation that affects subsequent state is captured by `WorldSnapshot` schema v2 and deterministic restore continuation tests;
 - protocol movement tests prove semantic intent submission does not mutate world state, fixed locomotion ticks produce `AuthoritativeMovementSampleBatch`, and repeated batches increase tick/revision monotonically;

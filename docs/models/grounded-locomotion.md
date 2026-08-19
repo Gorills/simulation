@@ -34,7 +34,9 @@ Implemented in the Godot-free native transition:
 - one actor-keyed `World` locomotion batch per authoritative tick, with atomic validation/mutation and one `SimulationTick` / `WorldRevision` advance regardless of actor count;
 - persisted per-actor fixed-step continuation required for deterministic subsequent movement;
 - semantic controlled-actor protocol intent whose submission does not itself mutate world state, followed by a separate authoritative locomotion tick through the same `World` transition;
-- one post-transition authoritative sample batch per successful locomotion tick, with samples canonically ordered by ascending `EntityId` and shared tick/revision metadata.
+- one post-transition authoritative sample batch per successful locomotion tick, with samples canonically ordered by ascending `EntityId` and shared tick/revision metadata;
+- a deterministic Core-owned NPC local-waypoint producer that reads authoritative actor spatial state and emits the same `ActorGroundedMoveIntent` / `PlanarMoveIntent` shape used by human control;
+- parity evidence that equivalent human and NPC-produced intents enter one actor-generic World batch and produce equivalent spatial/velocity results.
 
 Implemented across the presentation boundary:
 
@@ -47,14 +49,13 @@ Implemented across the presentation boundary:
 Still deliberately pending:
 
 - local prediction only if measured playtest latency proves it necessary;
-- production navigation/content-location geometry and indexing chosen from a real location requirement;
-- an actual NPC decision source feeding the already actor-generic `World` movement batch.
+- production navigation/content-location geometry and indexing chosen from a real location requirement.
 
 ## Authoritative invariants
 
 1. **Simulation decides movement.** Human or NPC code supplies intent; the shared solver produces authoritative spatial state.
 2. **No client-authored outcome.** There is no production `SetPosition`, `SetVelocity`, grounded flag or Godot collision result input.
-3. **Player/NPC parity.** Equivalent actors use the same transition; control source is not a world-law distinction. `World` consumes actor-keyed intent batches rather than a player-special movement method.
+3. **Player/NPC parity.** Equivalent actors use the same transition; control source is not a world-law distinction. `World` consumes actor-keyed intent batches rather than a player-special movement method, and the Core NPC waypoint decision emits that same batch input shape.
 4. **Simulation-owned environment.** Godot geometry can visualize a fixture but is not authoritative collision input.
 5. **Determinism.** Same initial state + environment + ordered intent + fixed configuration yields the same result.
 6. **Continuous movement preserves `SpatialEpoch`.** Walls, slopes, steps and falls are not teleports.
@@ -112,6 +113,26 @@ While grounded, current intent directly defines the existing constant-speed plan
 The application protocol exposes the same semantic shape as `ControlledActorMoveIntent`. Valid submission only replaces session/controller intent. It cannot choose entity identity, position, velocity, support state or final displacement. `Simulation::advance_locomotion_tick()` binds that controller intent to the controlled actor and invokes the actor-generic `World` batch transition.
 
 The Godot client converts camera-relative analog control to that semantic X/Z intent and quantizes it to the fixed scale before submission. The resulting transform is never read back as authoritative input.
+
+### NPC local waypoint steering
+
+`NpcLocalWaypoint` is the smallest current NPC-side locomotion decision input:
+
+```text
+actor EntityId
+local waypoint X/Z in authoritative millimeters
+caller-supplied per-axis arrival tolerance
+```
+
+`decide_npc_local_move_toward_waypoint()` reads the actor's authoritative `SpatialState` from `World` and returns one `ActorGroundedMoveIntent`. It is read-only: invalid waypoint input, unknown actors or actors without exact spatial state return explicit decision errors without mutating world state or advancing time.
+
+The current producer deliberately uses coarse deterministic eight-way steering:
+
+- one active axis -> full-strength `±1000` intent on that axis;
+- both active axes -> equal `±707` components, the largest equal integer pair that remains inside the scale-1000 unit circle;
+- an axis already inside the caller-provided arrival tolerance contributes zero.
+
+This is a **local steering producer**, not a high-level behavior model. It does not choose why the NPC wants to move, choose a need/task, schedule an activity, search a route, query obstacles, define arrival policy globally or select production navigation geometry. Milestone 1 must supply the first real causal need/task and the required place/waypoint; future navigation may replace or feed local waypoints without changing the actor-generic World movement law.
 
 ### Integer integration and continuation
 
@@ -200,7 +221,7 @@ This slice deliberately does not add jump impulse, coyote time, air acceleration
 
 Before mutating any actor it validates the full batch and computes every candidate transition. Invalid entity identity, missing exact spatial state, duplicate actor intent, incompatible continuation state, invalid intent, unsupported state or solver failure reject the operation without partial actor mutation or time advancement. Once all candidates succeed, the complete public sample result is allocated and canonically ordered before mutation; only then are spatial/continuation states committed and the world advances `SimulationTick` and `WorldRevision` exactly once.
 
-The successful Core result is one `GroundedLocomotionTickResult`: one shared post-transition tick/revision plus one `GroundedLocomotionSample` per moved actor. Samples contain the post-transition `SpatialState` and are sorted by ascending `EntityId`, independent of the order in which future player/NPC intent sources were collected. This makes actor count independent from time advancement and gives human-controlled and NPC actors the same world-law and sample seam. Current tests deliberately submit two actor intents in reverse entity order and require the returned samples to be canonical.
+The successful Core result is one `GroundedLocomotionTickResult`: one shared post-transition tick/revision plus one `GroundedLocomotionSample` per moved actor. Samples contain the post-transition `SpatialState` and are sorted by ascending `EntityId`, independent of the order in which human/NPC intent sources were collected. Current tests both submit literal multi-actor intents in reverse entity order and exercise the production NPC waypoint producer: an NPC-produced full-strength +X intent is batched before an equivalent human +X intent, yet the same World transition produces equivalent movement/velocity and canonical EntityId-ordered samples.
 
 At the protocol boundary, `submit_controlled_actor_move_intent()` validates and stores only desired planar intent. It does not advance time or mutate `SpatialState`. `advance_locomotion_tick()` is the authoritative tick boundary: it binds the stored controller intent to the controlled `EntityId`, invokes the shared World batch and maps the Core result to one `AuthoritativeMovementSampleBatch`. The batch carries shared post-transition `tick`, `revision` and `protocol_version`; each sample carries entity identity, position, velocity and `SpatialEpoch`. Repeated movement batches are ordered by strictly increasing locomotion tick, while revision positions each batch relative to other authoritative World mutations. There is no extra sequence counter and still no `SetPosition`, `SetVelocity`, `SetTransform` or final-displacement command.
 
@@ -224,7 +245,7 @@ This in-process 60 Hz timing contract is not a networking design. If authoritati
 
 ### Deterministic replay
 
-Native tests require exact equality for repeated flat/wall, slope, step and ledge/fall/landing intent streams from identical state/configuration/environment. World/protocol tests additionally prove exact repeated integration, atomic multi-actor batches, deterministic continuation across snapshot/restore, canonical sample order independent of intent-source order, and strict tick/revision ordering across repeated protocol batches.
+Native tests require exact equality for repeated flat/wall, slope, step and ledge/fall/landing intent streams from identical state/configuration/environment. World/protocol tests additionally prove exact repeated integration, atomic multi-actor batches, deterministic continuation across snapshot/restore, canonical sample order independent of intent-source order, and strict tick/revision ordering across repeated protocol batches. NPC decision tests additionally prove repeated local-waypoint decisions are deterministic/read-only and that equivalent human/NPC intents use the same World transition.
 
 ## Neutral acceptance arena
 
@@ -316,9 +337,9 @@ The 50° slope migration baseline and the numerical 0.3 m reference used to sele
 
 ## Next bounded task
 
-Prove an actual **NPC decision source** produces equivalent `PlanarMoveIntent` and enters the same actor-generic `World::advance_grounded_locomotion_tick()` batch as human-controlled intent, without introducing a player-only world path.
+Begin **Milestone 1 — Living Need** with one real authoritative NPC need and one causal task that selects a required place/local waypoint and uses the accepted shared locomotion capability. The task should establish why the NPC acts before introducing richer planning/navigation.
 
-Do not add prediction unless measured playtest latency requires it, and do not choose production navigation/geometry architecture until a real location/reachability requirement demands it.
+Do not add a generic behavior tree/GOAP/schedule framework, prediction, or production navigation/geometry architecture until a concrete gameplay requirement demonstrates the need.
 
 ## Falsifiers
 
