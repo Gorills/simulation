@@ -56,8 +56,9 @@ jobs:
         env:
           GODOT_BIN: ${{ github.workspace }}/.tools/Godot_v4.7.1-stable_linux.x86_64
         run: |
+          timeout 120s xvfb-run -a "$GODOT_BIN" --path godot --import
           mkdir -p verification-artifacts/default-ru
-          xvfb-run -a "$GODOT_BIN" --path godot -- --scenario smoke --artifact-dir "$PWD/verification-artifacts/default-ru"
+          timeout 45s xvfb-run -a "$GODOT_BIN" --path godot -- --scenario smoke --artifact-dir "$PWD/verification-artifacts/default-ru"
           python - <<'PY'
           from pathlib import Path
           from tools.play import validate_smoke_artifact
