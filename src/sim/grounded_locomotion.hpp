@@ -10,6 +10,7 @@ namespace worldsim::sim {
 
 inline constexpr std::int32_t kIntentScale = 1000;
 inline constexpr std::uint32_t kSlopeRunScale = 1000;
+inline constexpr MillimetersPerSecondSquared kNonMagicalGravityBaseline{9807};
 
 enum class PlanarAxis : std::uint8_t {
     x,
@@ -103,12 +104,16 @@ struct GroundedStepConfig final {
     // Maximum positive support discontinuity that ordinary grounded movement
     // may step up in one transition. This is independent from grounding snap.
     Millimeters max_step_up{};
+    // Positive downward acceleration magnitude. The current playable baseline
+    // rounds standard gravity to integer millimeters per second squared.
+    MillimetersPerSecondSquared gravity{kNonMagicalGravityBaseline};
 
     [[nodiscard]] constexpr bool is_valid() const noexcept {
         return ticks_per_second > 0
             && move_speed.value >= 0
             && max_slope_rise_per_1000_run > 0
-            && max_step_up.value >= 0;
+            && max_step_up.value >= 0
+            && gravity.value >= 0;
     }
 
     constexpr bool operator==(const GroundedStepConfig &) const = default;
@@ -133,11 +138,14 @@ struct PlanarMoveIntent final {
     constexpr bool operator==(const PlanarMoveIntent &) const = default;
 };
 
-// Remainders make integer millimeter integration exact over time instead of
-// losing fractional millimeters every fixed tick.
+// Position remainders retain fractional millimeters for each axis. The vertical
+// velocity remainder separately retains fractional mm/s while gravity is
+// integrated at the fixed authoritative tick rate.
 struct GroundedIntegrationRemainder final {
     std::int64_t x{};
+    std::int64_t y{};
     std::int64_t z{};
+    std::int64_t vertical_velocity{};
 
     constexpr bool operator==(const GroundedIntegrationRemainder &) const = default;
 };
@@ -159,6 +167,9 @@ enum class GroundedStepError : std::uint8_t {
     arithmetic_overflow,
 };
 
+// The historical name reflects the grounded-locomotion subsystem. The transition
+// now also owns unsupported airborne state caused by walking off support, applying
+// gravity until it lands on walkable support again.
 [[nodiscard]] std::expected<GroundedStepState, GroundedStepError> step_grounded(
     const GroundedEnvironment &environment,
     const UprightCapsule &body,

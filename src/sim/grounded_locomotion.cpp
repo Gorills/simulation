@@ -135,6 +135,23 @@ struct SurfaceSample final {
     return true;
 }
 
+[[nodiscard]] bool integrate_acceleration(
+    const std::int64_t acceleration,
+    const std::int64_t old_remainder,
+    const std::uint32_t ticks_per_second,
+    std::int64_t &delta_velocity,
+    std::int64_t &new_remainder
+) noexcept {
+    std::int64_t numerator{};
+    if (!checked_add(acceleration, old_remainder, numerator)) {
+        return false;
+    }
+    const auto divisor = static_cast<std::int64_t>(ticks_per_second);
+    delta_velocity = numerator / divisor;
+    new_remainder = numerator % divisor;
+    return true;
+}
+
 [[nodiscard]] bool patch_height_at(
     const GroundPatch &patch,
     const Millimeters x,
@@ -169,7 +186,6 @@ struct SurfaceSample final {
     }
 
     std::int64_t product{};
-    std::int64_t delta_height{};
     std::int64_t height{};
     if (
         !checked_mul_nonnegative_signed(offset, rise, product) ||
@@ -177,8 +193,6 @@ struct SurfaceSample final {
     ) {
         return false;
     }
-    delta_height = product / run;
-    (void)delta_height;
     out = Millimeters{height};
     return true;
 }
@@ -304,6 +318,96 @@ void block_axis(
     return blocked;
 }
 
+[[nodiscard]] std::expected<void, GroundedStepError> advance_fall(
+    const GroundedStepConfig &config,
+    const Millimeters start_y,
+    const MillimetersPerSecond start_vertical_velocity,
+    const std::int64_t start_position_remainder,
+    const std::int64_t start_velocity_remainder,
+    const std::optional<SurfaceSample> &target_surface,
+    GroundedStepState &next
+) noexcept {
+    const std::int64_t downward_acceleration = -config.gravity.value;
+    std::int64_t delta_velocity{};
+    std::int64_t velocity_remainder{};
+    if (!integrate_acceleration(
+            downward_acceleration,
+            start_velocity_remainder,
+            config.ticks_per_second,
+            delta_velocity,
+            velocity_remainder
+        )) {
+        return std::unexpected(GroundedStepError::arithmetic_overflow);
+    }
+
+    std::int64_t vertical_velocity{};
+    if (!checked_add(start_vertical_velocity.value, delta_velocity, vertical_velocity)) {
+        return std::unexpected(GroundedStepError::arithmetic_overflow);
+    }
+
+    std::int64_t delta_y{};
+    std::int64_t position_remainder{};
+    if (!integrate_axis(
+            vertical_velocity,
+            start_position_remainder,
+            config.ticks_per_second,
+            delta_y,
+            position_remainder
+        )) {
+        return std::unexpected(GroundedStepError::arithmetic_overflow);
+    }
+
+    std::int64_t candidate_y{};
+    if (!checked_add(start_y.value, delta_y, candidate_y)) {
+        return std::unexpected(GroundedStepError::arithmetic_overflow);
+    }
+
+    if (
+        target_surface.has_value() &&
+        target_surface->walkable &&
+        target_surface->height.value <= start_y.value &&
+        vertical_velocity <= 0 &&
+        candidate_y <= target_surface->height.value
+    ) {
+        next.spatial.position.y = target_surface->height;
+        next.spatial.velocity.y = MillimetersPerSecond{0};
+        next.remainder.y = 0;
+        next.remainder.vertical_velocity = 0;
+        return {};
+    }
+
+    next.spatial.position.y = Millimeters{candidate_y};
+    next.spatial.velocity.y = MillimetersPerSecond{vertical_velocity};
+    next.remainder.y = position_remainder;
+    next.remainder.vertical_velocity = velocity_remainder;
+    return {};
+}
+
+[[nodiscard]] std::expected<void, GroundedStepError> settle_grounded(
+    const GroundedStepConfig &config,
+    const Millimeters previous_y,
+    const SurfaceSample &surface,
+    GroundedStepState &next
+) noexcept {
+    next.spatial.position.y = surface.height;
+    std::int64_t vertical_delta{};
+    std::int64_t vertical_velocity{};
+    if (
+        !checked_sub(next.spatial.position.y.value, previous_y.value, vertical_delta) ||
+        !checked_mul_nonnegative_signed(
+            static_cast<std::int64_t>(config.ticks_per_second),
+            vertical_delta,
+            vertical_velocity
+        )
+    ) {
+        return std::unexpected(GroundedStepError::arithmetic_overflow);
+    }
+    next.spatial.velocity.y = MillimetersPerSecond{vertical_velocity};
+    next.remainder.y = 0;
+    next.remainder.vertical_velocity = 0;
+    return {};
+}
+
 } // namespace
 
 bool GroundedEnvironment::is_valid() const noexcept {
@@ -342,7 +446,10 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
     const auto tick_rate = static_cast<std::int64_t>(config.ticks_per_second);
     if (
         state.remainder.x <= -tick_rate || state.remainder.x >= tick_rate ||
-        state.remainder.z <= -tick_rate || state.remainder.z >= tick_rate
+        state.remainder.y <= -tick_rate || state.remainder.y >= tick_rate ||
+        state.remainder.z <= -tick_rate || state.remainder.z >= tick_rate ||
+        state.remainder.vertical_velocity <= -tick_rate ||
+        state.remainder.vertical_velocity >= tick_rate
     ) {
         return std::unexpected(GroundedStepError::invalid_state);
     }
@@ -356,21 +463,28 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
         return std::unexpected(current_surface_result.error());
     }
     const auto current_surface = *current_surface_result;
-    if (
-        !current_surface.has_value() ||
-        !current_surface->walkable ||
-        current_surface->height != position.y
-    ) {
-        return std::unexpected(GroundedStepError::no_ground_support);
+    if (current_surface.has_value() && current_surface->height.value > position.y.value) {
+        return std::unexpected(GroundedStepError::invalid_state);
+    }
+    const bool grounded = current_surface.has_value()
+        && current_surface->walkable
+        && current_surface->height == position.y;
+    if (grounded && (state.remainder.y != 0 || state.remainder.vertical_velocity != 0)) {
+        return std::unexpected(GroundedStepError::invalid_state);
     }
 
     std::int64_t velocity_x{};
     std::int64_t velocity_z{};
-    if (
-        !checked_scale_intent(config.move_speed.value, intent.x, velocity_x) ||
-        !checked_scale_intent(config.move_speed.value, intent.z, velocity_z)
-    ) {
-        return std::unexpected(GroundedStepError::arithmetic_overflow);
+    if (grounded) {
+        if (
+            !checked_scale_intent(config.move_speed.value, intent.x, velocity_x) ||
+            !checked_scale_intent(config.move_speed.value, intent.z, velocity_z)
+        ) {
+            return std::unexpected(GroundedStepError::arithmetic_overflow);
+        }
+    } else {
+        velocity_x = state.spatial.velocity.x.value;
+        velocity_z = state.spatial.velocity.z.value;
     }
 
     std::int64_t delta_x{};
@@ -391,12 +505,10 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
     ) {
         return std::unexpected(GroundedStepError::arithmetic_overflow);
     }
-    next.remainder = GroundedIntegrationRemainder{.x = remainder_x, .z = remainder_z};
-    next.spatial.velocity = SpatialVelocity{
-        .x = MillimetersPerSecond{velocity_x},
-        .y = MillimetersPerSecond{0},
-        .z = MillimetersPerSecond{velocity_z},
-    };
+    next.remainder.x = remainder_x;
+    next.remainder.z = remainder_z;
+    next.spatial.velocity.x = MillimetersPerSecond{velocity_x};
+    next.spatial.velocity.z = MillimetersPerSecond{velocity_z};
 
     std::int64_t body_top_value{};
     if (!checked_add(position.y.value, body.height.value, body_top_value)) {
@@ -463,41 +575,10 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
         return std::unexpected(target_surface_result.error());
     }
     auto target_surface = *target_surface_result;
-    if (!target_surface.has_value()) {
-        return std::unexpected(GroundedStepError::no_ground_support);
-    }
 
-    if (!target_surface->walkable) {
-        block_axis(next, state, target_surface->gradient_axis);
-        target_surface_result = surface_at(
-            environment,
-            config,
-            next.spatial.position.x,
-            next.spatial.position.z
-        );
-        if (!target_surface_result.has_value()) {
-            return std::unexpected(target_surface_result.error());
-        }
-        target_surface = *target_surface_result;
-        if (!target_surface.has_value() || !target_surface->walkable) {
-            return std::unexpected(GroundedStepError::no_ground_support);
-        }
-    }
-
-    if (
-        current_surface->patch != target_surface->patch &&
-        current_surface->patch->is_flat() &&
-        target_surface->patch->is_flat() &&
-        target_surface->height.value > current_surface->height.value
-    ) {
-        std::int64_t step_rise{};
-        if (!checked_sub(target_surface->height.value, current_surface->height.value, step_rise)) {
-            return std::unexpected(GroundedStepError::arithmetic_overflow);
-        }
-        if (step_rise > config.max_step_up.value) {
-            if (!block_entered_patch_axes(next, state, *target_surface->patch)) {
-                return std::unexpected(GroundedStepError::invalid_environment);
-            }
+    if (grounded) {
+        if (target_surface.has_value() && !target_surface->walkable) {
+            block_axis(next, state, target_surface->gradient_axis);
             target_surface_result = surface_at(
                 environment,
                 config,
@@ -512,22 +593,83 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
                 return std::unexpected(GroundedStepError::no_ground_support);
             }
         }
+
+        if (
+            target_surface.has_value() &&
+            current_surface->patch != target_surface->patch &&
+            current_surface->patch->is_flat() &&
+            target_surface->patch->is_flat() &&
+            target_surface->height.value > current_surface->height.value
+        ) {
+            std::int64_t step_rise{};
+            if (!checked_sub(target_surface->height.value, current_surface->height.value, step_rise)) {
+                return std::unexpected(GroundedStepError::arithmetic_overflow);
+            }
+            if (step_rise > config.max_step_up.value) {
+                if (!block_entered_patch_axes(next, state, *target_surface->patch)) {
+                    return std::unexpected(GroundedStepError::invalid_environment);
+                }
+                target_surface_result = surface_at(
+                    environment,
+                    config,
+                    next.spatial.position.x,
+                    next.spatial.position.z
+                );
+                if (!target_surface_result.has_value()) {
+                    return std::unexpected(target_surface_result.error());
+                }
+                target_surface = *target_surface_result;
+                if (!target_surface.has_value() || !target_surface->walkable) {
+                    return std::unexpected(GroundedStepError::no_ground_support);
+                }
+            }
+        }
+
+        const bool continuous_support = target_surface.has_value()
+            && target_surface->walkable
+            && (
+                target_surface->patch == current_surface->patch ||
+                target_surface->height.value >= current_surface->height.value
+            );
+        if (continuous_support) {
+            auto settled = settle_grounded(config, position.y, *target_surface, next);
+            if (!settled.has_value()) {
+                return std::unexpected(settled.error());
+            }
+            return next;
+        }
+
+        auto falling = advance_fall(
+            config,
+            position.y,
+            MillimetersPerSecond{0},
+            0,
+            0,
+            target_surface,
+            next
+        );
+        if (!falling.has_value()) {
+            return std::unexpected(falling.error());
+        }
+        return next;
     }
 
-    next.spatial.position.y = target_surface->height;
-    std::int64_t vertical_delta{};
-    std::int64_t vertical_velocity{};
-    if (
-        !checked_sub(next.spatial.position.y.value, position.y.value, vertical_delta) ||
-        !checked_mul_nonnegative_signed(
-            static_cast<std::int64_t>(config.ticks_per_second),
-            vertical_delta,
-            vertical_velocity
-        )
-    ) {
-        return std::unexpected(GroundedStepError::arithmetic_overflow);
+    if (target_surface.has_value() && target_surface->height.value > position.y.value) {
+        return std::unexpected(GroundedStepError::invalid_state);
     }
-    next.spatial.velocity.y = MillimetersPerSecond{vertical_velocity};
+
+    auto falling = advance_fall(
+        config,
+        position.y,
+        state.spatial.velocity.y,
+        state.remainder.y,
+        state.remainder.vertical_velocity,
+        target_surface,
+        next
+    );
+    if (!falling.has_value()) {
+        return std::unexpected(falling.error());
+    }
     return next;
 }
 

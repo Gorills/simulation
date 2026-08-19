@@ -15,6 +15,7 @@ constexpr GroundedStepConfig kPlayableStep{
     .move_speed = MillimetersPerSecond{5800},
     .max_slope_rise_per_1000_run = 1192,
     .max_step_up = Millimeters{300},
+    .gravity = kNonMagicalGravityBaseline,
 };
 
 [[nodiscard]] GroundedEnvironment flat_arena(const bool with_wall) {
@@ -86,11 +87,45 @@ constexpr GroundedStepConfig kPlayableStep{
     return environment;
 }
 
+[[nodiscard]] GroundedEnvironment ledge_arena() {
+    GroundedEnvironment environment;
+    environment.ground.push_back(GroundPatch{
+        .x = MillimeterRange{Millimeters{-10'000}, Millimeters{0}},
+        .z = MillimeterRange{Millimeters{-10'000}, Millimeters{10'000}},
+        .gradient_axis = PlanarAxis::x,
+        .height_at_min = Millimeters{0},
+        .height_at_max = Millimeters{0},
+    });
+    environment.ground.push_back(GroundPatch{
+        .x = MillimeterRange{Millimeters{1}, Millimeters{20'000}},
+        .z = MillimeterRange{Millimeters{-10'000}, Millimeters{10'000}},
+        .gradient_axis = PlanarAxis::x,
+        .height_at_min = Millimeters{-1'000},
+        .height_at_max = Millimeters{-1'000},
+    });
+    return environment;
+}
+
 [[nodiscard]] GroundedStepState initial_state() {
     return GroundedStepState{
         .spatial = SpatialState{
             .position = SpatialPosition{},
             .velocity = SpatialVelocity{},
+            .epoch = SpatialEpoch{1},
+        },
+    };
+}
+
+[[nodiscard]] GroundedStepState state_at(
+    const Millimeters x,
+    const Millimeters y,
+    const MillimetersPerSecond velocity_x = MillimetersPerSecond{},
+    const MillimetersPerSecond velocity_y = MillimetersPerSecond{}
+) {
+    return GroundedStepState{
+        .spatial = SpatialState{
+            .position = SpatialPosition{.x = x, .y = y},
+            .velocity = SpatialVelocity{.x = velocity_x, .y = velocity_y},
             .epoch = SpatialEpoch{1},
         },
     };
@@ -212,6 +247,22 @@ TEST(GroundedLocomotion, RejectsNegativeStepThreshold) {
     EXPECT_EQ(result.error(), GroundedStepError::invalid_config);
 }
 
+TEST(GroundedLocomotion, RejectsNegativeGravity) {
+    auto invalid_config = kPlayableStep;
+    invalid_config.gravity = MillimetersPerSecondSquared{-1};
+
+    const auto result = step_grounded(
+        flat_arena(false),
+        kPlayableBody,
+        invalid_config,
+        initial_state(),
+        PlanarMoveIntent{}
+    );
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), GroundedStepError::invalid_config);
+}
+
 TEST(GroundedLocomotion, TraversesWalkableSlopeAndDerivesAuthoritativeHeight) {
     const auto environment = walkable_slope_arena();
     const auto state = replay(environment, PlanarMoveIntent{.x = 1000, .z = 0}, 60);
@@ -314,6 +365,127 @@ TEST(GroundedLocomotion, IdenticalStepReplayProducesIdenticalState) {
     EXPECT_EQ(first, second);
     EXPECT_EQ(first.spatial.position.x.value, 5800);
     EXPECT_EQ(first.spatial.position.y.value, 300);
+    EXPECT_EQ(first.spatial.epoch.value, 1U);
+}
+
+TEST(GroundedLocomotion, LedgeSupportLossStartsFallWithoutDownwardSnap) {
+    const auto result = step_grounded(
+        ledge_arena(),
+        kPlayableBody,
+        kPlayableStep,
+        state_at(Millimeters{-50}, Millimeters{0}),
+        PlanarMoveIntent{.x = 1000, .z = 0}
+    );
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->spatial.position.x.value, 46);
+    EXPECT_EQ(result->spatial.position.y.value, -2);
+    EXPECT_EQ(result->spatial.velocity.x.value, 5800);
+    EXPECT_EQ(result->spatial.velocity.y.value, -163);
+    EXPECT_GT(result->spatial.position.y.value, -1'000);
+    EXPECT_EQ(result->spatial.epoch.value, 1U);
+}
+
+TEST(GroundedLocomotion, AirborneIntentDoesNotRewriteTakeoffPlanarVelocity) {
+    const auto environment = ledge_arena();
+    auto first = step_grounded(
+        environment,
+        kPlayableBody,
+        kPlayableStep,
+        state_at(Millimeters{-50}, Millimeters{0}),
+        PlanarMoveIntent{.x = 1000, .z = 0}
+    );
+    ASSERT_TRUE(first.has_value());
+
+    const auto second = step_grounded(
+        environment,
+        kPlayableBody,
+        kPlayableStep,
+        *first,
+        PlanarMoveIntent{.x = -1000, .z = 0}
+    );
+
+    ASSERT_TRUE(second.has_value());
+    EXPECT_GT(second->spatial.position.x.value, first->spatial.position.x.value);
+    EXPECT_EQ(second->spatial.velocity.x.value, 5800);
+    EXPECT_LT(second->spatial.velocity.y.value, first->spatial.velocity.y.value);
+}
+
+TEST(GroundedLocomotion, FallingAcceleratesToConfiguredGravityExactlyOverOneSecond) {
+    const GroundedEnvironment void_environment;
+    const auto state = replay(
+        void_environment,
+        PlanarMoveIntent{},
+        60,
+        state_at(Millimeters{0}, Millimeters{100'000})
+    );
+
+    EXPECT_EQ(state.spatial.velocity.y.value, -kNonMagicalGravityBaseline.value);
+    EXPECT_EQ(state.remainder.vertical_velocity, 0);
+    EXPECT_LT(state.spatial.position.y.value, 100'000);
+    EXPECT_EQ(state.spatial.epoch.value, 1U);
+}
+
+TEST(GroundedLocomotion, LandingClampsToLowerWalkablePlaneAndClearsVerticalRemainders) {
+    const auto environment = ledge_arena();
+    auto state = state_at(Millimeters{-50}, Millimeters{0});
+    bool landed = false;
+
+    for (int tick = 0; tick < 120; ++tick) {
+        auto next = step_grounded(
+            environment,
+            kPlayableBody,
+            kPlayableStep,
+            state,
+            PlanarMoveIntent{.x = 1000, .z = 0}
+        );
+        ASSERT_TRUE(next.has_value());
+        state = *next;
+        if (state.spatial.position.y.value == -1'000 && state.spatial.velocity.y.value == 0) {
+            landed = true;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(landed);
+    EXPECT_EQ(state.spatial.position.y.value, -1'000);
+    EXPECT_EQ(state.spatial.velocity.y.value, 0);
+    EXPECT_EQ(state.remainder.y, 0);
+    EXPECT_EQ(state.remainder.vertical_velocity, 0);
+    EXPECT_EQ(state.spatial.epoch.value, 1U);
+}
+
+TEST(GroundedLocomotion, HighDownwardVelocityDoesNotTunnelThroughLandingPlane) {
+    const auto result = step_grounded(
+        flat_arena(false),
+        kPlayableBody,
+        kPlayableStep,
+        state_at(
+            Millimeters{0},
+            Millimeters{500},
+            MillimetersPerSecond{0},
+            MillimetersPerSecond{-50'000}
+        ),
+        PlanarMoveIntent{}
+    );
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->spatial.position.y.value, 0);
+    EXPECT_EQ(result->spatial.velocity.y.value, 0);
+    EXPECT_EQ(result->remainder.y, 0);
+    EXPECT_EQ(result->remainder.vertical_velocity, 0);
+    EXPECT_EQ(result->spatial.epoch.value, 1U);
+}
+
+TEST(GroundedLocomotion, IdenticalLedgeFallLandingReplayProducesIdenticalState) {
+    const auto environment = ledge_arena();
+    const auto start = state_at(Millimeters{-50}, Millimeters{0});
+    const auto first = replay(environment, PlanarMoveIntent{.x = 1000, .z = 0}, 60, start);
+    const auto second = replay(environment, PlanarMoveIntent{.x = 1000, .z = 0}, 60, start);
+
+    EXPECT_EQ(first, second);
+    EXPECT_EQ(first.spatial.position.y.value, -1'000);
+    EXPECT_EQ(first.spatial.velocity.y.value, 0);
     EXPECT_EQ(first.spatial.epoch.value, 1U);
 }
 
