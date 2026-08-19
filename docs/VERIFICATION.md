@@ -13,20 +13,22 @@ manual/exploratory playtest when useful
 
 Godot tests do not replace Simulation Core tests. Native simulation tests do not prove that the game is usable.
 
-A claim is verified only by a check that actually ran. Missing tooling, an unbuilt target or an unperformed playtest is **not** a pass.
+A claim is verified only by a check that actually ran on the exact revision being claimed. Missing tooling, an unbuilt target, an unperformed playtest, or a check from an earlier revision is **not** a pass.
 
 ## Current Milestone 0 gates
 
-The first executable verification paths now exist:
+The executable verification paths now include:
 
 ```bash
 python tools/check_architecture.py
 python tools/dev.py check --preset native
+python tools/dev.py check --preset sanitize
 python tools/dev.py check --preset dev
 python tools/dev.py play --scenario smoke
 ```
 
 - `native` configures/builds/tests the Godot-free native graph.
+- `sanitize` runs the same Godot-free graph with ASan+UBSan under GCC/Clang.
 - `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
 - the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed identity, authoritative controlled-actor spatial state, presentation initialization and screenshot evidence.
 - the third-person control foundation additionally requires real local keyboard/mouse and gamepad playtesting; static authoritative spawn evidence is not proof that continuous locomotion is authoritative yet.
@@ -78,7 +80,7 @@ The current protocol tests prove:
 - bootstrap grid movement advances world revision but does **not** alter production `SpatialState`;
 - malformed bootstrap input is rejected without mutating observed authoritative state.
 
-CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces repository-level architecture policy.
+CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces the Godot-free dependency boundary.
 
 Recommended CTest labels:
 
@@ -112,9 +114,11 @@ Do not write these tests before the corresponding feature exists. The list defin
 
 ## Sanitizers
 
-Provide a separate ASan+UBSan preset when memory/UB-sensitive implementation work justifies it. Run it for crashes/corruption and milestone verification rather than every presentation-only edit.
+The repository provides the `sanitize` CMake preset for Godot-free native ASan+UBSan verification under GCC/Clang.
 
-Do not add sanitizer presets merely as decoration before they can run in a supported local toolchain.
+Run it for memory/UB-sensitive native changes, crashes/corruption investigations and milestone verification. The minimal native CI gate also runs this preset so a clean independent checkout exercises the sanitizer build/tests for every pull request and push to `main`.
+
+Sanitizer success is correctness evidence, not performance evidence. It does not replace the normal native preset, GDExtension/Godot verification or player-facing playtests.
 
 ## Debug surface
 
@@ -293,13 +297,15 @@ save/load round-trip
 
 Follow [`engineering/VERSIONS.md`](engineering/VERSIONS.md): build native code, build the adapter, load it in the pinned Godot engine and run the smallest playable scenario.
 
-## Local-only verification policy
+## Independent native CI policy
 
-This project intentionally has **no CI**. Verification and milestone acceptance are performed on the developer machine with the repository-owned bootstrap, CMake/CTest presets, bounded Godot playtests and direct local control playtesting.
+Local verification remains the primary developer feedback loop. The repository also carries one intentionally small GitHub Actions workflow that runs clean `native` and `sanitize` configure/build/test passes on pull requests and pushes to `main`.
 
-Do not add GitHub Actions, GitLab CI, CircleCI, Jenkins, Buildkite, Azure Pipelines, Travis, AppVeyor, or another project CI service/configuration. Do not create committed workflow files as a substitute for running the local gates.
+CI is independent evidence, not a substitute for developer-machine verification. It deliberately does **not** claim Godot runtime/load, bounded smoke artifacts, manual keyboard/gamepad feel, screenshots or performance acceptance.
 
-A local failure must be fixed locally; it cannot be deferred with “CI will catch it.” Empty GitHub status/check contexts are expected and are not missing project evidence. The applicable local test/build/playtest artifacts are the evidence.
+A green check applies only to the exact commit it tested. If code changes after a failure or after the last green run, the affected gate must run again before that new revision may be reported as verified. A local failure must still be fixed locally rather than deferred with “CI will catch it.”
+
+Keep this workflow narrow until a real cross-platform or GDExtension regression demonstrates the need for another automated lane. Do not move empirical performance thresholds or interactive Godot acceptance into CI merely because CI now exists.
 
 ## Definition of Done for a gameplay capability
 

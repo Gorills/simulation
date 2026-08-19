@@ -128,7 +128,7 @@ For a mechanic with a known representative performance scenario:
 - if the feature deliberately spends more budget, record what product value consumes that budget and what remains for future systems;
 - preserve the scenario so future work can reproduce the result locally.
 
-Do not add project CI to enforce this repository. Performance verification remains local, reproducible, and evidence-backed.
+Do not turn empirical performance budgets into CI pass/fail thresholds without a stable representative runner and scenario. Performance verification remains reproducible and evidence-backed on recorded hardware; the repository's minimal native CI is a correctness gate, not performance evidence.
 
 ## Current known smell removed by this foundation
 
