@@ -10,6 +10,7 @@ struct SurfaceSample final {
     Millimeters height{};
     bool walkable{};
     PlanarAxis gradient_axis{PlanarAxis::x};
+    const GroundPatch *patch{};
 };
 
 [[nodiscard]] bool checked_add(
@@ -244,6 +245,7 @@ struct SurfaceSample final {
             .height = height,
             .walkable = walkable,
             .gradient_axis = patch.gradient_axis,
+            .patch = &patch,
         };
         if (walkable) {
             return sample;
@@ -277,6 +279,29 @@ void block_axis(
         next.spatial.velocity.z = MillimetersPerSecond{0};
         next.remainder.z = 0;
     }
+}
+
+[[nodiscard]] bool block_entered_patch_axes(
+    GroundedStepState &next,
+    const GroundedStepState &state,
+    const GroundPatch &target_patch
+) noexcept {
+    bool blocked = false;
+    if (
+        !target_patch.x.contains(state.spatial.position.x) &&
+        target_patch.x.contains(next.spatial.position.x)
+    ) {
+        block_axis(next, state, PlanarAxis::x);
+        blocked = true;
+    }
+    if (
+        !target_patch.z.contains(state.spatial.position.z) &&
+        target_patch.z.contains(next.spatial.position.z)
+    ) {
+        block_axis(next, state, PlanarAxis::z);
+        blocked = true;
+    }
+    return blocked;
 }
 
 } // namespace
@@ -456,6 +481,36 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
         target_surface = *target_surface_result;
         if (!target_surface.has_value() || !target_surface->walkable) {
             return std::unexpected(GroundedStepError::no_ground_support);
+        }
+    }
+
+    if (
+        current_surface->patch != target_surface->patch &&
+        current_surface->patch->is_flat() &&
+        target_surface->patch->is_flat() &&
+        target_surface->height.value > current_surface->height.value
+    ) {
+        std::int64_t step_rise{};
+        if (!checked_sub(target_surface->height.value, current_surface->height.value, step_rise)) {
+            return std::unexpected(GroundedStepError::arithmetic_overflow);
+        }
+        if (step_rise > config.max_step_up.value) {
+            if (!block_entered_patch_axes(next, state, *target_surface->patch)) {
+                return std::unexpected(GroundedStepError::invalid_environment);
+            }
+            target_surface_result = surface_at(
+                environment,
+                config,
+                next.spatial.position.x,
+                next.spatial.position.z
+            );
+            if (!target_surface_result.has_value()) {
+                return std::unexpected(target_surface_result.error());
+            }
+            target_surface = *target_surface_result;
+            if (!target_surface.has_value() || !target_surface->walkable) {
+                return std::unexpected(GroundedStepError::no_ground_support);
+            }
         }
     }
 
