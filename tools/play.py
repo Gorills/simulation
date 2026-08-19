@@ -7,19 +7,16 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import shutil
 import signal
 import subprocess
-import sys
 import time
 from typing import IO
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
-PROJECT = ROOT / "godot"
+from godot_runtime import PROJECT, ROOT, expected_extension_library, import_project_metadata, resolve_godot
+
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
-EXPECTED_GODOT = "4.7.1"
 
 
 class PlayLock(AbstractContextManager["PlayLock"]):
@@ -65,27 +62,6 @@ class PlayLock(AbstractContextManager["PlayLock"]):
         finally:
             self.handle.close()
             self.handle = None
-
-
-def expected_extension_library() -> Path:
-    if sys.platform.startswith("linux"):
-        return PROJECT / "bin" / "libworld_sim.template_debug.so"
-    if sys.platform == "darwin":
-        return PROJECT / "bin" / "libworld_sim.template_debug.dylib"
-    if os.name == "nt":
-        return PROJECT / "bin" / "world_sim.template_debug.dll"
-    raise SystemExit(f"unsupported local playtest platform: {sys.platform}")
-
-
-def resolve_godot() -> str:
-    override = os.environ.get("GODOT_BIN")
-    candidate = override or shutil.which("godot") or shutil.which("godot4")
-    if not candidate:
-        raise SystemExit("Godot not found; install 4.7.1 or set GODOT_BIN")
-    version = subprocess.run([candidate, "--version"], capture_output=True, text=True, timeout=10, check=True).stdout.strip()
-    if not version.startswith(EXPECTED_GODOT):
-        raise SystemExit(f"Godot version mismatch: expected {EXPECTED_GODOT}, got {version}")
-    return candidate
 
 
 def terminate_owned_process(process: subprocess.Popen[bytes]) -> None:
@@ -203,6 +179,7 @@ def main() -> int:
         raise SystemExit(f"GDExtension library missing: {library}; run tools/dev.py build --preset dev")
 
     godot = resolve_godot()
+    import_project_metadata(godot)
     command = [godot, "--path", str(PROJECT), "--", "--scenario", args.scenario, "--artifact-dir", str(artifact_dir)]
     started = time.monotonic()
     metadata: dict[str, object] = {

@@ -37,6 +37,7 @@ def main() -> int:
         command.add_argument("--preset", default="dev", choices=("native", "dev", "release"))
     play = sub.add_parser("play")
     play.add_argument("--scenario", default="smoke")
+    sub.add_parser("run", help="launch the configured main scene without opening the Godot editor")
 
     args = parser.parse_args()
     if args.command == "configure":
@@ -51,6 +52,8 @@ def main() -> int:
         run([tool("ctest"), "--preset", args.preset])
     elif args.command == "play":
         run([sys.executable, str(ROOT / "tools" / "play.py"), "--scenario", args.scenario])
+    elif args.command == "run":
+        run([sys.executable, str(ROOT / "tools" / "run_game.py")])
     return 0
 
 

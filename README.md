@@ -8,6 +8,7 @@ Playable systemic third-person RPG with one authoritative C++23 Simulation Core 
 - Runtime architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Simulation/modeling: [`docs/MODELING.md`](docs/MODELING.md)
 - Authoritative spatial model: [`docs/models/spatial-location.md`](docs/models/spatial-location.md)
+- Grounded locomotion model: [`docs/models/grounded-locomotion.md`](docs/models/grounded-locomotion.md)
 - Simulation ↔ Godot boundary: [`docs/engineering/simulation-godot-boundary.md`](docs/engineering/simulation-godot-boundary.md)
 - Verification/playtest: [`docs/VERIFICATION.md`](docs/VERIFICATION.md)
 - Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
@@ -35,9 +36,9 @@ The player-controlled person is an ordinary simulated actor. Human input and NPC
 
 Exact `SpatialState` is selective. An entity may exist authoritatively without an exact 3D pose when current gameplay causality only needs semantic or aggregate location.
 
-The native `BootstrapMoveIntent` grid path remains Milestone 0 transport evidence and does not change production spatial state. Continuous third-person locomotion still needs the next Godot-free deterministic movement/collision stage; do not extend the grid probe or copy Godot motor results back into Simulation.
+The first Godot-free grounded locomotion transition now proves deterministic flat-ground integration plus head-on/oblique wall blocking against neutral Simulation-owned geometry. It is not wired into the live controlled-actor protocol path yet; slope, step, fall and presentation sample reconciliation remain later slices. The native `BootstrapMoveIntent` grid path remains Milestone 0 transport evidence only.
 
-See [`docs/decisions/0004-authoritative-world-presentation-boundary.md`](docs/decisions/0004-authoritative-world-presentation-boundary.md) and [`docs/decisions/0006-authoritative-spatial-contract.md`](docs/decisions/0006-authoritative-spatial-contract.md).
+See [`docs/decisions/0004-authoritative-world-presentation-boundary.md`](docs/decisions/0004-authoritative-world-presentation-boundary.md), [`docs/decisions/0006-authoritative-spatial-contract.md`](docs/decisions/0006-authoritative-spatial-contract.md), and [`docs/models/grounded-locomotion.md`](docs/models/grounded-locomotion.md).
 
 ## Controls
 
@@ -52,19 +53,36 @@ Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPer
 
 The current playable motor remains useful for feel while authoritative continuous movement is migrated into Simulation. Its Godot transform is not world truth.
 
-## Local development
+## Play locally
 
-Requirements: Python 3.12+ and the exact Godot baseline recorded in [`tools/toolchain.lock.json`](tools/toolchain.lock.json). `GODOT_BIN` may point to the editor binary when it is not on `PATH`.
+Requirements: Python 3.12+, a C++23 compiler, GNU Make, and the exact Godot baseline recorded in [`tools/toolchain.lock.json`](tools/toolchain.lock.json). If Godot is not on `PATH`, set `GODOT_BIN` to its executable.
+
+From the repository root:
+
+```bash
+make play
+```
+
+On the first run this creates the repository-local `.venv`, installs the pinned CMake/Ninja tooling without populating the pip download cache, configures/fetches the pinned native dependencies, and builds the `dev` Simulation/protocol/tests/GDExtension graph. Later runs reuse that bootstrap and perform an incremental build. Before each game launch the tooling performs a headless incremental Godot import so project-local `.godot` metadata and global `class_name` registrations are valid even on a clean checkout; no editor window is opened. Then Godot launches the configured project main scene directly.
+
+Repository-managed generated state stays under ignored project paths such as `.venv/`, `build/`, `.cache/`, `godot/.godot/` and generated `godot/bin/` libraries. The Godot executable itself is an external prerequisite; this command verifies the pinned version rather than compiling the engine.
+
+Useful companion commands:
+
+```bash
+make check   # configure/build/test the dev graph locally
+make smoke   # build, then run the bounded artifact-producing Godot smoke playtest
+```
+
+The underlying Python front door remains available for focused work:
 
 ```bash
 python3 tools/bootstrap.py
-.venv/bin/python tools/dev.py check --preset native
-.venv/bin/python tools/dev.py build --preset dev
-.venv/bin/python tools/dev.py test --preset dev
-.venv/bin/python tools/dev.py play --scenario smoke
+python3 tools/dev.py check --preset native
+python3 tools/dev.py build --preset dev
+python3 tools/dev.py test --preset dev
+python3 tools/dev.py run
 ```
-
-On Windows use `.venv\\Scripts\\python.exe` instead.
 
 `native` omits GDExtension but still builds/tests the Godot-free graph. `dev` builds the debug GDExtension against the immutable godot-cpp revision in [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake). The bounded smoke playtest validates `debug.json` plus `final.png` under `.cache/play/`.
 
