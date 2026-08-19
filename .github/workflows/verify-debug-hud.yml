@@ -1,9 +1,7 @@
 name: Verify debug HUD
 
 on:
-  push:
-    branches:
-      - agent/debug-hud-verifier
+  pull_request:
 
 permissions:
   contents: read
