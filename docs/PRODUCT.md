@@ -68,6 +68,32 @@ F5 optimization/scale only if measured
 
 Simulation fidelity should not run materially ahead of player-facing exposure.
 
+### Historical counterfactual, not generic fantasy medievalism
+
+The non-magical reference world is grounded in sourced scholarship around **circa 1200**, with concrete mechanics narrowing region/institutional assumptions where needed.
+
+History supplies the constraints and institutions from which the world starts. It does not dictate what must happen after magic changes those constraints.
+
+Do not turn familiar fantasy stereotypes — one feudal pyramid, immutable peasant/noble classes, universal barter villages, omnipotent kings — into authoritative world laws when the historical baseline is more complex.
+
+### Magic always participates causally
+
+Magic is not a later decorative subsystem.
+
+Every serious model identifies which mundane constraints could be changed by present or future magic. When an implemented magical capability changes one of those constraints, downstream economy/social/political/health/security consequences must arise through the same authoritative world model.
+
+The world may resist disruptive magic through real actor/institution capabilities — law, property, patronage, alliances, legitimacy, information, force, recruitment, monopoly, sanctions, countermeasures — but rulers do not receive plot armor. If the balance really changes, social and political order may change with it.
+
+### Adaptive causal fidelity
+
+Do not simulate every detail of every person merely because it exists in reality.
+
+Resolve individual identity, aggregates and deferred detail at the cheapest level that preserves current gameplay causality, already-observed history and future consequences that are actually in play.
+
+Camera distance is not the criterion. A distant debt, ruler, caravan, epidemic or institution can remain causally important; a visible crowd member may not need a complete private life.
+
+Realism means believable causal constraints and observable consequences, not maximal variable count.
+
 ### One authoritative world
 
 The authoritative implementation of world laws and outcomes exists once, in the C++ Simulation Core.
@@ -82,7 +108,7 @@ Do not start unrelated refactors, speculative frameworks or neighboring subsyste
 
 ## Player role is compositional
 
-There is no authoritative `PlayerClass` enum that grants the player the role of farmer, merchant, mage, noble, criminal, priest or politician.
+There is no authoritative `PlayerClass`, `SocialClass` or occupational caste enum that grants the player the role of farmer, merchant, mage, noble, criminal, priest or politician.
 
 Roles emerge from combinations of:
 
@@ -93,6 +119,7 @@ Roles emerge from combinations of:
 - organization membership and office;
 - reputation, relationships, debts and obligations;
 - territory/access;
+- coercive capability;
 - magic access;
 - actions and history.
 
@@ -104,12 +131,14 @@ If the player can buy land, own a workshop, hire someone, join an organization, 
 
 NPC decision algorithms may differ from player input, but constraints and consequences are shared.
 
+A low-status actor can rise extraordinarily far if their actual resources, magic, alliances, reputation, office or force permit it. Existing institutions may react, recruit, regulate, oppose or collapse through the same world rules.
+
 ## Opportunity-driven RPG
 
 Available actions arise from world and actor state:
 
 ```text
-world state + actor state + institution rules
+world state + actor state + institution rules + information
   -> feasible opportunities
 ```
 
@@ -117,7 +146,7 @@ Do not use a global abstract skill tree to unlock the world independently of its
 
 ## Early scope guard
 
-Do not start with a 3D open world, MMO networking, LLM NPCs, universal GOAP/ECS frameworks, full genetics/metabolism, a global political simulator, full religion simulator, universal magic ontology, custom scripting language, microservices, database clusters, or a revived TypeScript/WASM client.
+Do not start with a 3D open world, MMO networking, LLM NPCs, universal GOAP/ECS frameworks, full genetics/metabolism, a global political simulator, full religion simulator, universal magic ontology, dynamic world-LOD framework, custom scripting language, microservices, database clusters, or a revived TypeScript/WASM client.
 
 Any of these may be considered later only after a concrete player-facing need, measured constraint and (when consequential) an ADR.
 

@@ -8,14 +8,16 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | --- | --- | --- |
 | product goals, playable invariants, player-role philosophy | [`PRODUCT.md`](PRODUCT.md) | gameplay/product work |
 | runtime ownership, dependency direction, protocol/GDExtension seam, AI Layer runtime boundary | [`ARCHITECTURE.md`](ARCHITECTURE.md) | architecture/integration work |
-| determinism, NPC/economy/politics/social/history/magic/save modeling | [`MODELING.md`](MODELING.md) | simulation/model changes |
+| determinism, NPC/economy/politics/social/history/magic/fidelity policy | [`MODELING.md`](MODELING.md) | simulation/model changes |
+| circa-1200 non-magical historical baseline | [`research/high-medieval-baseline-c1200.md`](research/high-medieval-baseline-c1200.md) | economy/social/politics/institution/history assumptions |
+| historical counterfactual + adaptive causal fidelity decision | [`decisions/0005-historical-counterfactual-and-causal-fidelity.md`](decisions/0005-historical-counterfactual-and-causal-fidelity.md) | changing role/status, magic participation or simulation-detail policy |
 | tests, playtest supervisor, evidence, local DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
 | current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target |
 | agent context packaging | [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md) | maintaining AGENTS/Cursor/Claude/Gemini/skills |
 | stack-specific implementation | [`engineering/STACK.md`](engineering/STACK.md) | coding/build work |
 | Godot/GDExtension versions | [`engineering/VERSIONS.md`](engineering/VERSIONS.md) | engine/binding/dependency work |
 | consequential rationale | [`decisions/`](decisions/) | when an accepted choice may be affected |
-| serious mechanic model | `models/<mechanic>.md` | once that mechanic has a durable model contract |
+| serious mechanic model | `models/<mechanic>.md` | once that mechanic has a durable causal model contract |
 | load-bearing research | `research/` | when historical/scientific evidence needs a durable artifact |
 
 ## Engineering routes
@@ -44,11 +46,9 @@ Host files do not own product/engineering truth. They point here.
 
 ## Authority and conflicts
 
-Different document types answer different questions; avoid pretending one total ordering solves every conflict.
-
 For **implemented behavior**, current source, build configuration, lock files and executable tests are authoritative evidence.
 
-For **intentional architecture decisions**, accepted ADRs explain why a choice exists. If current implementation intentionally changes a consequential accepted decision, update/supersede the ADR rather than silently diverging.
+For **intentional architecture/model decisions**, accepted ADRs explain why a choice exists. If current implementation intentionally changes a consequential accepted decision, update/supersede the ADR rather than silently diverging.
 
 For **required behavior/design not yet implemented**, use the canonical concern owner above.
 
@@ -62,9 +62,10 @@ A stale prose statement is a documentation defect. Do not change working code me
 - ADRs record consequential decisions and rationale; they are not alternate full specs.
 - Engineering guides explain how/how-not for a chosen stack; they do not redefine product goals.
 - Model documents exist only for serious mechanics that need a durable causal contract.
-- Research artifacts should record source quality, uncertainty and the modeling consequence, not become an uncurated link dump.
+- Research artifacts record source quality, uncertainty and modeling consequence rather than becoming an uncurated link dump.
+- Broad historical research is not permission to guess precise local rates/rules; narrow the source when a mechanic depends on them.
 - Planned files/directories must not be described as if they already exist.
-- When a mechanically enforceable invariant gains real code/targets, prefer an executable check over additional prose.
+- When a mechanically enforceable invariant gains real code/targets, prefer an executable boundary over additional prose.
 
 ## Progressive disclosure for agents
 
@@ -74,7 +75,7 @@ Default route:
 AGENTS.md
   -> this INDEX
   -> one canonical concern document
-  -> one relevant engineering/model/ADR source
+  -> one relevant engineering/model/ADR/research source
   -> current code/tests/build files
 ```
 
