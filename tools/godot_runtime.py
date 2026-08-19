@@ -10,6 +10,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / "godot"
 LOCK = ROOT / "tools" / "toolchain.lock.json"
+PROJECT_CONFIG = PROJECT / "project.godot"
+CI_DISPLAY_IMPORT_ENV = "WORLD_SIM_GODOT_IMPORT_DISPLAY"
 
 
 def expected_godot_version() -> str:
@@ -18,6 +20,22 @@ def expected_godot_version() -> str:
     if not isinstance(value, str) or not value:
         raise SystemExit("tools/toolchain.lock.json is missing a valid Godot version")
     return value
+
+
+def project_rendering_method() -> str:
+    for raw_line in PROJECT_CONFIG.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line.startswith("renderer/rendering_method="):
+            continue
+        _, encoded_value = line.split("=", 1)
+        try:
+            value = json.loads(encoded_value)
+        except json.JSONDecodeError as exc:
+            raise SystemExit("godot/project.godot has an invalid renderer/rendering_method value") from exc
+        if not isinstance(value, str) or not value:
+            break
+        return value
+    raise SystemExit("godot/project.godot is missing renderer/rendering_method")
 
 
 def resolve_godot() -> str:
@@ -41,7 +59,24 @@ def resolve_godot() -> str:
 
 
 def import_project_metadata(godot: str) -> None:
-    command = [godot, "--headless", "--path", str(PROJECT), "--import"]
+    use_display = os.environ.get(CI_DISPLAY_IMPORT_ENV) == "1"
+    command = [godot]
+    if use_display:
+        if not os.environ.get("DISPLAY"):
+            raise SystemExit(f"{CI_DISPLAY_IMPORT_ENV}=1 requires an available DISPLAY")
+        command.extend(
+            [
+                "--rendering-method",
+                project_rendering_method(),
+                "--audio-driver",
+                "Dummy",
+                "--disable-vsync",
+            ]
+        )
+    else:
+        command.append("--headless")
+    command.extend(["--path", str(PROJECT), "--import"])
+
     print("+", " ".join(command))
     try:
         subprocess.run(command, cwd=ROOT, check=True, timeout=120)
