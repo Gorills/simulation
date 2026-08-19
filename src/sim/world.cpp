@@ -1,6 +1,8 @@
 #include "sim/world.hpp"
 
+#include <cassert>
 #include <expected>
+#include <utility>
 
 namespace worldsim::sim {
 
@@ -16,15 +18,23 @@ std::expected<void, WorldError> World::spawn_actor(
     if (initial.spatial.has_value() && !initial.spatial->is_valid()) {
         return std::unexpected(WorldError::invalid_spatial_state);
     }
-    if (actor(id) != nullptr) {
+
+    const auto [index_entry, inserted] = actor_index_by_id_.emplace(id.value, actors_.size());
+    if (!inserted) {
         return std::unexpected(WorldError::duplicate_entity);
     }
 
-    actors_.push_back(ActorState{
-        .id = id,
-        .bootstrap_position = initial.bootstrap_position,
-        .spatial = initial.spatial,
-    });
+    try {
+        actors_.push_back(ActorState{
+            .id = id,
+            .bootstrap_position = initial.bootstrap_position,
+            .spatial = initial.spatial,
+        });
+    } catch (...) {
+        actor_index_by_id_.erase(index_entry);
+        throw;
+    }
+
     ++revision_.value;
     return {};
 }
@@ -66,24 +76,24 @@ void World::advance_one_tick() noexcept {
     ++revision_.value;
 }
 
-const ActorState *World::actor(const EntityId id) const noexcept {
-    if (!id.is_valid()) {
-        return nullptr;
-    }
-    for (const auto &state : actors_) {
-        if (state.id == id) {
-            return &state;
-        }
-    }
-    return nullptr;
+bool World::contains_actor(const EntityId id) const noexcept {
+    return id.is_valid() && actor_index_by_id_.contains(id.value);
 }
 
-const SpatialState *World::actor_spatial_state(const EntityId id) const noexcept {
-    const auto *state = actor(id);
-    if (state == nullptr || !state->spatial.has_value()) {
-        return nullptr;
+std::optional<GridPosition> World::actor_bootstrap_position(const EntityId id) const noexcept {
+    const auto index = actor_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
     }
-    return &*state->spatial;
+    return actors_[*index].bootstrap_position;
+}
+
+std::optional<SpatialState> World::actor_spatial_state(const EntityId id) const noexcept {
+    const auto index = actor_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
+    }
+    return actors_[*index].spatial;
 }
 
 SimulationTick World::tick() const noexcept {
@@ -98,16 +108,27 @@ WorldSeed World::seed() const noexcept {
     return seed_;
 }
 
-ActorState *World::find_actor(const EntityId id) noexcept {
+std::optional<std::size_t> World::actor_index(const EntityId id) const noexcept {
     if (!id.is_valid()) {
+        return std::nullopt;
+    }
+
+    const auto entry = actor_index_by_id_.find(id.value);
+    if (entry == actor_index_by_id_.end()) {
+        return std::nullopt;
+    }
+
+    assert(entry->second < actors_.size());
+    assert(actors_[entry->second].id == id);
+    return entry->second;
+}
+
+ActorState *World::find_actor(const EntityId id) noexcept {
+    const auto index = actor_index(id);
+    if (!index.has_value()) {
         return nullptr;
     }
-    for (auto &state : actors_) {
-        if (state.id == id) {
-            return &state;
-        }
-    }
-    return nullptr;
+    return &actors_[*index];
 }
 
 } // namespace worldsim::sim
