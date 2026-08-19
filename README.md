@@ -36,7 +36,7 @@ The player-controlled person is an ordinary simulated actor. Human input and NPC
 
 Exact `SpatialState` is selective. An entity may exist authoritatively without an exact 3D pose when current gameplay causality only needs semantic or aggregate location.
 
-The first Godot-free grounded locomotion transition now proves deterministic flat-ground integration plus head-on/oblique wall blocking against neutral Simulation-owned geometry. It is not wired into the live controlled-actor protocol path yet; slope, step, fall and presentation sample reconciliation remain later slices. The native `BootstrapMoveIntent` grid path remains Milestone 0 transport evidence only.
+The Godot-free grounded locomotion transition proves deterministic flat-ground integration, head-on/oblique wall blocking, and authoritative walkable/too-steep slope classification/traversal against neutral Simulation-owned geometry. It is not wired into the live controlled-actor protocol path yet; step handling, fall/landing and presentation sample reconciliation remain later slices. The native `BootstrapMoveIntent` grid path remains Milestone 0 transport evidence only.
 
 See [`docs/decisions/0004-authoritative-world-presentation-boundary.md`](docs/decisions/0004-authoritative-world-presentation-boundary.md), [`docs/decisions/0006-authoritative-spatial-contract.md`](docs/decisions/0006-authoritative-spatial-contract.md), and [`docs/models/grounded-locomotion.md`](docs/models/grounded-locomotion.md).
 
