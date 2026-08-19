@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ControlProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/controls/control_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+move_deadzone = 0.2
+mouse_sensitivity = 0.002
+invert_mouse_x = false
+invert_mouse_y = false
+look_deadzone = 0.2
+gamepad_look_speed = 3.0
+gamepad_look_response = 1.0
+invert_gamepad_x = false
+invert_gamepad_y = false
+pitch_min_degrees = -65.0
+pitch_max_degrees = 70.0
+target_height = 1.55
+camera_distance = 4.2
+camera_collision_margin = 0.08
+field_of_view = 68.0

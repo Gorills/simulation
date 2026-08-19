@@ -8,7 +8,7 @@ Prefer versioned official documentation, project upstream repositories, language
 
 | Topic | Primary source | Encoded in |
 | --- | --- | --- |
-| scene independence, parent-mediated sibling wiring, persistent Main/World/GUI structure | Godot [Scene organization](https://docs.godotengine.org/en/stable/tutorials/best_practices/scene_organization.html) | [`godot.md`](godot.md) |
+| scene independence, parent-mediated sibling wiring, persistent composition roots | Godot [Scene organization](https://docs.godotengine.org/en/stable/tutorials/best_practices/scene_organization.html) | [`godot.md`](godot.md) |
 | Autoload trade-offs | Godot [Autoloads versus regular nodes](https://docs.godotengine.org/en/stable/tutorials/best_practices/autoloads_versus_regular_nodes.html) | `godot.md` |
 | Node vs Object/RefCounted/Resource | Godot [Node alternatives](https://docs.godotengine.org/en/stable/tutorials/best_practices/node_alternatives.html) | `godot.md` |
 | Resource sharing/identity | Godot [Resources](https://docs.godotengine.org/en/stable/tutorials/scripting/resources.html) | `godot.md` |
@@ -16,7 +16,16 @@ Prefer versioned official documentation, project upstream repositories, language
 | runtime node setup preferences | Godot [Logic preferences](https://docs.godotengine.org/en/stable/tutorials/best_practices/logic_preferences.html) | `godot.md` |
 | `_process` vs `_physics_process` | Godot [Idle and physics processing](https://docs.godotengine.org/en/stable/tutorials/scripting/idle_and_physics_processing.html) | `godot.md` |
 | semantic input actions | Godot [Using InputEvent / InputMap](https://docs.godotengine.org/en/stable/tutorials/inputs/inputevent.html) | `godot.md` |
+| controller mappings, circular deadzone and `Input.get_vector()` | Godot 4.7 [Controllers, gamepads, and joysticks](https://docs.godotengine.org/en/4.7/tutorials/inputs/controllers_gamepads_joysticks.html) | `godot.md`, ADR 0002 |
+| captured mouse mouselook and `screen_relative` | Godot 4.7 [`InputEventMouseMotion`](https://docs.godotengine.org/en/4.7/classes/class_inputeventmousemotion.html) and [Mouse and input coordinates](https://docs.godotengine.org/en/4.7/tutorials/inputs/mouse_and_input_coordinates.html) | `godot.md`, ADR 0002 |
+| third-person camera collision | Godot 4.7 [Third-person camera with spring arm](https://docs.godotengine.org/en/4.7/tutorials/3d/spring_arm.html) | `godot.md`, ADR 0002 |
+| fixed-step smooth rendering and manual camera follow | Godot 4.7 [Physics interpolation quick start](https://docs.godotengine.org/en/4.7/tutorials/physics/interpolation/physics_interpolation_quick_start_guide.html) and [Advanced physics interpolation](https://docs.godotengine.org/en/4.7/tutorials/physics/interpolation/advanced_physics_interpolation.html) | `godot.md`, ADR 0002 |
+| official third-person input/camera/movement reference | [`godotengine/tps-demo`](https://github.com/godotengine/tps-demo) — `player/player_input.gd`, `player/player.gd` | `godot.md`, ADR 0002 |
+| Godot 4.7 `CharacterBody3D`, camera-relative movement, acceleration/deceleration and interpolation reference | [`godot-demo-projects` 4.7 `3d/platformer`](https://github.com/godotengine/godot-demo-projects/tree/4.7-6ad6167/3d/platformer) | `godot.md`, ADR 0002 |
+| commercial precedent that movement response needs explicit tuning | CD PROJEKT RED [The Witcher 3 patch 1.07 changelog](https://www.thewitcher.com/us/en/news/1081/patch-1-07-changelog) | ADR 0002 |
 | typed GDScript | Godot [Static typing](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/static_typing.html) | `godot.md` |
+
+The Witcher changelog is used only as product-design evidence that movement response is a deliberate player-facing tuning concern. No proprietary Witcher implementation or numeric tuning value is treated as a project API.
 
 ## GDExtension / godot-cpp
 
@@ -52,6 +61,7 @@ The Core Guidelines are guidance, not a license to import every recommended abst
 
 - Stable/versioned official docs beat old tutorials when APIs or compatibility differ.
 - A large production repository may provide a useful structural precedent without making every one of its build choices appropriate here.
+- Commercial games may motivate a UX requirement without their internal implementation becoming a project dependency or guessed contract.
 - Unofficial mnemonic phrasing may help an explanation, but the rule must be grounded in an upstream/canonical source.
 - When upstream behavior changes, update the project guide and source record together; do not preserve stale compatibility claims for consistency with old prose.
-- Version-specific facts belong in [`VERSIONS.md`](VERSIONS.md) and eventually machine-readable build/lock files, not scattered across guides.
+- Version-specific facts belong in [`VERSIONS.md`](VERSIONS.md) and machine-readable build/lock files, not scattered across guides.

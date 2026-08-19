@@ -12,6 +12,27 @@ include(CTest)
 option(WORLD_SIM_BUILD_TESTS "Build native world simulation tests" ${BUILD_TESTING})
 option(WORLD_SIM_BUILD_GDEXTENSION "Build the Godot GDExtension adapter" ON)
 
+function(world_sim_enable_project_warnings target)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            ${target}
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+                -Wconversion
+                -Wsign-conversion
+                -Wshadow
+                -Wformat=2
+                -Wundef
+                -Wnon-virtual-dtor
+                -Wold-style-cast
+        )
+    elseif(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    endif()
+endfunction()
+
 add_library(sim_core STATIC)
 target_sources(
     sim_core
@@ -21,44 +42,52 @@ target_sources(
         FILE_SET HEADERS
         BASE_DIRS src
         FILES
-            src/protocol/move.hpp
+            src/sim/types.hpp
             src/sim/world.hpp
 )
 target_compile_features(sim_core PUBLIC cxx_std_23)
 target_include_directories(sim_core PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>")
 set_target_properties(sim_core PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
+world_sim_enable_project_warnings(sim_core)
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(
-        sim_core
-        PRIVATE
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wconversion
-            -Wsign-conversion
-            -Wshadow
-            -Wformat=2
-            -Wundef
-            -Wnon-virtual-dtor
-            -Wold-style-cast
-    )
-elseif(MSVC)
-    target_compile_options(sim_core PRIVATE /W4 /permissive-)
-endif()
+add_library(sim_protocol STATIC)
+target_sources(
+    sim_protocol
+    PRIVATE
+        src/protocol/simulation.cpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS src
+        FILES
+            src/protocol/move.hpp
+            src/protocol/simulation.hpp
+)
+target_compile_features(sim_protocol PUBLIC cxx_std_23)
+target_include_directories(sim_protocol PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>")
+target_link_libraries(sim_protocol PRIVATE sim_core)
+set_target_properties(sim_protocol PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
+world_sim_enable_project_warnings(sim_protocol)
 
 if(WORLD_SIM_BUILD_TESTS)
     find_package(Python3 3.12 COMPONENTS Interpreter REQUIRED)
     include(cmake/Dependencies.cmake)
     world_sim_fetch_googletest()
 
-    add_executable(sim_tests tests/sim/world_test.cpp)
-    target_link_libraries(sim_tests PRIVATE sim_core GTest::gtest_main)
-    target_compile_features(sim_tests PRIVATE cxx_std_23)
-    set_target_properties(sim_tests PROPERTIES CXX_EXTENSIONS OFF)
+    add_executable(sim_core_tests tests/sim/world_test.cpp)
+    target_link_libraries(sim_core_tests PRIVATE sim_core GTest::gtest_main)
+    target_compile_features(sim_core_tests PRIVATE cxx_std_23)
+    set_target_properties(sim_core_tests PROPERTIES CXX_EXTENSIONS OFF)
+    world_sim_enable_project_warnings(sim_core_tests)
+
+    add_executable(protocol_tests tests/protocol/simulation_test.cpp)
+    target_link_libraries(protocol_tests PRIVATE sim_protocol GTest::gtest_main)
+    target_compile_features(protocol_tests PRIVATE cxx_std_23)
+    set_target_properties(protocol_tests PROPERTIES CXX_EXTENSIONS OFF)
+    world_sim_enable_project_warnings(protocol_tests)
 
     include(GoogleTest)
-    gtest_discover_tests(sim_tests PROPERTIES LABELS "unit;sim;determinism")
+    gtest_discover_tests(sim_core_tests PROPERTIES LABELS "unit;sim;determinism")
+    gtest_discover_tests(protocol_tests PROPERTIES LABELS "unit;protocol;determinism")
 
     add_test(
         NAME architecture_no_godot_in_core
@@ -80,8 +109,9 @@ if(WORLD_SIM_BUILD_GDEXTENSION)
             src/adapters/gdextension/sim_facade.hpp
     )
     target_compile_features(world_sim_gdextension PRIVATE cxx_std_23)
-    target_link_libraries(world_sim_gdextension PRIVATE sim_core godot::cpp)
+    target_link_libraries(world_sim_gdextension PRIVATE sim_protocol godot::cpp)
     set_target_properties(world_sim_gdextension PROPERTIES CXX_EXTENSIONS OFF)
+    world_sim_enable_project_warnings(world_sim_gdextension)
 
     if(GODOTCPP_TARGET STREQUAL "template_release")
         set(_world_sim_gdextension_variant "template_release")

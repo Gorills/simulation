@@ -1,6 +1,6 @@
 # World Simulation
 
-Playable systemic RPG with one authoritative C++23 Simulation Core and one Godot 4 client.
+Playable systemic third-person RPG with one authoritative C++23 Simulation Core and one Godot 4 client.
 
 ## Start here
 
@@ -19,11 +19,24 @@ Playable systemic RPG with one authoritative C++23 Simulation Core and one Godot
 ```text
 Godot 4
   -> world_sim_gdextension
-  -> protocol
+  -> sim_protocol
   -> sim_core
 ```
 
-`src/sim` owns world truth. Godot owns presentation/input/UI. The first implemented path is a semantic move command whose returned native projection drives the client position.
+`src/sim` owns systemic world truth. Godot owns the latency-sensitive local third-person locomotion/camera shell plus presentation, input, audio and UI. The distinction is deliberate: a `CharacterBody3D` transform is not permission for GDScript to invent inventory, access rights, trade results or other authoritative outcomes.
+
+The native `MoveIntent` path remains a small Milestone 0 protocol/GDExtension smoke probe. Normal third-person locomotion does not send discrete grid steps to the Simulation Core; future semantic-location rules get an explicit protocol contract when gameplay requires them.
+
+## Controls
+
+The reference client is keyboard/mouse and gamepad from the start:
+
+- WASD / left stick — move;
+- mouse / right stick — orbit camera;
+- Shift / L3 — sprint;
+- Escape — release captured mouse; click to recapture.
+
+Control code is intentionally split into small responsibilities. Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPersonCameraRig`, local kinematic movement in `ThirdPersonPlayer`, and tuneable feel values in `ControlProfile` / `LocomotionProfile` resources. See [`docs/engineering/godot.md`](docs/engineering/godot.md) and [`docs/decisions/0002-third-person-controls.md`](docs/decisions/0002-third-person-controls.md).
 
 ## Local development
 
@@ -46,6 +59,6 @@ Canonical front door after bootstrap:
 
 On Windows use `.venv\\Scripts\\python.exe` instead.
 
-`native` omits GDExtension but still builds/tests the Godot-free core. `dev` builds the debug GDExtension against the exact immutable godot-cpp revision in [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake). The smoke playtest is bounded, owns only its Godot process, and validates `debug.json` plus `final.png` under `.cache/play/`.
+`native` omits GDExtension but still builds/tests the Godot-free native graph. `dev` builds the debug GDExtension against the exact immutable godot-cpp revision in [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake). The smoke playtest is bounded, owns only its Godot process, and validates `debug.json` plus `final.png` under `.cache/play/`.
 
 The selected client split is **GDScript + C++ GDExtension**, not C#. Version semantics and verification status live in [`docs/engineering/VERSIONS.md`](docs/engineering/VERSIONS.md).
