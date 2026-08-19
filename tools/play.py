@@ -19,6 +19,8 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
+SMOKE_RENDERING_METHOD = "gl_compatibility"
+SMOKE_AUDIO_DRIVER = "Dummy"
 
 
 class PlayLock(AbstractContextManager["PlayLock"]):
@@ -287,6 +289,11 @@ def main() -> int:
     import_project_metadata(godot)
     command = [
         godot,
+        "--rendering-method",
+        SMOKE_RENDERING_METHOD,
+        "--audio-driver",
+        SMOKE_AUDIO_DRIVER,
+        "--disable-vsync",
         "--path",
         str(PROJECT),
         "--",
