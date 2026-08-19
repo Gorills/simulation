@@ -1,0 +1,87 @@
+name: Godot smoke
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install pinned build tools
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements-dev.txt
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xauth
+      - name: Install pinned Godot
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import subprocess
+          import urllib.request
+          import zipfile
+
+          lock = json.loads(Path("tools/toolchain.lock.json").read_text(encoding="utf-8"))
+          version = lock.get("godot")
+          if not isinstance(version, str) or not version:
+              raise SystemExit("tools/toolchain.lock.json is missing a valid Godot version")
+
+          release = f"{version}-stable"
+          binary_name = f"Godot_v{release}_linux.x86_64"
+          tools = Path(".tools")
+          tools.mkdir(exist_ok=True)
+          archive = tools / "godot.zip"
+          binary = tools / binary_name
+          url = f"https://github.com/godotengine/godot/releases/download/{release}/{binary_name}.zip"
+
+          urllib.request.urlretrieve(url, archive)
+          with zipfile.ZipFile(archive) as bundle:
+              bundle.extractall(tools)
+          archive.unlink()
+          binary.chmod(0o755)
+          subprocess.run([str(binary), "--version"], check=True)
+
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write(f"GODOT_BIN={binary.resolve()}\n")
+          PY
+      - name: Build development graph
+        run: python tools/dev.py check --preset dev
+      - name: Verify Russian Godot smoke
+        env:
+          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
+        run: xvfb-run -a python tools/dev.py play --scenario smoke --locale ru
+      - name: Verify English Godot smoke
+        env:
+          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
+        run: xvfb-run -a python tools/dev.py play --scenario smoke --locale en
+      - name: Upload Godot smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: godot-smoke-${{ github.sha }}
+          path: .cache/play/**
+          if-no-files-found: warn

@@ -1,23 +1,23 @@
 # Verification and playtest contract
 
-This document owns what counts as evidence for a project claim. It does not own AI Layer Task/Work lifecycle.
+This document owns **proof obligations, verification entry points and what a passing check is allowed to claim**. It does not own product goals, mechanic specifications, current roadmap sequencing or dependency versions.
+
+Exact implemented assertions belong in executable tests and validators. This document describes the evidence shape and routes to those executables rather than copying every fixture value into prose.
 
 ## Evidence pyramid
 
 ```text
-many fast deterministic native C++ tests
+many fast deterministic native tests
 some protocol/native scenario tests
-few bounded Godot playtest scenarios
+few bounded Godot runtime smoke scenarios
 manual/exploratory playtest when useful
 ```
 
-Godot tests do not replace Simulation Core tests. Native simulation tests do not prove that the game is usable.
+A claim is verified only by a check that actually ran on the exact revision being claimed. Missing tooling, an unbuilt target, an unperformed playtest or evidence from an earlier revision is **not** a pass.
 
-A claim is verified only by a check that actually ran on the exact revision being claimed. Missing tooling, an unbuilt target, an unperformed playtest, or a check from an earlier revision is **not** a pass.
+Compile-green alone is not Definition of Done for player-facing gameplay.
 
-## Current Milestone 0 gates
-
-The executable verification paths now include:
+## Ordinary local gates
 
 ```bash
 python tools/check_architecture.py
@@ -29,191 +29,67 @@ python tools/dev.py play --scenario smoke --locale ru
 python tools/dev.py play --scenario smoke --locale en
 ```
 
-- `native` configures/builds/tests the Godot-free native graph and also runs localization-catalog integrity through `tools/dev.py check`.
-- `sanitize` runs the same Godot-free graph with ASan+UBSan under GCC/Clang and the same localization-catalog integrity check.
-- `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
-- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed controlled + living-need NPC identities, authoritative controlled-actor spatial state, one real two-actor authoritative movement sample batch, duplicate/stale-batch rejection, NPC materialization from the sample stream, presentation reconciliation, active locale/translated probes and screenshot evidence.
-- localization-affecting runtime UI changes require rendered evidence for every supported locale; catalog parity alone is not visual proof.
-- material third-person control changes additionally require real local keyboard/mouse and gamepad playtesting; automated smoke proves the authority round-trip, not subjective control feel.
+Use only the subset required by the change, but do not claim a gate that did not run.
 
-The existence of these commands is not evidence that all of them have run in a particular environment.
+- `native` builds/tests the Godot-free native graph.
+- `sanitize` runs the Godot-free graph with the configured sanitizer preset.
+- `dev` additionally builds the GDExtension development graph.
+- `play --scenario smoke` launches the real Godot project through the repository supervisor and validates the current boundary evidence plus screenshot artifact.
+
+The exact Godot/tool versions are owned by lock/configuration files and [`engineering/VERSIONS.md`](engineering/VERSIONS.md), not duplicated here.
 
 ## Capability proof
 
 A systemic player-facing capability normally needs:
 
 1. authoritative native behavior;
-2. explicit semantic protocol command/result/events/projection or transition-result stream;
-3. targeted deterministic/regression evidence where relevant;
+2. semantic protocol input/result/projection or transition-result contract;
+3. focused deterministic/regression evidence where relevant;
 4. visible Godot feedback based on the authoritative result;
 5. one bounded playtest proving the real round-trip;
-6. for an actor capability, evidence that human-controlled and NPC actors do not use contradictory world rules.
+6. for actor capabilities, evidence that human-controlled and NPC actors do not use contradictory world laws.
 
-Engine-local presentation/control work does not need a fake native rule merely to satisfy this list, but it must be exercised in the real Godot client and must not create world authority in GDScript.
+Engine-local presentation/control work does not need a fake native mechanic merely to satisfy this list, but it must be exercised in the real Godot client and must not create world authority in GDScript.
 
-Compile-green alone is not Definition of Done for gameplay.
+## Native and protocol tests
 
-## Native tests
+Native tests must remain deterministic, independent and Godot-free where the production owner is `src/sim`/`src/protocol`.
 
-Tests should be independent, repeatable and deterministic, with no order dependence.
+The target graph should make ownership visible:
 
-Use behavior-oriented names. Prefer `EXPECT_*` for multiple independent observations and `ASSERT_*` only when continuing would be meaningless.
+- Simulation-domain tests link against Simulation without Godot;
+- protocol tests exercise boundary validation/orchestration and authoritative results;
+- architecture checks mechanically reject Godot leakage into Core/protocol;
+- mechanic-specific detailed assertions live next to the mechanic tests rather than in this document.
 
-Native rule tests must not require Godot. Core tests use real value objects/state where practical rather than mock-heavy designs.
-
-The native test graph mirrors production ownership:
-
-- `sim_core_tests` links only `sim_core` + `GTest::gtest_main` and exercises domain state/transitions directly;
-- `protocol_tests` links `sim_protocol` + `GTest::gtest_main` and exercises validation plus command-to-domain-to-projection/result behavior.
-
-The current domain tests prove, among other locomotion/state contracts:
-
-- different actor `EntityId`s use the same authoritative actor operation;
-- actor actions change `WorldRevision` without pretending that `SimulationTick` advanced;
-- explicit simulation-time advancement changes tick/revision separately;
-- duplicate/unknown/invalid identities fail without mutation;
-- exact `SpatialState` can exist for one actor while another authoritative actor has no exact spatial pose;
-- invalid `SpatialEpoch` is rejected without mutating the world;
-- equal initial state/action sequences remain deterministic;
-- shared grounded-locomotion batches are atomic and actor-count independent for time advancement;
-- authoritative movement samples are returned in canonical ascending `EntityId` order even when intent collection order is reversed;
-- grounded acceleration, braking and reversal are deterministic and do not require client-authored velocity;
-- one actor capability resolves different `walk/run/sprint` paces through the same World rule;
-- different actor capabilities resolve the same semantic pace to different authoritative movement limits;
-- invalid pace/capability fails without partial world mutation;
-- fixed-step position/planar-velocity/vertical continuation survives snapshot/restore deterministically;
-- `ActorLocomotionCapability` and `RestNeedState` are validated/persisted causal actor state;
-- first rest-need decision is deterministic/read-only, chooses semantic walk pace, and satisfaction follows authoritative position/tolerance rather than presentation or a duplicate completion flag.
-
-The current protocol tests prove:
-
-- the current `ObservedWorldProjection` contains the controlled actor plus the first identity-resolved living-need NPC while remaining identity/presence-only;
-- the controlled actor starts with exact authoritative spatial state at the origin, zero velocity and epoch 1;
-- bootstrap grid movement advances world revision but does **not** alter production `SpatialState`;
-- malformed bootstrap input is rejected without mutating observed authoritative state;
-- movement direction/pace submission alone does not mutate authoritative world state;
-- invalid pace does not replace the last accepted controller intent;
-- a fixed locomotion tick returns a post-transition `AuthoritativeMovementSampleBatch`;
-- repeated movement batches increase tick/revision deterministically;
-- every current application locomotion batch carries canonical samples for both controlled actor and living-need NPC;
-- the controlled actor's `run` pace accelerates toward its current actor-specific limit rather than instantly becoming 5.8 m/s;
-- the living-need NPC selects `walk`, accelerates/brakes through the same World resolver/solver, and settles inside its assigned rest tolerance.
-
-CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces the Godot-free dependency boundary.
-
-Recommended CTest labels:
-
-```text
-unit
-sim
-protocol
-determinism
-scenario
-slow
-architecture
-```
-
-Godot playtests are not registered in the default CTest set.
-
-## Authority-boundary regression evidence
-
-As real mechanics arrive, tests must protect the Simulation/Godot ownership boundary rather than only individual formulas.
-
-Representative proofs:
-
-- merchant stock/money transfer happens atomically in Simulation, not UI state;
-- the same transaction law works for an NPC buyer and the controlled actor;
-- a relationship change is visible through a projection but cannot be set by Godot;
-- an offscreen event changes Simulation state without requiring a Godot node;
-- materialization/dematerialization does not create/delete authoritative entities;
-- stale presentation revisions cannot overwrite newer authoritative samples;
-- local prediction, when introduced, reconciles to authoritative movement and cannot create systemic outcomes.
-
-Do not write these tests before the corresponding feature exists. The list defines what evidence the eventual architecture requires.
+Use behavior-oriented test names. Prefer direct domain values/state over mock-heavy tests when practical.
 
 ## Sanitizers
 
-The repository provides the `sanitize` CMake preset for Godot-free native ASan+UBSan verification under GCC/Clang.
+Run the sanitizer preset for memory/UB-sensitive native changes, crashes/corruption investigations and milestone verification. Sanitizer success is correctness evidence, not performance evidence and not proof that Godot runtime integration works.
 
-Run it for memory/UB-sensitive native changes, crashes/corruption investigations and milestone verification. The minimal native CI gate also runs this preset so a clean independent checkout exercises the sanitizer build/tests for every pull request and push to `main`.
+## Godot smoke supervisor
 
-Sanitizer success is correctness evidence, not performance evidence. It does not replace the normal native preset, GDExtension/Godot verification or player-facing playtests.
-
-## Debug surface
-
-The development client should expose a read-only debug surface sufficient to explain a playtest:
-
-- ready/build/protocol identifiers;
-- controlled actor `EntityId`;
-- presentation position separately from authoritative spatial/semantic location;
-- `SimulationTick`, `WorldRevision` and spatial continuity epoch separately;
-- nearby/materialized actor IDs and relevant observation state;
-- last authoritative events/results/samples relevant to the scenario;
-- seed and scenario;
-- current screen/dialog state.
-
-The debug surface must not expose authoritative mutation methods. Scenario setup belongs to explicit initialization before the world starts, not debugger cheats.
-
-Milestone 0 exposes the local third-person presentation position, bootstrap/observed/spatial read projections, the latest authoritative movement-batch evidence, and the read-only `WorldPresentation` reconciliation snapshot. The bootstrap grid and production spatial sample remain deliberately separate.
-
-## Third-person control verification
-
-Control feel is empirical. Source review and Godot import success are necessary but insufficient.
-
-Before accepting a material control/presentation change, use the pinned Godot runtime and verify the affected device path. Check at least:
-
-- keyboard movement intent is camera-relative and releases cleanly without drift;
-- mouse look direction is correct, captured motion is stable across the supported window/stretch setup, and Escape/click pointer lifecycle works;
-- left-stick movement has a circular deadzone, reaches the full analog range and does not drift at rest;
-- right-stick look has no drift at rest, reaches useful angular speed at full deflection and has the expected vertical direction;
-- ordinary controlled movement chooses semantic `run`, and the existing sprint action chooses semantic `sprint` rather than multiplying a Godot-local speed;
-- authoritative acceleration/braking visibly follows Simulation samples and movement does not continue through a local `move_and_slide()`/Godot-gravity path;
-- presentation turning remains responsive without changing the authoritative physics-root position;
-- `SpringArm3D` pulls the camera inward against nearby presentation geometry and excludes the player presentation collider;
-- same-epoch movement does not introduce obvious visual jitter or camera stepping.
-
-These checks validate presentation feel. Native/protocol tests prove the current numeric movement law. **Whether the selected 1.0 / 3.0 / 5.8 m/s feel baselines and acceleration/braking feel natural in the actual camera/scene remains empirical and requires interactive playtesting.** Automated smoke must not be reported as proof of subjective movement feel.
-
-## Godot playtest supervisor
-
-`tools/play.py` is the single ordinary automated playtest entry point:
+`tools/play.py` is the single ordinary automated Godot playtest entry point. Do not create a second long-lived smoke runner for each feature.
 
 ```bash
 python tools/play.py --scenario smoke --locale ru
 python tools/play.py --scenario smoke --locale en
 ```
 
-Russian is the default when `--locale` is omitted. Do not create an alternative long-lived runner merely for convenience.
+The supervisor owns:
 
-### Preflight
+- pinned Godot resolution/version validation;
+- project metadata import before the visual run;
+- a non-blocking repository playtest lock;
+- one owned Godot process group;
+- bounded timeout and cleanup;
+- required debug/screenshot artifacts;
+- semantic validation of the authoritative Simulation ↔ protocol ↔ GDExtension ↔ Godot round-trip.
 
-The supervisor fails before launch unless the expected debug GDExtension library exists and the resolved Godot binary reports the exact 4.7.1 baseline. `GODOT_BIN` is the explicit override when Godot is not on `PATH`.
+The default/local metadata-import path is headless. Linux CI may explicitly opt into the bounded Xvfb import path through the repository runtime helper when the pinned Godot editor cannot complete `--headless --import` on that runner. That exception is CI infrastructure, not a second gameplay runner.
 
-### Locking
-
-The supervisor takes the non-blocking `.cache/play/godot.lock`.
-
-If the lock is held, exit non-zero with a clear `PLAYTEST BUSY` result. Do not wait forever, poll indefinitely or start a competing Godot process.
-
-### Process ownership
-
-One ordinary scenario run owns exactly the Godot process group it spawned for the repository project.
-
-Never use `pkill godot` or `killall godot`. Never terminate an editor or process that the supervisor did not create.
-
-### Deadlines
-
-Every run has a bounded timeout; the current smoke default is 30 seconds. No wait is infinite.
-
-Wait on conditions such as ready state, projection state, an explicit event or screenshot checkpoint. Arbitrary sleeps are only for intentional presentation observation.
-
-### Cleanup
-
-The supervisor owns graceful termination, a hard deadline, forced termination of **its own** process group if necessary, diagnostics and lock release.
-
-Use `try/finally` or an equivalent lifecycle guard.
-
-### Artifacts
+The exact fixture values and debug JSON assertions are executable truth in `tools/play.py` and the relevant native/protocol tests. Do not copy those values into architecture/roadmap prose.
 
 Each run writes under:
 
@@ -226,64 +102,74 @@ Each run writes under:
   debug.json
 ```
 
-For the `smoke` scenario, `debug.json` is a boundary-evidence object with six logical sections:
+A smoke pass requires a zero Godot exit status and successful supervisor validation of the currently implemented boundary evidence. At minimum that evidence covers authoritative identity/presence, controlled exact-spatial state, an authoritative movement transition for the current scenario, presentation binding/reconciliation, duplicate/stale transition rejection where applicable, active locale probes and a rendered screenshot.
+
+The smoke is boundary/runtime evidence. It does **not** prove subjective control feel, audio output, GPU-driver coverage or performance.
+
+## Godot process/environment policy
+
+Metadata import must remain non-interactive and bounded. The ordinary/default path uses Godot headless mode and therefore requires neither X11 nor a physical audio device. On the current Linux CI runner, pinned Godot 4.7.1 aborts during this project's `--headless --import`; the persistent smoke lane therefore performs that import under the same Xvfb display already required for screenshot evidence.
+
+The CI display-import workaround reads the renderer from canonical `godot/project.godot`, uses the `Dummy` audio driver and disables VSync. It must not introduce a second renderer setting or make CI scene state authoritative. If a later pinned Godot revision makes the headless path reliable on CI, prefer removing the workaround rather than preserving it by habit.
+
+The visual screenshot smoke likewise runs under Xvfb, keeps its renderer owned by `project.godot`, uses `Dummy` audio and disables VSync. Missing ALSA/Pulse devices and virtual-display VSync limitations therefore do not masquerade as gameplay failures.
+
+CI software rendering is compatibility evidence only. A successful llvmpipe/Mesa run does not prove real-GPU performance or driver-specific rendering correctness.
+
+Unexpected engine `ERROR` lines should still be investigated; the pass/fail contract is the process result plus validated artifacts, not a rule that arbitrary stderr output is harmless.
+
+## Godot smoke CI lane
+
+The repository carries a persistent `.github/workflows/godot-smoke.yml` lane for runtime integration changes. It:
+
+1. installs the Godot version from `tools/toolchain.lock.json` rather than duplicating a version literal in workflow prose;
+2. builds the development/GDExtension graph;
+3. runs the Russian smoke under Xvfb;
+4. runs the English smoke under Xvfb;
+5. uploads `.cache/play` evidence even when the job fails.
+
+Documentation-only changes are excluded from this lane. The lane is deliberately bounded: it does not add narrow-layout matrices, interactive input feel, performance thresholds or cross-platform GPU matrices without a demonstrated need.
+
+A green Godot smoke check applies only to the exact commit it tested.
+
+## Native CI lane
+
+`.github/workflows/native.yml` runs clean `native` and `sanitize` configure/build/test passes on pull requests and pushes to `main`.
+
+Native CI is independent evidence, not a substitute for local verification. A local failure must still be fixed locally rather than deferred with “CI will catch it.”
+
+## Manual third-person verification
+
+Control feel is empirical. Material input/camera/movement-presentation changes require a real local playtest of the affected device path in addition to automated smoke.
+
+Check the relevant subset of:
+
+- keyboard movement is camera-relative and releases without drift;
+- pointer capture/release and mouse look behave correctly;
+- gamepad sticks have usable deadzones/range and no rest drift;
+- ordinary movement/sprint select semantic intent rather than a Godot-local speed law;
+- presentation follows authoritative movement without a competing local position path;
+- turning/camera remain responsive without changing authoritative world truth;
+- camera collision behaves correctly around presentation geometry;
+- same-continuity movement does not introduce obvious rendering jitter.
+
+Automated smoke must not be reported as proof of subjective movement feel.
+
+## Localization verification
+
+Catalog integrity is necessary but not sufficient for player-visible text changes.
+
+A material localization/UI change should verify:
 
 ```text
-bootstrap_projection:
-  entity_id=1, x=1, y=0, tick=0, revision=3, seed=1, protocol_version=6
-
-observed_world_projection:
-  controlled_actor_id=1, tick=1, revision=4, protocol_version=6
-  entities=[{entity_id=1},{entity_id=2}]
-
-controlled_actor_spatial_projection:
-  entity_id=1
-  position_m=[0.001,0,0]
-  velocity_mps=[0.1,0,0]
-  spatial_epoch=1
-  tick=1, revision=4, protocol_version=6
-
-movement_stream:
-  duplicate_batch_rejected=true
-  batch:
-    tick=1, revision=4, protocol_version=6
-    samples=[
-      {entity_id=1, position_m=[0.001,0,0], velocity_mps=[0.1,0,0], spatial_epoch=1},
-      {entity_id=2, position_m=[2.999,0,-3.0], velocity_mps=[-0.1,0,0], spatial_epoch=1}
-    ]
-
-presentation:
-  controlled_entity_id=1
-  last_tick=1
-  last_revision=4
-  protocol_version=6
-  observed_entity_ids=[1,2]
-  bound_entity_ids=[1,2]
-  visible_bound_entity_ids=[1,2]
-  controlled_spatial_initialized=true
-  controlled_spatial_epoch=1
-  controlled_spatial_tick=1
-  controlled_spatial_revision=4
-  controlled_authoritative_position_m=[0.001,0,0]
-  controlled_authoritative_velocity_mps=[0.1,0,0]
-  movement_batches_applied=1
-
-localization:
-  locale=ru|en
-  supported_locales=[ru,en]
-  hud_title=<translated UI_DEBUG_TITLE>
-  controls_hint=<translated UI_DEBUG_CONTROLS_HINT>
+catalog parity
+-> Godot import/load
+-> render affected UI in ru
+-> render affected UI in en
+-> inspect glyph coverage, clipping and reflow
 ```
 
-The localization section proves the active presentation locale and selected translated runtime strings. Simulation/protocol evidence remains language-independent.
-
-The controlled actor spawn creates revision 1 and the living-need NPC spawn creates revision 2. `WorldPresentation` binds/materializes observed identity while only the controlled actor receives the initial spatial read; the NPC shell remains hidden. The bootstrap step creates revision 3 but mutates only the old grid probe. The smoke scenario then submits semantic +X **run** intent for the controlled actor while Core derives the NPC's **walk** rest-task intent and advances one shared locomotion tick, producing tick 1 / revision 4. Both actors begin from rest, so the shared default 6000 mm/s² acceleration changes their first X velocity by 100 mm/s; integer position integration produces a 1 mm first-tick displacement. The first NPC sample makes its presentation shell visible.
-
-The same returned movement batch is submitted to `WorldPresentation` a second time only as a rejection probe. It must be rejected before presentation mutation because its tick/revision are duplicate/stale. This is boundary evidence, not a second authoritative Simulation transition.
-
-This sequence proves bootstrap separation plus the semantic direction/pace -> authoritative capability resolution -> sample boundary. It does **not** prove subjective run/walk feel; longer deterministic native/protocol tests prove numeric acceleration/speed/braking, while interactive playtest evaluates feel.
-
-Successful artifacts may be retained on a bounded rolling basis; failure artifacts should remain available for diagnosis until explicit cleanup.
+Use pseudolocalization or additional viewport evidence when the layout risk actually requires it; do not make every ordinary runtime change pay for a speculative matrix.
 
 ## Risk-based verification
 
@@ -293,50 +179,45 @@ Successful artifacts may be retained on a bounded rolling basis; failure artifac
 build affected target
 -> focused native test
 -> determinism/scenario test when relevant
--> affected Godot playtest when player-visible
+-> affected Godot smoke/playtest when player-visible
 ```
 
 ### Simulation ↔ Godot boundary change
 
 ```text
-native rule/protocol tests
--> identity/tick/revision/epoch/sample assertions
--> adapter build
--> Godot load/import
--> semantic command/result round-trip
--> presentation reconciliation evidence
+native/protocol tests
+-> development adapter build
+-> bounded Godot metadata import
+-> bounded Godot smoke
+-> inspect evidence/artifacts when the change affects presentation
 ```
 
 ### Godot presentation/control change
 
 ```text
 Godot import/load
--> affected keyboard/mouse or gamepad playtest
--> collision/camera/input checks relevant to the change
--> screenshot/visible-state evidence when useful
--> confirm no new authoritative state was introduced in Godot
+-> bounded smoke
+-> affected keyboard/mouse/gamepad playtest
+-> screenshot/visible-state inspection when useful
+-> confirm no authoritative state moved into Godot
 ```
 
 ### Localization / player-visible text change
 
 ```text
-localization catalog integrity
+catalog integrity
 -> Godot import/load
--> render affected UI in ru
--> render affected UI in en
--> inspect glyph coverage, keys, clipping and reflow
--> pseudolocalization for material layout changes when useful
+-> affected locale renders
+-> layout/glyph inspection
 ```
-
-See [`engineering/localization.md`](engineering/localization.md) for the locale/key ownership contract.
 
 ### Protocol / GDExtension change
 
 ```text
 native protocol tests
--> adapter build
--> Godot loads extension
--> one semantic command/result/projection-or-sample round-trip playtest
+-> development adapter build
+-> Godot import
+-> one semantic command/result/projection-or-transition round-trip smoke
 ```
 
 ### Persistence change
@@ -349,44 +230,21 @@ save/load round-trip
 
 ### Dependency/version change
 
-Follow [`engineering/VERSIONS.md`](engineering/VERSIONS.md): build native code, build the adapter, load it in the pinned Godot engine and run the smallest playable scenario.
+Follow [`engineering/VERSIONS.md`](engineering/VERSIONS.md): verify native code, adapter build, pinned Godot load and the smallest affected playable scenario.
 
-## Independent native CI policy
+## Debug surface
 
-Local verification remains the primary developer feedback loop. The repository also carries one intentionally small GitHub Actions workflow that runs clean `native` and `sanitize` configure/build/test passes on pull requests and pushes to `main`.
+Development diagnostics should be read-only and sufficient to explain a playtest: build/protocol identifiers, controlled identity, authoritative vs presentation state, time/revision/continuity identifiers, relevant observed/materialized identities, last authoritative result/events/samples and scenario/locale state.
 
-CI is independent evidence, not a substitute for developer-machine verification. It deliberately does **not** claim Godot runtime/load, bounded smoke artifacts, manual keyboard/gamepad feel, screenshots or performance acceptance.
+The debug surface must not expose authoritative mutation methods. Scenario setup belongs to explicit initialization, not debugger cheats.
 
-A green check applies only to the exact commit it tested. If code changes after a failure or after the last green run, the affected gate must run again before that new revision may be reported as verified. A local failure must still be fixed locally rather than deferred with “CI will catch it.”
+## Definition of Done
 
-Keep this workflow narrow until a real cross-platform or GDExtension regression demonstrates the need for another automated lane. Do not move empirical performance thresholds or interactive Godot acceptance into CI merely because CI now exists.
+For the bounded task being completed:
 
-## Definition of Done for a gameplay capability
-
-A capability is done only when all applicable items are true:
-
-- authoritative C++ implementation exists for world state/consequences;
-- player-controlled and NPC actors use the same relevant world rule rather than privileged player logic;
-- Godot has no bypass truth for entity existence/location/inventory/economy/social/politics/combat/magic outcomes;
-- protocol expresses the semantic input/result/events/projection/transition result when needed;
-- projection/result exposes only the presentation information that should be observable;
-- deterministic behavior is tested where required;
-- a targeted regression test protects important causality;
-- player-facing feedback exists;
-- the capability is actually reachable in the game;
-- the bounded/manual local playtest demonstrates the expected outcome;
-- relevant docs/model changed if and only if the real contract changed;
-- unrelated refactoring is absent.
-
-## Evidence reporting
-
-Reports should distinguish facts, not perform a second workflow ceremony:
-
-- **VERIFIED** — checks that actually ran and their results;
-- **NOT VERIFIED** — checks not run or unavailable;
-- **ASSUMPTIONS** — load-bearing interpretations not yet proved by a dedicated scenario;
-- **BLOCKERS** — concrete conditions preventing completion.
-
-For gameplay evidence record the scenario, relevant input/action and observable screenshot/debug outcome.
-
-Never say “fully verified” when only a subset of the required evidence exists.
+- relevant source/tests/contracts were inspected before the change;
+- the smallest coherent implementation was made;
+- focused executable checks passed on the exact claimed revision, or missing evidence is reported explicitly;
+- player-visible/boundary work received the appropriate Godot evidence;
+- no unrelated refactor or speculative framework was mixed into the change;
+- documentation was updated only at the canonical owner of the changed fact.
