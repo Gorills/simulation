@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sim/grounded_locomotion.hpp"
+#include "sim/household_resource.hpp"
 #include "sim/types.hpp"
 
 #include <cstddef>
@@ -29,15 +30,6 @@ enum class LocomotionPace : std::uint8_t {
     return false;
 }
 
-// Authoritative base capability for ordinary grounded locomotion. These values
-// are deliberately actor state rather than a global controller profile. Future
-// causal state such as wounds, carried load, progression or concrete magical
-// effects can alter the limits resolved by World without changing intent or
-// creating a player/NPC-specific movement law.
-//
-// The current numbers are first project feel baselines, not biological claims:
-// ordinary walk 1.0 m/s, run 3.0 m/s, sprint 5.8 m/s, with deterministic
-// acceleration/braking. They remain playtest-tunable through actor/content state.
 struct ActorLocomotionCapability final {
     MillimetersPerSecond walk_speed{1'000};
     MillimetersPerSecond run_speed{3'000};
@@ -88,6 +80,9 @@ enum class WorldSnapshotError : std::uint8_t {
     invalid_rest_need_state,
     invalid_grounded_locomotion_state,
     duplicate_entity,
+    invalid_household_id,
+    invalid_household_grain_state,
+    duplicate_household,
 };
 
 struct GroundedLocomotionContext final {
@@ -100,9 +95,6 @@ struct GroundedLocomotionContext final {
     }
 };
 
-// Temporary Stage C2/Milestone 1 integration context. It owns shared world-law
-// fixture data only. Per-actor speed/acceleration/braking are resolved by World
-// from ActorState + requested pace before each step.
 [[nodiscard]] inline GroundedLocomotionContext make_flat_locomotion_acceptance_context() {
     GroundedLocomotionContext context{
         .body = UprightCapsule{
@@ -158,10 +150,6 @@ struct GroundedLocomotionContinuation final {
     constexpr bool operator==(const GroundedLocomotionContinuation &) const = default;
 };
 
-// First Milestone 1 need state. The actor needs to be within the assigned local
-// rest-point tolerance; satisfaction is derived from authoritative SpatialState,
-// so no parallel Boolean completion flag can drift from location truth. This is
-// deliberately not a generic needs/task framework or a production home model.
 struct RestNeedState final {
     Millimeters rest_x{};
     Millimeters rest_z{};
@@ -175,8 +163,6 @@ struct RestNeedState final {
 };
 
 struct ActorSpawnState final {
-    // Milestone 0 transport probe only. Production spatial movement must not
-    // depend on this grid position.
     GridPosition bootstrap_position{};
     std::optional<SpatialState> spatial{};
     ActorLocomotionCapability locomotion_capability{};
@@ -189,18 +175,11 @@ struct ActorState final {
     std::optional<SpatialState> spatial{};
     ActorLocomotionCapability locomotion_capability{};
     std::optional<RestNeedState> rest_need{};
-    // Hidden fixed-step continuation state. It affects future authoritative
-    // movement and therefore belongs to snapshot truth, but not to presentation
-    // projections.
     GroundedLocomotionContinuation grounded_locomotion{};
 
     constexpr bool operator==(const ActorState &) const = default;
 };
 
-// Intent carries direction/magnitude plus a semantic pace choice. It never
-// carries a requested meters-per-second value: World resolves that from the
-// authoritative actor capability so a client/NPC decision source cannot author
-// the movement outcome directly.
 struct ActorGroundedMoveIntent final {
     EntityId actor{};
     PlanarMoveIntent move{};
@@ -209,9 +188,6 @@ struct ActorGroundedMoveIntent final {
     constexpr bool operator==(const ActorGroundedMoveIntent &) const = default;
 };
 
-// One post-transition authoritative sample produced by a successful locomotion
-// batch. Samples are presentation-neutral Core values and never contain protocol
-// or Godot types.
 struct GroundedLocomotionSample final {
     EntityId actor{};
     SpatialState spatial{};
@@ -219,9 +195,6 @@ struct GroundedLocomotionSample final {
     constexpr bool operator==(const GroundedLocomotionSample &) const = default;
 };
 
-// One successful fixed locomotion transition produces exactly one temporal batch.
-// Every sample shares this post-transition tick/revision. Samples are sorted by
-// ascending EntityId so presentation order is independent of intent-source order.
 struct GroundedLocomotionTickResult final {
     SimulationTick tick{};
     WorldRevision revision{};
@@ -230,17 +203,15 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 4;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 5;
 
-// Core-owned in-memory persistence contract. Serialization format, content and
-// protocol envelope versions belong to a later persistence layer; this value
-// snapshot contains only authoritative World state in deterministic actor order.
 struct WorldSnapshot final {
     std::uint32_t schema_version{kWorldSnapshotSchemaVersion};
     WorldSeed seed{};
     SimulationTick tick{};
     WorldRevision revision{};
     std::vector<ActorState> actors{};
+    std::vector<HouseholdState> households{};
 
     bool operator==(const WorldSnapshot &) const = default;
 };
@@ -254,20 +225,24 @@ public:
         ActorSpawnState initial = {}
     );
 
-    // Milestone 0 transport probe only. Production spatial movement must use a
-    // real actor-location contract rather than extending this cardinal grid API.
+    [[nodiscard]] std::expected<void, HouseholdResourceError> spawn_household(
+        HouseholdId id,
+        HouseholdSpawnState initial = {}
+    );
+
+    // Immediate authoritative stock transition. It changes WorldRevision but
+    // deliberately does not advance SimulationTick: recurring consumption/time
+    // scheduling is not admitted by this slice.
+    [[nodiscard]] std::expected<void, HouseholdResourceError> consume_household_grain(
+        HouseholdId id,
+        GrainGrams amount
+    ) noexcept;
+
     [[nodiscard]] std::expected<void, WorldError> apply_bootstrap_step(
         EntityId id,
         CardinalDirection direction
     ) noexcept;
 
-    // Applies one fixed authoritative locomotion tick atomically to the supplied
-    // actor intents. One batch advances SimulationTick/WorldRevision once
-    // regardless of actor count, so human and NPC intents share the same world
-    // transition rather than advancing time through player-only calls. World
-    // resolves each actor's capability + requested pace into solver limits before
-    // computing the step. On success samples are post-transition and canonically
-    // ordered by EntityId.
     [[nodiscard]] std::expected<GroundedLocomotionTickResult, GroundedLocomotionTickError>
     advance_grounded_locomotion_tick(
         const GroundedLocomotionContext &context,
@@ -276,24 +251,18 @@ public:
 
     void advance_one_tick() noexcept;
 
-    // Snapshot/restore is intentionally value-based. Derived runtime indexes are
-    // rebuilt on restore and never persisted as authoritative state.
     [[nodiscard]] WorldSnapshot snapshot() const;
     [[nodiscard]] std::expected<void, WorldSnapshotError> restore(const WorldSnapshot &snapshot);
 
-    // EntityId is the durable external reference. Queries return values rather
-    // than addresses into World storage so later actor growth cannot invalidate
-    // a caller-held pointer/reference.
     [[nodiscard]] bool contains_actor(EntityId id) const noexcept;
     [[nodiscard]] std::optional<GridPosition> actor_bootstrap_position(EntityId id) const noexcept;
     [[nodiscard]] std::optional<SpatialState> actor_spatial_state(EntityId id) const noexcept;
     [[nodiscard]] std::optional<ActorLocomotionCapability> actor_locomotion_capability(EntityId id) const noexcept;
     [[nodiscard]] std::optional<RestNeedState> actor_rest_need(EntityId id) const noexcept;
 
-    // Bounded exact-spatial presence query for a concrete local causal condition.
-    // It considers only other authoritative actors that currently have exact
-    // SpatialState and uses the caller's per-axis X/Z tolerance. This is not
-    // body collision, navigation, observation policy or a general spatial index.
+    [[nodiscard]] bool contains_household(HouseholdId id) const noexcept;
+    [[nodiscard]] std::optional<HouseholdGrainState> household_grain_state(HouseholdId id) const noexcept;
+
     [[nodiscard]] bool is_planar_position_occupied_by_other_actor(
         EntityId excluded_actor,
         Millimeters x,
@@ -308,11 +277,13 @@ public:
 private:
     [[nodiscard]] std::optional<std::size_t> actor_index(EntityId id) const noexcept;
     [[nodiscard]] ActorState *find_actor(EntityId id) noexcept;
+    [[nodiscard]] std::optional<std::size_t> household_index(HouseholdId id) const noexcept;
+    [[nodiscard]] HouseholdState *find_household(HouseholdId id) noexcept;
 
-    // actors_ owns deterministic insertion order and compact state. The index is
-    // lookup-only; its iteration order must never define simulation behavior.
     std::vector<ActorState> actors_{};
     std::unordered_map<std::int64_t, std::size_t> actor_index_by_id_{};
+    std::vector<HouseholdState> households_{};
+    std::unordered_map<std::int64_t, std::size_t> household_index_by_id_{};
     SimulationTick tick_{};
     WorldRevision revision_{};
     WorldSeed seed_{};
