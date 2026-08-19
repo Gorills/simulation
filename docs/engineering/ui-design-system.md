@@ -58,6 +58,18 @@ Local overrides remain available for a genuinely dynamic or isolated case, but t
 
 Do not create a second palette or spacing source in a GDScript singleton, JSON file or screen-local Resource.
 
+## Runtime UI quality rule
+
+Using project Theme variations is **necessary but not sufficient** for a runtime interface to satisfy the design system.
+
+Any interface rendered inside the running game — including debug HUDs, developer overlays, test screens and internal tools — must also follow the project rules for information hierarchy, spacing, alignment, density, legibility, container-driven layout and responsive behavior. Calling an interface “debug” or “temporary” does not exempt it when it is part of the game viewport.
+
+External engineering surfaces such as stdout/stderr, the Godot debugger, profiler output, CI logs and standalone artifact files are not in-game UI and do not need to imitate the game visual language.
+
+Do not use a persistent runtime HUD as a formatted log sink. Prefer semantic fields and grouped read-only state; keep raw JSON/serialized evidence in debug artifacts unless inspecting the raw payload itself is the explicit UI task.
+
+A runtime UI change is not complete from scene-tree or token review alone. Inspect the rendered result in the pinned Godot runtime and review hierarchy, density, alignment, readability and clipping/reflow at the logical baseline plus representative narrower/wider aspect ratios.
+
 ## Theme vocabulary
 
 ### Surfaces
@@ -217,6 +229,7 @@ The supplied mockups are mood references. Their most useful qualities are atmosp
 6. Establish keyboard/controller focus.
 7. Test at 1920×1080 and at least one wider and one narrower aspect ratio before calling layout complete.
 8. Review the screen with the global Theme changed, to ensure feature code did not silently depend on literal visual values.
+9. Capture/review a rendered screenshot or equivalent live frame for hierarchy, density, alignment and readability; scene-tree compliance alone is not visual acceptance.
 
 ## Anti-patterns
 
@@ -230,4 +243,5 @@ The supplied mockups are mood references. Their most useful qualities are atmosp
 - hiding focus because mouse hover looks cleaner;
 - framing every nested group;
 - shrinking text to fit instead of fixing information architecture;
+- dumping raw serialized/log output into a persistent runtime HUD when semantic presentation is sufficient;
 - changing systemic gameplay state inside reusable visual components.

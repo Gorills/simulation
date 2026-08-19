@@ -7,14 +7,27 @@ const DEBUG_REFRESH_INTERVAL_SECONDS := 0.25
 @onready var player: ThirdPersonPlayer = %Player
 @onready var player_entity_binding: EntityBinding = %PlayerEntityBinding
 @onready var camera_rig: ThirdPersonCameraRig = %CameraRig
-@onready var debug_label: Label = %Debug
+@onready var debug_fps: Label = %DebugFps
+@onready var debug_process: Label = %DebugProcess
+@onready var debug_physics: Label = %DebugPhysics
+@onready var debug_input: Label = %DebugInput
+@onready var debug_entity: Label = %DebugEntity
+@onready var debug_tick: Label = %DebugTick
+@onready var debug_revision: Label = %DebugRevision
+@onready var debug_protocol: Label = %DebugProtocol
+@onready var debug_seed: Label = %DebugSeed
+@onready var debug_scenario: Label = %DebugScenario
+@onready var debug_authority_position: Label = %DebugAuthorityPosition
+@onready var debug_epoch: Label = %DebugEpoch
+@onready var debug_presentation_position: Label = %DebugPresentationPosition
+@onready var debug_divergence: Label = %DebugDivergence
 
 var sim := SimFacade.new()
 var _bootstrap_projection: Dictionary = {}
-var _bootstrap_projection_text := "{}"
 var _observed_world_projection: Dictionary = {}
 var _controlled_actor_spatial_projection: Dictionary = {}
 var _debug_refresh_elapsed := 0.0
+var _scenario_name := "interactive"
 
 
 func _ready() -> void:
@@ -42,9 +55,11 @@ func _ready() -> void:
     controls.capture_pointer()
 
     _set_bootstrap_projection(sim.bootstrap_debug_projection())
-    _refresh_debug_text()
-
     var scenario := _user_arg_value("--scenario")
+    if not scenario.is_empty():
+        _scenario_name = scenario
+    _refresh_debug_hud()
+
     if scenario == "smoke":
         var artifact_dir := _user_arg_value("--artifact-dir")
         if artifact_dir.is_empty():
@@ -59,49 +74,48 @@ func _process(delta: float) -> void:
     if _debug_refresh_elapsed < DEBUG_REFRESH_INTERVAL_SECONDS:
         return
     _debug_refresh_elapsed = 0.0
-    _refresh_debug_text()
+    _refresh_debug_hud()
 
 
 func _on_input_device_changed(_device: int) -> void:
-    _refresh_debug_text()
+    _refresh_debug_hud()
 
 
 func _set_bootstrap_projection(projection: Dictionary) -> void:
     _bootstrap_projection = projection
-    _bootstrap_projection_text = JSON.stringify(projection)
 
 
-func _refresh_debug_text() -> void:
+func _refresh_debug_hud() -> void:
     var authoritative_position := _spatial_position_or_zero(_controlled_actor_spatial_projection)
+    var presentation_position := player.global_position
     var fps := int(Performance.get_monitor(Performance.TIME_FPS))
     var process_ms := float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
     var physics_ms := float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
-    debug_label.text = (
-        "controls: %s\n"
-        + "performance: %d fps · process %.2f ms · physics %.2f ms\n"
-        + "authoritative entity: %d · tick: %d · revision: %d · protocol: %d\n"
-        + "authoritative spatial: (%.2f, %.2f, %.2f)m · epoch: %d\n"
-        + "player presentation: (%.2f, %.2f, %.2f)\n"
-        + "native bootstrap projection: %s\n"
-        + "WASD / left stick move · mouse / right stick look · Shift / L3 sprint · Esc releases mouse"
-    ) % [
-        controls.active_device_name(),
-        fps,
-        process_ms,
-        physics_ms,
-        world_presentation.controlled_entity_id(),
-        world_presentation.last_tick(),
-        world_presentation.last_revision(),
-        world_presentation.protocol_version(),
+
+    debug_fps.text = "%d" % fps
+    debug_process.text = "%.2f ms" % process_ms
+    debug_physics.text = "%.2f ms" % physics_ms
+    debug_input.text = controls.active_device_name()
+
+    debug_entity.text = "#%d" % world_presentation.controlled_entity_id()
+    debug_tick.text = str(world_presentation.last_tick())
+    debug_revision.text = str(world_presentation.last_revision())
+    debug_protocol.text = str(world_presentation.protocol_version())
+    debug_seed.text = str(int(_bootstrap_projection.get("seed", 0)))
+    debug_scenario.text = _scenario_name
+
+    debug_authority_position.text = "(%.2f, %.2f, %.2f) m" % [
         authoritative_position.x,
         authoritative_position.y,
         authoritative_position.z,
-        int(_controlled_actor_spatial_projection.get("spatial_epoch", 0)),
-        player.global_position.x,
-        player.global_position.y,
-        player.global_position.z,
-        _bootstrap_projection_text,
     ]
+    debug_epoch.text = str(int(_controlled_actor_spatial_projection.get("spatial_epoch", 0)))
+    debug_presentation_position.text = "(%.2f, %.2f, %.2f) m" % [
+        presentation_position.x,
+        presentation_position.y,
+        presentation_position.z,
+    ]
+    debug_divergence.text = "%.2f m" % presentation_position.distance_to(authoritative_position)
 
 
 func _run_smoke(artifact_dir: String) -> void:
@@ -122,7 +136,7 @@ func _run_smoke(artifact_dir: String) -> void:
         push_error("failed to apply observed-world projection after bootstrap move")
         get_tree().quit(6)
         return
-    _refresh_debug_text()
+    _refresh_debug_hud()
 
     await RenderingServer.frame_post_draw
     if not _write_debug_artifact(artifact_dir):
