@@ -5,6 +5,7 @@ const MOVE_INTENT_SCALE := 1000
 const LOCOMOTION_PACE_WALK := 0
 const LOCOMOTION_PACE_RUN := 1
 const LOCOMOTION_PACE_SPRINT := 2
+const LIVING_NEED_NPC_ENTITY_ID := 2
 
 @onready var controls: PlayerControls = %PlayerControls
 @onready var world_presentation: WorldPresentation = %WorldPresentation
@@ -31,6 +32,7 @@ var _bootstrap_projection: Dictionary = {}
 var _observed_world_projection: Dictionary = {}
 var _controlled_actor_spatial_projection: Dictionary = {}
 var _last_movement_batch: Dictionary = {}
+var _offscreen_evidence: Dictionary = {}
 var _debug_refresh_elapsed := 0.0
 var _scenario_name := "interactive"
 var _locomotion_runtime_enabled := false
@@ -70,13 +72,16 @@ func _ready() -> void:
         _scenario_name = scenario
     _refresh_debug_hud()
 
-    if scenario == "smoke":
+    if scenario == "smoke" or scenario == "offscreen":
         var artifact_dir := _user_arg_value("--artifact-dir")
         if artifact_dir.is_empty():
-            push_error("smoke scenario requires --artifact-dir")
+            push_error("bounded playtest scenario requires --artifact-dir")
             get_tree().quit(2)
             return
-        call_deferred("_run_smoke", artifact_dir)
+        if scenario == "offscreen":
+            call_deferred("_run_offscreen", artifact_dir)
+        else:
+            call_deferred("_run_smoke", artifact_dir)
         return
 
     _locomotion_runtime_enabled = true
@@ -156,6 +161,15 @@ func _advance_authoritative_locomotion(intent: Vector2i, pace: int) -> bool:
     _last_movement_batch = batch
     _controlled_actor_spatial_projection = controlled_projection
     return true
+
+
+func _run_one_smoke_movement() -> bool:
+    _smoke_movement_finished = false
+    _smoke_movement_succeeded = false
+    _smoke_movement_requested = true
+    while not _smoke_movement_finished:
+        await get_tree().physics_frame
+    return _smoke_movement_succeeded
 
 
 func _camera_relative_move_intent() -> Vector2i:
@@ -253,19 +267,17 @@ func _active_input_device_text() -> String:
 
 func _scenario_text() -> String:
     match _scenario_name:
-        "smoke":
+        "smoke", "offscreen":
             return tr(&"UI_SCENARIO_SMOKE")
         _:
             return tr(&"UI_SCENARIO_INTERACTIVE")
 
 
-func _run_smoke(artifact_dir: String) -> void:
-    await get_tree().process_frame
+func _apply_smoke_bootstrap() -> bool:
     var response: Dictionary = sim.bootstrap_submit_move(1, 0)
     if not bool(response.get("ok", false)):
         push_error("native bootstrap move failed")
-        get_tree().quit(3)
-        return
+        return false
 
     _set_bootstrap_projection(response.get("projection", {}))
     _observed_world_projection = sim.observed_world_projection()
@@ -274,13 +286,17 @@ func _run_smoke(artifact_dir: String) -> void:
         player_entity_binding
     ):
         push_error("failed to apply observed-world projection after bootstrap move")
-        get_tree().quit(6)
+        return false
+    return true
+
+
+func _run_smoke(artifact_dir: String) -> void:
+    await get_tree().process_frame
+    if not _apply_smoke_bootstrap():
+        get_tree().quit(3)
         return
 
-    _smoke_movement_requested = true
-    while not _smoke_movement_finished:
-        await get_tree().physics_frame
-    if not _smoke_movement_succeeded:
+    if not await _run_one_smoke_movement():
         get_tree().quit(8)
         return
 
@@ -299,6 +315,110 @@ func _run_smoke(artifact_dir: String) -> void:
     ):
         push_error("failed to refresh observed-world projection after authoritative movement")
         get_tree().quit(6)
+        return
+    _controlled_actor_spatial_projection = sim.controlled_actor_spatial_projection()
+    _refresh_debug_hud()
+
+    await RenderingServer.frame_post_draw
+    if not _write_debug_artifact(artifact_dir):
+        get_tree().quit(4)
+        return
+    if not _write_screenshot(artifact_dir):
+        get_tree().quit(5)
+        return
+
+    get_tree().quit(0)
+
+
+func _run_offscreen(artifact_dir: String) -> void:
+    await get_tree().process_frame
+    if not _apply_smoke_bootstrap():
+        get_tree().quit(3)
+        return
+
+    if not await _run_one_smoke_movement():
+        get_tree().quit(8)
+        return
+    var first_batch := _last_movement_batch.duplicate(true)
+    var first_batch_evidence := _movement_batch_evidence(first_batch)
+    if first_batch_evidence.is_empty():
+        push_error("offscreen scenario could not serialize its first authoritative batch")
+        get_tree().quit(10)
+        return
+
+    var initial_npc_presentation := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID)
+    if initial_npc_presentation == null or not initial_npc_presentation.visible:
+        push_error("offscreen scenario requires an initially materialized visible NPC")
+        get_tree().quit(10)
+        return
+    if not world_presentation.dematerialize_observed_non_controlled(LIVING_NEED_NPC_ENTITY_ID):
+        get_tree().quit(10)
+        return
+    await get_tree().process_frame
+
+    var observed_while_absent := world_presentation.is_observed(LIVING_NEED_NPC_ENTITY_ID)
+    var absent_before_tick := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID) == null
+    if not observed_while_absent or not absent_before_tick:
+        push_error("NPC must remain observed while its presentation is absent")
+        get_tree().quit(10)
+        return
+
+    if not await _run_one_smoke_movement():
+        get_tree().quit(8)
+        return
+    var offscreen_batch := _last_movement_batch.duplicate(true)
+    var offscreen_batch_evidence := _movement_batch_evidence(offscreen_batch)
+    var absent_after_tick := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID) == null
+    if offscreen_batch_evidence.is_empty() or not absent_after_tick:
+        push_error("authoritative offscreen tick must succeed without rematerializing the NPC")
+        get_tree().quit(10)
+        return
+
+    _observed_world_projection = sim.observed_world_projection()
+    if not world_presentation.apply_observed_world_projection(
+        _observed_world_projection,
+        player_entity_binding
+    ):
+        push_error("failed to rematerialize NPC from fresh observed-world projection")
+        get_tree().quit(10)
+        return
+    var rematerialized := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID)
+    var hidden_before_sample := rematerialized != null and not rematerialized.visible
+    if not hidden_before_sample:
+        push_error("rematerialized NPC must wait hidden for a fresh authoritative sample")
+        get_tree().quit(10)
+        return
+
+    if not await _run_one_smoke_movement():
+        get_tree().quit(8)
+        return
+    var rematerialized_after_sample := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID)
+    var visible_after_sample := (
+        rematerialized_after_sample != null and rematerialized_after_sample.visible
+    )
+    if not visible_after_sample:
+        push_error("fresh authoritative sample must reveal the rematerialized NPC")
+        get_tree().quit(10)
+        return
+
+    _offscreen_evidence = {
+        "entity_id": LIVING_NEED_NPC_ENTITY_ID,
+        "observed_while_absent": observed_while_absent,
+        "presentation_absent_before_tick": absent_before_tick,
+        "presentation_absent_after_tick": absent_after_tick,
+        "rematerialized_hidden_before_sample": hidden_before_sample,
+        "rematerialized_visible_after_sample": visible_after_sample,
+        "first_batch": first_batch_evidence,
+        "offscreen_batch": offscreen_batch_evidence,
+    }
+
+    _observed_world_projection = sim.observed_world_projection()
+    if not world_presentation.apply_observed_world_projection(
+        _observed_world_projection,
+        player_entity_binding
+    ):
+        push_error("failed to refresh observed-world projection after rematerialization")
+        get_tree().quit(10)
         return
     _controlled_actor_spatial_projection = sim.controlled_actor_spatial_projection()
     _refresh_debug_hud()
@@ -347,6 +467,8 @@ func _write_debug_artifact(artifact_dir: String) -> bool:
             "controls_hint": tr(&"UI_DEBUG_CONTROLS_HINT"),
         },
     }
+    if not _offscreen_evidence.is_empty():
+        evidence["offscreen_continuation"] = _offscreen_evidence
     file.store_string(JSON.stringify(evidence, "  "))
     return true
 

@@ -19,6 +19,7 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
+SUPPORTED_SCENARIOS = ("smoke", "offscreen")
 SMOKE_AUDIO_DRIVER = "Dummy"
 
 
@@ -97,7 +98,7 @@ def require_close_vector(actual: object, expected: list[float], label: str) -> N
             )
 
 
-def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+def load_playtest_artifact(path: Path) -> dict[str, object]:
     debug_path = path / "debug.json"
     screenshot_path = path / "final.png"
     if not debug_path.is_file() or not screenshot_path.is_file():
@@ -106,6 +107,23 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
     evidence = json.loads(debug_path.read_text(encoding="utf-8"))
     if not isinstance(evidence, dict):
         raise SystemExit("debug artifact must be a JSON object")
+    return evidence
+
+
+def movement_sample(batch: object, entity_id: int, label: str) -> dict[str, object]:
+    if not isinstance(batch, dict):
+        raise SystemExit(f"{label} must be a movement batch object")
+    samples = batch.get("samples")
+    if not isinstance(samples, list):
+        raise SystemExit(f"{label} is missing movement samples")
+    for sample in samples:
+        if isinstance(sample, dict) and sample.get("entity_id") == entity_id:
+            return sample
+    raise SystemExit(f"{label} is missing EntityId {entity_id}")
+
+
+def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+    evidence = load_playtest_artifact(path)
 
     bootstrap = evidence.get("bootstrap_projection")
     observed = evidence.get("observed_world_projection")
@@ -265,9 +283,117 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
     return evidence
 
 
+def validate_offscreen_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+    evidence = load_playtest_artifact(path)
+    offscreen = evidence.get("offscreen_continuation")
+    presentation = evidence.get("presentation")
+    localization = evidence.get("localization")
+    movement_stream = evidence.get("movement_stream")
+    if not all(isinstance(section, dict) for section in (offscreen, presentation, localization, movement_stream)):
+        raise SystemExit("offscreen artifact is missing offscreen/presentation/localization/movement sections")
+
+    assert isinstance(offscreen, dict)
+    assert isinstance(presentation, dict)
+    assert isinstance(localization, dict)
+    assert isinstance(movement_stream, dict)
+
+    if offscreen.get("entity_id") != 2:
+        raise SystemExit(f"unexpected offscreen entity: {offscreen.get('entity_id')}")
+    for key in (
+        "observed_while_absent",
+        "presentation_absent_before_tick",
+        "presentation_absent_after_tick",
+        "rematerialized_hidden_before_sample",
+        "rematerialized_visible_after_sample",
+    ):
+        if offscreen.get(key) is not True:
+            raise SystemExit(f"offscreen continuation did not prove {key}")
+
+    first_batch = offscreen.get("first_batch")
+    absent_batch = offscreen.get("offscreen_batch")
+    final_batch = movement_stream.get("batch")
+    if not all(isinstance(batch, dict) for batch in (first_batch, absent_batch, final_batch)):
+        raise SystemExit("offscreen continuation is missing an authoritative movement batch")
+    assert isinstance(first_batch, dict)
+    assert isinstance(absent_batch, dict)
+    assert isinstance(final_batch, dict)
+
+    first_tick = first_batch.get("tick")
+    absent_tick = absent_batch.get("tick")
+    final_tick = final_batch.get("tick")
+    first_revision = first_batch.get("revision")
+    absent_revision = absent_batch.get("revision")
+    final_revision = final_batch.get("revision")
+    if not all(isinstance(value, int) for value in (
+        first_tick,
+        absent_tick,
+        final_tick,
+        first_revision,
+        absent_revision,
+        final_revision,
+    )):
+        raise SystemExit("offscreen movement batches have invalid temporal headers")
+    assert isinstance(first_tick, int)
+    assert isinstance(absent_tick, int)
+    assert isinstance(final_tick, int)
+    assert isinstance(first_revision, int)
+    assert isinstance(absent_revision, int)
+    assert isinstance(final_revision, int)
+    if absent_tick != first_tick + 1 or final_tick != absent_tick + 1:
+        raise SystemExit("offscreen movement ticks are not consecutive")
+    if absent_revision != first_revision + 1 or final_revision != absent_revision + 1:
+        raise SystemExit("offscreen movement revisions are not consecutive")
+    if not all(batch.get("protocol_version") == 6 for batch in (first_batch, absent_batch, final_batch)):
+        raise SystemExit("offscreen movement protocol version mismatch")
+
+    first_npc = movement_sample(first_batch, 2, "first batch")
+    absent_npc = movement_sample(absent_batch, 2, "offscreen batch")
+    final_npc = movement_sample(final_batch, 2, "final batch")
+    first_position = first_npc.get("position_m")
+    absent_position = absent_npc.get("position_m")
+    final_position = final_npc.get("position_m")
+    if not all(isinstance(position, list) and len(position) == 3 for position in (
+        first_position,
+        absent_position,
+        final_position,
+    )):
+        raise SystemExit("offscreen NPC samples have invalid positions")
+    assert isinstance(first_position, list)
+    assert isinstance(absent_position, list)
+    assert isinstance(final_position, list)
+    if not (
+        isinstance(first_position[0], (int, float))
+        and isinstance(absent_position[0], (int, float))
+        and isinstance(final_position[0], (int, float))
+        and float(absent_position[0]) < float(first_position[0])
+        and float(final_position[0]) < float(absent_position[0])
+    ):
+        raise SystemExit("living-need NPC did not continue authoritative travel while unmaterialized")
+
+    expected_presentation = {
+        "observed_entity_ids": [1, 2],
+        "bound_entity_ids": [1, 2],
+        "visible_bound_entity_ids": [1, 2],
+        "last_tick": final_tick,
+        "last_revision": final_revision,
+        "controlled_spatial_tick": final_tick,
+        "controlled_spatial_revision": final_revision,
+        "movement_batches_applied": 3,
+    }
+    for key, value in expected_presentation.items():
+        if presentation.get(key) != value:
+            raise SystemExit(f"unexpected offscreen presentation {key}: expected {value}, got {presentation.get(key)}")
+
+    if localization.get("locale") != expected_locale:
+        raise SystemExit(
+            f"unexpected offscreen locale: expected {expected_locale}, got {localization.get('locale')}"
+        )
+    return evidence
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded Godot playtest owned by this repository")
-    parser.add_argument("--scenario", default="smoke", choices=("smoke",))
+    parser.add_argument("--scenario", default="smoke", choices=SUPPORTED_SCENARIOS)
     parser.add_argument("--locale", default="ru", choices=SUPPORTED_LOCALES)
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
@@ -335,10 +461,13 @@ def main() -> int:
         run_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         raise SystemExit(f"Godot playtest failed with exit code {return_code}; artifacts: {artifact_dir}")
 
-    evidence = validate_smoke_artifact(artifact_dir, args.locale)
+    if args.scenario == "offscreen":
+        evidence = validate_offscreen_artifact(artifact_dir, args.locale)
+    else:
+        evidence = validate_smoke_artifact(artifact_dir, args.locale)
     metadata.update({"status": "passed", "evidence": evidence})
     run_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"PLAYTEST PASSED ({args.locale}): {artifact_dir}")
+    print(f"PLAYTEST PASSED ({args.scenario}, {args.locale}): {artifact_dir}")
     return 0
 
 

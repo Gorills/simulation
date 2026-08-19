@@ -27,6 +27,7 @@ python tools/dev.py check --preset sanitize
 python tools/dev.py check --preset dev
 python tools/dev.py play --scenario smoke --locale ru
 python tools/dev.py play --scenario smoke --locale en
+python tools/dev.py play --scenario offscreen --locale ru
 ```
 
 Use only the subset required by the change, but do not claim a gate that did not run.
@@ -34,7 +35,8 @@ Use only the subset required by the change, but do not claim a gate that did not
 - `native` builds/tests the Godot-free native graph.
 - `sanitize` runs the Godot-free graph with the configured sanitizer preset.
 - `dev` additionally builds the GDExtension development graph.
-- `play --scenario smoke` launches the real Godot project through the repository supervisor and validates the current boundary evidence plus screenshot artifact.
+- `play --scenario smoke` launches the real Godot project and validates the ordinary boundary/screenshot evidence.
+- `play --scenario offscreen` proves an observed living-need NPC can lose its Godot node, continue receiving authoritative movement while absent, and rematerialize from fresh observation plus a later authoritative sample.
 
 The exact Godot/tool versions are owned by lock/configuration files and [`engineering/VERSIONS.md`](engineering/VERSIONS.md), not duplicated here.
 
@@ -68,28 +70,15 @@ Use behavior-oriented test names. Prefer direct domain values/state over mock-he
 
 Run the sanitizer preset for memory/UB-sensitive native changes, crashes/corruption investigations and milestone verification. Sanitizer success is correctness evidence, not performance evidence and not proof that Godot runtime integration works.
 
-## Godot smoke supervisor
+## Godot playtest supervisor
 
-`tools/play.py` is the single ordinary automated Godot playtest entry point. Do not create a second long-lived smoke runner for each feature.
+`tools/play.py` is the single ordinary automated Godot playtest entry point. Add bounded scenarios to this supervisor rather than creating feature-specific long-lived runners.
 
-```bash
-python tools/play.py --scenario smoke --locale ru
-python tools/play.py --scenario smoke --locale en
-```
-
-The supervisor owns:
-
-- pinned Godot resolution/version validation;
-- project metadata import before the visual run;
-- a non-blocking repository playtest lock;
-- one owned Godot process group;
-- bounded timeout and cleanup;
-- required debug/screenshot artifacts;
-- semantic validation of the authoritative Simulation ↔ protocol ↔ GDExtension ↔ Godot round-trip.
+The supervisor owns pinned Godot validation, metadata import, the repository playtest lock, one owned Godot process group, timeout/cleanup, required artifacts and scenario-specific semantic validation.
 
 The default/local metadata-import path is headless. Linux CI may explicitly opt into the bounded Xvfb import path through the repository runtime helper when the pinned Godot editor cannot complete `--headless --import` on that runner. That exception is CI infrastructure, not a second gameplay runner.
 
-The exact fixture values and debug JSON assertions are executable truth in `tools/play.py` and the relevant native/protocol tests. Do not copy those values into architecture/roadmap prose.
+Exact fixture values and debug JSON assertions are executable truth in `tools/play.py` and relevant tests. Do not copy them into architecture/roadmap prose.
 
 Each run writes under:
 
@@ -102,17 +91,36 @@ Each run writes under:
   debug.json
 ```
 
-A smoke pass requires a zero Godot exit status and successful supervisor validation of the currently implemented boundary evidence. At minimum that evidence covers authoritative identity/presence, controlled exact-spatial state, an authoritative movement transition for the current scenario, presentation binding/reconciliation, duplicate/stale transition rejection where applicable, active locale probes and a rendered screenshot.
+### Baseline smoke
 
-The smoke is boundary/runtime evidence. It does **not** prove subjective control feel, audio output, GPU-driver coverage or performance.
+The `smoke` scenario validates authoritative identity/presence, controlled exact-spatial state, one current authoritative movement transition, presentation binding/reconciliation, duplicate/stale transition rejection, active locale probes and a rendered screenshot.
+
+This is boundary/runtime evidence. It does **not** prove subjective control feel, audio output, GPU-driver coverage or performance.
+
+### Offscreen continuation
+
+The `offscreen` scenario is a presentation-lifecycle proof, not a scheduler or large-world simulation benchmark.
+
+It must prove on one bounded run that:
+
+- the living-need NPC is initially observed/materialized;
+- presentation-only dematerialization removes its node/binding without removing observation or authoritative identity;
+- the next authoritative locomotion tick succeeds while that NPC node is absent;
+- the authoritative NPC sample progresses during that absent tick;
+- absence does not silently rematerialize the NPC;
+- fresh observation rematerializes a hidden shell;
+- a later authoritative sample supplies current state and makes the shell visible again;
+- controlled presentation ordering/revision/continuity guards remain valid throughout.
+
+This proves **Godot-node absence does not stop the already implemented RestNeed causal path**. It does not prove regional scheduling, semantic travel, reduced-fidelity world simulation or time acceleration.
 
 ## Godot process/environment policy
 
-Metadata import must remain non-interactive and bounded. The ordinary/default path uses Godot headless mode and therefore requires neither X11 nor a physical audio device. On the current Linux CI runner, pinned Godot 4.7.1 aborts during this project's `--headless --import`; the persistent smoke lane therefore performs that import under the same Xvfb display already required for screenshot evidence.
+Metadata import must remain non-interactive and bounded. The ordinary/default path uses Godot headless mode. On the current Linux CI runner, pinned Godot 4.7.1 aborts during this project's `--headless --import`; the persistent smoke lane therefore performs that import under the same Xvfb display already required for screenshot evidence.
 
 The CI display-import workaround reads the renderer from canonical `godot/project.godot`, uses the `Dummy` audio driver and disables VSync. It must not introduce a second renderer setting or make CI scene state authoritative. If a later pinned Godot revision makes the headless path reliable on CI, prefer removing the workaround rather than preserving it by habit.
 
-The visual screenshot smoke likewise runs under Xvfb, keeps its renderer owned by `project.godot`, uses `Dummy` audio and disables VSync. Missing ALSA/Pulse devices and virtual-display VSync limitations therefore do not masquerade as gameplay failures.
+The visual scenarios likewise run under Xvfb, keep their renderer owned by `project.godot`, use `Dummy` audio and disable VSync. Missing ALSA/Pulse devices and virtual-display VSync limitations therefore do not masquerade as gameplay failures.
 
 CI software rendering is compatibility evidence only. A successful llvmpipe/Mesa run does not prove real-GPU performance or driver-specific rendering correctness.
 
@@ -120,15 +128,9 @@ Unexpected engine `ERROR` lines should still be investigated; the pass/fail cont
 
 ## Godot smoke CI lane
 
-The repository carries a persistent `.github/workflows/godot-smoke.yml` lane for runtime integration changes. It:
+The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs the RU and EN baseline smoke scenarios, runs the bounded RU offscreen continuation scenario, and uploads `.cache/play` evidence even on failure.
 
-1. installs the Godot version from `tools/toolchain.lock.json` rather than duplicating a version literal in workflow prose;
-2. builds the development/GDExtension graph;
-3. runs the Russian smoke under Xvfb;
-4. runs the English smoke under Xvfb;
-5. uploads `.cache/play` evidence even when the job fails.
-
-Documentation-only changes are excluded from this lane. The lane is deliberately bounded: it does not add narrow-layout matrices, interactive input feel, performance thresholds or cross-platform GPU matrices without a demonstrated need.
+Documentation-only changes are excluded. The lane remains deliberately bounded: no narrow-layout matrix, interactive input-feel automation, performance thresholds or cross-platform GPU matrix without a demonstrated need.
 
 A green Godot smoke check applies only to the exact commit it tested.
 
@@ -142,16 +144,7 @@ Native CI is independent evidence, not a substitute for local verification. A lo
 
 Control feel is empirical. Material input/camera/movement-presentation changes require a real local playtest of the affected device path in addition to automated smoke.
 
-Check the relevant subset of:
-
-- keyboard movement is camera-relative and releases without drift;
-- pointer capture/release and mouse look behave correctly;
-- gamepad sticks have usable deadzones/range and no rest drift;
-- ordinary movement/sprint select semantic intent rather than a Godot-local speed law;
-- presentation follows authoritative movement without a competing local position path;
-- turning/camera remain responsive without changing authoritative world truth;
-- camera collision behaves correctly around presentation geometry;
-- same-continuity movement does not introduce obvious rendering jitter.
+Check the relevant subset of keyboard release/drift, pointer lifecycle/mouse look, gamepad deadzones/range, semantic run/sprint selection, authoritative movement following, presentation turning/camera behavior, camera collision and visible jitter.
 
 Automated smoke must not be reported as proof of subjective movement feel.
 
@@ -188,16 +181,16 @@ build affected target
 native/protocol tests
 -> development adapter build
 -> bounded Godot metadata import
--> bounded Godot smoke
--> inspect evidence/artifacts when the change affects presentation
+-> affected bounded Godot scenario
+-> inspect evidence/artifacts when presentation changes
 ```
 
 ### Godot presentation/control change
 
 ```text
 Godot import/load
--> bounded smoke
--> affected keyboard/mouse/gamepad playtest
+-> affected bounded scenario
+-> keyboard/mouse/gamepad playtest when control feel changed
 -> screenshot/visible-state inspection when useful
 -> confirm no authoritative state moved into Godot
 ```
@@ -217,7 +210,7 @@ catalog integrity
 native protocol tests
 -> development adapter build
 -> Godot import
--> one semantic command/result/projection-or-transition round-trip smoke
+-> one semantic command/result/projection-or-transition round-trip scenario
 ```
 
 ### Persistence change

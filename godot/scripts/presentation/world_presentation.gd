@@ -227,8 +227,9 @@ func initialize_controlled_spatial_presentation(
 
 
 # Applies one fixed authoritative movement batch during a Godot physics tick.
-# Every sample and bound presentation root is validated before the first transform
-# write. Godot physics interpolation then smooths same-epoch transforms for render.
+# Every sample is validated before the first transform write. Observed non-
+# controlled actors may intentionally be unmaterialized; their authoritative
+# samples remain valid but have no Godot transform to apply until rematerialized.
 func apply_authoritative_movement_sample_batch(batch: Dictionary) -> bool:
     if not _controlled_spatial_initialized:
         push_error("movement samples require initialized controlled spatial presentation")
@@ -290,14 +291,19 @@ func apply_authoritative_movement_sample_batch(batch: Dictionary) -> bool:
             push_error("movement sample references an entity outside the observed world")
             return false
 
+        var presentation_root: Node3D = null
         var binding_value = _bindings.get(entity_id, null)
-        var binding := binding_value as EntityBinding
-        if binding == null or binding.entity_id() != entity_id:
-            push_error("movement sample has no valid observed presentation binding")
-            return false
-        var presentation_root := binding.get_parent() as Node3D
-        if presentation_root == null or not is_ancestor_of(presentation_root):
-            push_error("movement sample presentation root must live under WorldPresentation")
+        if binding_value != null:
+            var binding := binding_value as EntityBinding
+            if binding == null or binding.entity_id() != entity_id:
+                push_error("movement sample has an invalid presentation binding")
+                return false
+            presentation_root = binding.get_parent() as Node3D
+            if presentation_root == null or not is_ancestor_of(presentation_root):
+                push_error("movement sample presentation root must live under WorldPresentation")
+                return false
+        elif entity_id == _controlled_entity_id:
+            push_error("controlled movement sample requires a materialized presentation binding")
             return false
 
         var position: Vector3 = position_value
@@ -321,6 +327,9 @@ func apply_authoritative_movement_sample_batch(batch: Dictionary) -> bool:
         var sample: Dictionary = sample_value
         var entity_id: int = sample["entity_id"]
         var presentation_root := sample["presentation_root"] as Node3D
+        if presentation_root == null:
+            continue
+
         var position: Vector3 = sample["position_m"]
         var velocity: Vector3 = sample["velocity_mps"]
         var spatial_epoch: int = sample["spatial_epoch"]
@@ -344,6 +353,35 @@ func apply_authoritative_movement_sample_batch(batch: Dictionary) -> bool:
     _last_tick = tick
     _last_revision = revision
     _movement_batches_applied += 1
+    return true
+
+
+# Presentation lifecycle only. The entity remains authoritative and observed;
+# removing its node/binding must not mutate Simulation or stop its causal work.
+func dematerialize_observed_non_controlled(entity_id: int) -> bool:
+    if entity_id <= 0 or entity_id == _controlled_entity_id:
+        push_error("dematerialization requires a positive non-controlled EntityId")
+        return false
+    if not _observed_entity_ids.has(entity_id):
+        push_error("cannot dematerialize an entity outside the observed world")
+        return false
+
+    var binding_value = _bindings.get(entity_id, null)
+    if binding_value == null:
+        return true
+    var binding := binding_value as EntityBinding
+    if binding == null or binding.entity_id() != entity_id:
+        push_error("cannot dematerialize an invalid presentation binding")
+        return false
+    var presentation_root := binding.get_parent() as Node3D
+    if presentation_root == null or not is_ancestor_of(presentation_root):
+        push_error("cannot dematerialize an invalid presentation root")
+        return false
+
+    binding._clear_entity_id()
+    presentation_root.queue_free()
+    _bindings.erase(entity_id)
+    _spatial_epoch_by_entity.erase(entity_id)
     return true
 
 
