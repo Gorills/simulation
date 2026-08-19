@@ -1,0 +1,58 @@
+name: Verify debug HUD
+
+on:
+  push:
+    branches:
+      - agent/debug-hud-verifier
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 2ec8e1264c8ea1f18adb21a330f47c2d97c5e9e5
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install pinned build tools
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements-dev.txt
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+      - name: Install pinned Godot
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import urllib.request
+          import zipfile
+
+          tools = Path('.tools')
+          tools.mkdir(exist_ok=True)
+          archive = tools / 'godot.zip'
+          url = 'https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip'
+          urllib.request.urlretrieve(url, archive)
+          with zipfile.ZipFile(archive) as bundle:
+              bundle.extractall(tools)
+          archive.unlink()
+          PY
+          chmod +x .tools/Godot_v4.7.1-stable_linux.x86_64
+          .tools/Godot_v4.7.1-stable_linux.x86_64 --version
+      - name: Build development graph
+        run: python tools/dev.py check --preset dev
+      - name: Run smoke screenshot
+        env:
+          GODOT_BIN: ${{ github.workspace }}/.tools/Godot_v4.7.1-stable_linux.x86_64
+        run: xvfb-run -a python tools/play.py --scenario smoke
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: debug-hud-smoke
+          path: .cache/play/**
+          if-no-files-found: warn
