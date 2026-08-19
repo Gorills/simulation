@@ -17,7 +17,8 @@ This is the navigation root and catalog for repository knowledge. Agents start h
 | ACTIVE | [`DOCUMENTATION.md`](DOCUMENTATION.md) | Documentation structure, indexing, lifecycle, and anti-drift rules | Documentation conventions change |
 | ACTIVE | [`engineering/AGENT_RUNBOOK.md`](engineering/AGENT_RUNBOOK.md) | Exact commands and operational procedure for agents: setup, build, tests, graphical verification, artifacts, teardown, triage | Agent-visible command/lifecycle/tooling behavior changes |
 | ACTIVE | [`engineering/DEVELOPMENT_RULES.md`](engineering/DEVELOPMENT_RULES.md) | Stack, C++/CMake/platform/dependency rules, verification policy, and bounded engineering workflow | Engineering/toolchain contract changes |
-| ACTIVE | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Implemented foundation structure, graphical platform boundary, vendoring, and Linux verification lifecycle | Implemented architecture changes |
+| ACTIVE | [`engineering/PLATFORM_CAPABILITIES.md`](engineering/PLATFORM_CAPABILITIES.md) | Required production native window/input capability contract, current Fenster limitation, candidate evidence, and selection acceptance gate | Production platform requirements/evidence/selection changes |
+| ACTIVE | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Implemented foundation structure, graphical diagnostic boundary, vendoring, Linux verification lifecycle, and current production-platform gate | Implemented architecture changes |
 | ACTIVE | [`design/GAME_UI_DESIGN_SKILL.md`](design/GAME_UI_DESIGN_SKILL.md) | Canonical agent-neutral workflow for designing future player-visible UI without template/default drift | UI design workflow or design-task routing changes |
 | ACTIVE | [`design/DESIGN_SYSTEM.md`](design/DESIGN_SYSTEM.md) | Single persistent memory for durable approved visual/UI decisions; intentionally `UNSET` until real UI establishes them | A real UI task approves a durable token/pattern/direction |
 | ACTIVE | [`design/UI_UX_RULES.md`](design/UI_UX_RULES.md) | Hard usability, accessibility, interaction-state, copy, and craft floor for future native game UI | Usability/accessibility/craft policy changes or target requirements become concrete |
@@ -30,7 +31,9 @@ This is the navigation root and catalog for repository knowledge. Agents start h
 
 ## Current stage
 
-The repository contains a verified **development/graphics foundation** plus an active **UI/UX policy foundation**, and intentionally contains no gameplay or game-UI implementation.
+The repository contains a verified **development/graphics diagnostic foundation** plus an active **UI/UX policy foundation**, and intentionally contains no gameplay or game-UI implementation.
+
+The current Fenster-based graphical path proves that the agent can build/run a native framebuffer window, inject real X11 keyboard input and capture real window pixels. It is now explicitly classified as a **diagnostic fixture**, not the final production game platform API. Production window/input selection remains blocked until a candidate passes the acceptance gate in `engineering/PLATFORM_CAPABILITIES.md` inside the agent environment.
 
 The design foundation defines how future UI must be conceived, remembered across sessions, reviewed, and checked for usability/accessibility. It does **not** claim that a palette, font system, component library, widget set, HUD, menu, inventory, dialogue UI, or other real game surface already exists. `design/DESIGN_SYSTEM.md` therefore keeps those decisions `UNSET` until a real bounded UI task approves them.
 

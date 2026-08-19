@@ -10,9 +10,10 @@ Before changing anything:
 2. For any code/tooling task, read [`docs/engineering/AGENT_RUNBOOK.md`](docs/engineering/AGENT_RUNBOOK.md) and follow its exact commands instead of rediscovering the stack.
 3. Read [`docs/engineering/DEVELOPMENT_RULES.md`](docs/engineering/DEVELOPMENT_RULES.md).
 4. Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before changing repository structure, CMake, graphics/platform code, or verification tooling.
-5. For any player-visible UI/design task, read the design foundation in this order before editing: [`docs/design/GAME_UI_DESIGN_SKILL.md`](docs/design/GAME_UI_DESIGN_SKILL.md) -> [`docs/design/DESIGN_SYSTEM.md`](docs/design/DESIGN_SYSTEM.md) -> [`docs/design/UI_UX_RULES.md`](docs/design/UI_UX_RULES.md) -> [`docs/design/DESIGN_REVIEW.md`](docs/design/DESIGN_REVIEW.md). Source provenance is in [`docs/design/SOURCES.md`](docs/design/SOURCES.md); do not re-install/research external skill packs during ordinary UI work.
-6. Read [`docs/specs/PROJECT_SPEC.md`](docs/specs/PROJECT_SPEC.md) only when product/gameplay direction is relevant.
-7. For documentation changes, follow [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md).
+5. For native window/input/platform work, read [`docs/engineering/PLATFORM_CAPABILITIES.md`](docs/engineering/PLATFORM_CAPABILITIES.md). The currently vendored Fenster path is a proven **diagnostic fixture**, not yet the selected production game window/input contract.
+6. For any player-visible UI/design task, read the design foundation in this order before editing: [`docs/design/GAME_UI_DESIGN_SKILL.md`](docs/design/GAME_UI_DESIGN_SKILL.md) -> [`docs/design/DESIGN_SYSTEM.md`](docs/design/DESIGN_SYSTEM.md) -> [`docs/design/UI_UX_RULES.md`](docs/design/UI_UX_RULES.md) -> [`docs/design/DESIGN_REVIEW.md`](docs/design/DESIGN_REVIEW.md). Source provenance is in [`docs/design/SOURCES.md`](docs/design/SOURCES.md); do not re-install/research external skill packs during ordinary UI work.
+7. Read [`docs/specs/PROJECT_SPEC.md`](docs/specs/PROJECT_SPEC.md) only when product/gameplay direction is relevant.
+8. For documentation changes, follow [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md).
 
 Inspect the existing code/tests/commands before assuming an API or contract exists.
 
@@ -20,17 +21,20 @@ Inspect the existing code/tests/commands before assuming an API or contract exis
 
 This repository is currently a **development foundation**, not a game implementation.
 
-- The native graphical stack is implemented and locally verifiable.
+- The native graphical diagnostic stack is implemented and locally verifiable.
+- The production native window/input capability contract is documented, but production platform selection is still pending. Do not build gameplay/UI directly on Fenster or OS-specific handles.
 - The UI/UX design workflow, persistent design-memory contract, usability/accessibility floor, review procedure, and source provenance are documented, but there is intentionally no game UI implementation yet.
 - There is intentionally no gameplay, Simulation Core, protocol, game executable, `GAME.md`, or gameplay playtest runner yet.
 - `src/platform/graphics_smoke.cpp` is a stack diagnostic fixture, **not gameplay or UI design evidence**.
-- Do not create gameplay or game-UI implementation until the user explicitly starts the corresponding bounded task in a later pass.
+- Before the first gameplay/UI implementation, the production platform selection blocker in `docs/engineering/PLATFORM_CAPABILITIES.md` must be resolved by a locally proven candidate.
 
 ## Hard invariants
 
 - The required agent development loop must run without network access.
 - Required dependencies must not be downloaded during normal configure/build/test/verification.
 - Third-party source used by the required path is vendored and integrity-checked.
+- The currently vendored Fenster dependency is diagnostic-only until a production platform replacement passes the documented capability acceptance test.
+- Future gameplay/UI code must depend on a project-owned platform contract, never directly on X11/Win32/Cocoa handles or Fenster internals.
 - The planned authoritative world belongs in a future C++23 Simulation Core; presentation/platform code must never become gameplay authority.
 - Future gameplay work is vertical: rule -> protocol -> graphical player experience -> proof.
 - Future player-visible UI work must follow the repo-owned design foundation and persist durable approved choices only in `docs/design/DESIGN_SYSTEM.md`.
