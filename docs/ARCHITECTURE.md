@@ -10,6 +10,7 @@ Related canonical owners:
 - milestones: [`ROADMAP.md`](ROADMAP.md)
 - stack implementation guidance: [`engineering/STACK.md`](engineering/STACK.md)
 - Simulation ↔ Godot implementation route: [`engineering/simulation-godot-boundary.md`](engineering/simulation-godot-boundary.md)
+- authoritative spatial model: [`models/spatial-location.md`](models/spatial-location.md)
 - Godot/GDExtension versions: [`engineering/VERSIONS.md`](engineering/VERSIONS.md)
 - consequential decisions: [`decisions/`](decisions/)
 
@@ -45,7 +46,7 @@ src/protocol !-> Godot / godot-cpp / GDExtension
 godot/       !-> authoritative world state or systemic outcomes
 ```
 
-Folder names do not enforce architecture. The CMake target graph is the primary executable expression of the dependency direction.
+Folder names do not enforce architecture. The CMake target graph is the primary executable expression of dependency direction.
 
 ## Implemented native target graph
 
@@ -61,41 +62,47 @@ world_sim_gdextension -------+----> godot::cpp
 
 `sim_protocol` privately depends on `sim_core`; `sim_core` has no dependency on protocol or Godot.
 
-The current executable native smoke path is deliberately named as temporary:
+The Milestone 0 smoke path remains deliberately temporary:
 
 ```text
 BootstrapMoveIntent(dx, dy)
   -> protocol::Simulation validation
-  -> protocol bootstrap control binding -> EntityId{1}
+  -> bootstrap control binding -> EntityId{1}
   -> sim::World::apply_bootstrap_step(EntityId, CardinalDirection)
-  -> BootstrapActorProjection(entity_id, tick, revision, ...)
+  -> BootstrapActorProjection
 ```
 
-Malformed transport values are rejected before the domain is called. `GridPosition`, `CardinalDirection`, `BootstrapMoveIntent`, `apply_bootstrap_step` and `BootstrapActorProjection` are Milestone 0 transport evidence, **not** the production third-person spatial contract.
+`GridPosition`, `CardinalDirection`, `BootstrapMoveIntent`, `apply_bootstrap_step` and `BootstrapActorProjection` are transport evidence, **not** production third-person spatial state.
 
-The first durable presentation read path is separate:
+Production-shaped reads are separate:
 
 ```text
-protocol::Simulation::observed_world_projection()
-  -> ObservedWorldProjection
-       controlled_actor_id
-       SimulationTick
-       WorldRevision
-       observed EntityId set
-  -> GDExtension field-for-field translation
-  -> Godot WorldPresentation
-  -> EntityBinding on the controlled presentation
+Simulation
+  ├── observed_world_projection()
+  │     -> ObservedWorldProjection
+  │          identity/presence + tick/revision
+  │
+  └── controlled_actor_spatial_projection()
+        -> ControlledActorSpatialProjection
+             EntityId
+             position (mm)
+             velocity (mm/s)
+             SpatialEpoch
+             SimulationTick
+             WorldRevision
+        -> GDExtension mm -> Godot meters
+        -> WorldPresentation initial placement
 ```
 
-`ObservedWorldProjection` deliberately contains no bootstrap grid coordinates. The minimum implemented observation set contains only the controlled actor until a real spatial/knowledge/visibility policy exists.
+`ObservedWorldProjection` does not contain bootstrap grid coordinates or production spatial state. `ControlledActorSpatialProjection` is purpose-built for the exact-spatial controlled presentation.
 
 ## Ownership by layer
 
 | Layer | Owns | Must not own |
 | --- | --- | --- |
-| `src/sim` | entity identity/existence, world state, locations when implemented, inventory/economy/social/political/magic/combat laws, deterministic outcomes, simulation time, seeded RNG | protocol DTOs, Godot types, input devices, render frames, UI, camera state |
-| `src/protocol` | control/session binding, commands/intents, validation/translation, results, events, purpose-built projections, versioned boundary DTOs | rendering, scene-node state, duplicated domain rules, mutable exported `WorldState` |
-| `src/adapters/gdextension` | Godot-facing ↔ protocol translation, registration, diagnostics | direct world ownership, prices, relationships, combat resolution, authoritative spawning or movement decisions |
+| `src/sim` | entity identity/existence, semantic and exact spatial state when causal, inventory/economy/social/political/magic/combat laws, deterministic outcomes, simulation time, seeded RNG | protocol DTOs, Godot types, input devices, render frames, UI, camera state |
+| `src/protocol` | control/session binding, commands/intents, boundary validation/translation, results, events, purpose-built projections, versioned DTOs | rendering, scene-node state, duplicated domain rules, mutable exported `WorldState` |
+| `src/adapters/gdextension` | Godot-facing ↔ protocol translation, unit conversion, registration, diagnostics | direct world ownership, prices, relationships, collision resolution, authoritative spawning or movement decisions |
 | `godot/` | input sampling, presentation replicas, interpolation/prediction state, scenes, camera, audio, animation, VFX, UI/design system | authoritative entity existence/location, inventory, economy, relationships, ownership, access rights, trade/damage/politics/magic outcomes |
 | native tools/tests | scenarios, diagnostics, verification, developer orchestration | a second simulator or alternate gameplay implementation |
 
@@ -103,13 +110,13 @@ The authoritative world exists once: in the C++ Simulation Core.
 
 Godot may predict or interpolate a representation for responsiveness. Prediction is a disposable presentation hypothesis; authoritative samples/results reconcile it and all systemic outcomes remain Simulation-owned.
 
-See [`decisions/0004-authoritative-world-presentation-boundary.md`](decisions/0004-authoritative-world-presentation-boundary.md).
+See ADR 0004 and [`decisions/0006-authoritative-spatial-contract.md`](decisions/0006-authoritative-spatial-contract.md).
 
 ## Player/NPC parity
 
 The Simulation Core does not have a privileged player species.
 
-A human-controlled person and an NPC are simulated actors with stable `EntityId`s. What differs is the source that produces their intent:
+A human-controlled person and an NPC are simulated actors with stable `EntityId`s. What differs is the source that produces intent:
 
 ```text
 PlayerControls -> protocol/session binding --+
@@ -117,26 +124,58 @@ PlayerControls -> protocol/session binding --+
 NPC decision -------------------------------+-> same authoritative action/rule path
 ```
 
-Human control is a relationship outside the actor's world identity. It must not grant alternate economy, inventory, relationship, institution, ownership, law or combat APIs.
+Human control is a relationship outside the actor's world identity. It must not grant alternate economy, inventory, relationship, institution, ownership, law, combat or movement rules.
 
-If an NPC can open a shop, buy an item, attack a traveler, join an institution or acquire property, a human-controlled actor should use the same domain capability when the same prerequisites hold.
+If an NPC can open a shop, buy an item, attack a traveler, join an institution, acquire property or move through a place, a human-controlled actor uses the same world capability when the same prerequisites hold.
 
 ## Domain API quality bar
 
 Simulation code exposes semantic domain operations and types rather than transport-shaped primitives.
 
-The implemented foundation establishes durable distinctions:
+Durable distinctions now include:
 
-- `EntityId` is stable simulated identity and does not mean “player id”;
-- `SimulationTick` is world time progression;
-- `WorldRevision` is authoritative state ordering and may change without time advancing;
-- `WorldSeed` is deterministic random-state provenance, not time or identity;
-- `World` stores actors by identity instead of owning a `player_position_` field;
-- bootstrap grid/cardinal types and operations are explicitly named as temporary probes.
+- `EntityId` — stable simulated identity;
+- `SimulationTick` — world-time progression;
+- `WorldRevision` — authoritative mutation ordering;
+- `WorldSeed` — deterministic random-state provenance;
+- `SpatialPosition` — signed 64-bit millimeters in Simulation X/Y/Z space;
+- `SpatialVelocity` — signed 64-bit millimeters per second;
+- `SpatialEpoch` — continuity identity for interpolation/snap semantics;
+- `SpatialState` — optional exact spatial state when current causal fidelity requires it;
+- bootstrap grid/cardinal types — explicitly temporary transport probes.
 
-A command changing an actor does not automatically mean time advanced. Time changes only through explicit simulation advancement.
+A command changing an actor does not automatically mean time advanced. A world revision changing does not automatically mean spatial position changed. A spatial epoch changing means presentation must treat the relocation as discontinuous.
 
-Do not introduce a strong type merely to wrap every scalar. Add one when it prevents mixing different domain meanings, removes invalid states, or makes an authoritative contract materially clearer.
+Do not introduce a strong type merely to wrap every scalar. Add one when it prevents mixing different meanings, removes invalid states or makes an authoritative contract materially clearer.
+
+## Authoritative spatial contract
+
+The exact coordinate representation is now selected; the collision/navigation solver is not.
+
+Simulation exact 3D coordinates use:
+
+```text
+X/Y/Z signed int64 millimeters
+velocity signed int64 millimeters/second
+Y is up
+right-handed X/Y/Z orientation aligned with Godot
+```
+
+Godot 4.7 uses one 3D unit = one meter, so GDExtension performs the unit conversion. Godot `Vector3` never becomes a Simulation type.
+
+Exact state is selective:
+
+```text
+entity exists != entity has SpatialState != Godot node exists
+```
+
+The controlled actor in the active 3D session has exact spatial state. A distant or aggregate-resolved actor may remain authoritative without exact pose when current mechanics do not require one.
+
+`SpatialEpoch` changes on teleport/respawn/discontinuous transfer. Samples across different epochs are not interpolated as ordinary motion.
+
+There is deliberately no general `SetPosition`/`SetVelocity` world API. Future movement writes are semantic intents whose resulting position/velocity are decided by the Simulation solver.
+
+Detailed causal contract: [`models/spatial-location.md`](models/spatial-location.md).
 
 ## Protocol boundary: writes vs reads
 
@@ -156,15 +195,18 @@ Commands mutate through world rules. Projections answer presentation needs witho
 
 The protocol is a small application contract, not an exported `WorldState`. Internal Simulation types do not automatically become public/client types.
 
-The shared application protocol version lives in `src/protocol/version.hpp`; a temporary feature DTO must not become the version owner merely because it was implemented first.
+The shared application protocol version lives in `src/protocol/version.hpp`. Breaking boundary changes update that version and affected native/client evidence together.
 
-Breaking protocol changes update the explicit protocol version and affected native/client verification together.
-
-See [`MODELING.md`](MODELING.md#protocol-semantics) and [`engineering/simulation-godot-boundary.md`](engineering/simulation-godot-boundary.md).
+For movement, future good input is a semantic desired movement intent. `SetNpcPosition`, `SetPlayerTransform` or client-authored final velocity are invalid world APIs.
 
 ## Purpose-built projections
 
-Godot reads projections shaped for a presentation task. The first implemented durable read model is `ObservedWorldProjection`.
+Godot reads projections shaped for a presentation task. Implemented durable read models now include:
+
+```text
+ObservedWorldProjection
+ControlledActorSpatialProjection
+```
 
 Likely additional families as real mechanics arrive include:
 
@@ -181,15 +223,13 @@ Do not introduce one universal projection containing every person, secret relati
 
 A projection exposes only information the client is allowed to know. A shop UI may see offered stock/price without receiving hidden merchant knowledge or unrelated world state.
 
-The current `ObservedWorldProjection` is intentionally identity/presence-only. Do not add grid coordinates to it to make the bootstrap demo convenient; authoritative spatial samples get their own real contract once the spatial model is chosen.
-
 ## Domain events
 
 Domain events describe facts that happened and support feedback, explanation, tests and projection updates.
 
 Examples may include `ItemTransferred`, `TradeCompleted`, `ActorArrived`, `AttackStarted`, `ActorWounded`, `RelationshipChanged`, `OfficeChanged`, `LawViolated` and `MagicEffectApplied` once those mechanics exist.
 
-Events are not automatically the persistence model. This project does not adopt full event sourcing without a separate demonstrated need.
+Events are not automatically the persistence model. This project does not adopt full event sourcing without a demonstrated need.
 
 ## Observed/materialized world
 
@@ -197,33 +237,34 @@ World existence and Godot scene-node lifetime are different concepts.
 
 ```text
 full authoritative Simulation world
-  -> Simulation/protocol observation policy
+  -> observation policy
       -> bounded ObservedWorldProjection
-          -> Godot WorldPresentation keyed by EntityId
+          -> WorldPresentation keyed by EntityId
               -> presentation nodes / bindings
 ```
 
-The first executable Godot bridge is intentionally smaller than the final materializer: `WorldPresentation` validates monotonic `WorldRevision`, tracks the observed authoritative ID set, and binds the pre-existing controlled `Player` representation through an `EntityBinding`. It does **not** yet invent a generic NPC scene factory because no second real presentation kind exists.
+`WorldPresentation` validates monotonic world revisions, tracks observed IDs and binds the controlled `Player` representation through `EntityBinding`. It also performs the **initial** controlled presentation placement from `ControlledActorSpatialProjection`.
 
-Future materialization will extend this owner to instantiate/update/dematerialize typed presentation scenes when real observed NPC/item capabilities exist. Removing a Godot representation must never delete the simulated entity.
+That initialization API is intentionally not a continuous movement updater. Repeated authoritative samples must later go through a sample buffer/interpolator/reconciliation path.
 
-Keep these concepts separate:
+Future materialization may instantiate/update/dematerialize typed presentation scenes when real NPC/item capabilities exist. Removing a Godot representation must never delete the simulated entity.
+
+Keep distinct:
 
 - authoritative existence;
-- semantic/spatial location;
+- semantic location;
+- exact `SpatialState`;
 - actor knowledge/visibility;
 - presentation materialization;
 - camera frustum/occlusion.
 
-Godot may perform extra visual culling. Visual culling does not decide world existence or reveal hidden information.
-
-## Offscreen simulation
+## Offscreen simulation and causal fidelity
 
 A settlement continues in Simulation when it is not represented in Godot.
 
-Economy, relationships, politics, schedules, violence, magic and other implemented causal systems continue according to Simulation time/rules. If the player returns, presentation shows current projections: changed stock, residents/locations, injuries/deaths, institutional changes, prices or other actual consequences.
+Economy, relationships, politics, violence, magic and other implemented causal systems continue according to Simulation rules/time. Exact spatial resolution is retained only where current causality needs it; this is a model decision under ADR 0005, not a camera-distance performance hack.
 
-Simulation-internal fidelity/LOD may be introduced later only from profiling evidence. It must preserve authoritative semantics and never delegate distant-world outcomes to Godot.
+Presentation materialization, causal model resolution and runtime performance architecture remain separate concerns.
 
 ## GDExtension seam
 
@@ -235,51 +276,59 @@ Godot crosses into native gameplay through exactly one runtime seam. The adapter
 4. translate results/projections/events back to Godot-facing values;
 5. expose diagnostics without embedding world rules.
 
-The current `SimFacade` owns `protocol::Simulation` and exposes:
+The current `SimFacade` exposes:
 
 ```text
-observed_world_projection()     # durable identity/presence read model
-bootstrap_submit_move(dx, dy)   # Milestone 0 probe only
-bootstrap_debug_projection()    # Milestone 0 diagnostics only
+observed_world_projection()             # identity/presence read
+controlled_actor_spatial_projection()  # authoritative exact-spatial read
+bootstrap_submit_move(dx, dy)           # Milestone 0 probe only
+bootstrap_debug_projection()            # Milestone 0 diagnostics only
 ```
 
-If a systemic gameplay rule is implemented inside a `GDCLASS`, GDScript node, UI script or serialization helper, the boundary is violated.
+Spatial unit conversion belongs here: integer millimeters in protocol become meter-space Godot `Vector3` values. Collision or movement decisions do not.
 
-The adapter may depend on godot-cpp. `src/sim` and `src/protocol` may not.
+If a systemic gameplay rule is implemented inside a `GDCLASS`, GDScript node, UI script or serialization helper, the boundary is violated.
 
 ## Godot client architecture
 
 Godot is the interactive presentation client, not the authoritative simulator.
 
-The implemented control/presentation graph is currently:
+Current graph:
 
 ```text
 InputMap
   -> PlayerControls + ControlProfile
-       -> ThirdPersonPlayer + LocomotionProfile   # presentation/prediction shell
+       -> ThirdPersonPlayer + LocomotionProfile   # current local presentation shell
        -> ThirdPersonCameraRig
             -> SpringArm3D -> Camera3D
 
 SimFacade.observed_world_projection()
   -> WorldPresentation
        -> EntityBinding -> Player presentation
+
+SimFacade.controlled_actor_spatial_projection()
+  -> WorldPresentation.initialize_controlled_spatial_presentation()
+       -> initial Player meter-space position
+       -> reset_physics_interpolation()
 ```
 
 `WorldPresentation` is the Godot owner of authoritative presentation identity/presence. Feature scripts must not create parallel `EntityId -> Node` registries or assign authoritative IDs themselves.
 
-ADR 0004 supersedes the earlier interpretation that local `CharacterBody3D` state is authoritative. Production locomotion must migrate toward:
+The current `ThirdPersonPlayer.move_and_slide()` result is still local presentation/prototype movement. It must not be copied back into Simulation as authoritative location.
+
+The next movement stage is:
 
 ```text
-semantic player input
-  -> actor intent
-  -> authoritative spatial simulation
-  -> revisioned movement samples/projection
-  -> Godot interpolation / optional prediction + reconciliation
+semantic player/NPC movement intent
+  -> deterministic Simulation movement/collision solver
+  -> ordered ControlledActor/NPC spatial samples
+  -> Godot sample buffer
+  -> interpolation / optional prediction + reconciliation
 ```
 
-The exact authoritative spatial/collision representation is intentionally not selected yet; it must be chosen from actual terrain/navigation/determinism/performance constraints.
+The exact collision/navigation representation is intentionally **not selected yet**. It must be chosen from the first real terrain/reachability requirement and tested in Godot-free native code.
 
-Detailed presentation guidance is in [`engineering/godot.md`](engineering/godot.md); cross-boundary guidance is in [`engineering/simulation-godot-boundary.md`](engineering/simulation-godot-boundary.md).
+Godot's floating-point world precision is also presentation-side. Simulation's int64 millimeter coordinates do not require enabling Godot large-world coordinates now; future rebasing/double precision can be added if measured world scale requires it.
 
 ## UI design-system boundary
 
@@ -293,7 +342,7 @@ Feature scenes consume semantic Theme variations and compose layout with Godot C
 
 The logical desktop baseline is 1920×1080 with `canvas_items` + `expand`.
 
-See [`decisions/0003-project-wide-ui-design-system.md`](decisions/0003-project-wide-ui-design-system.md) and [`engineering/ui-design-system.md`](engineering/ui-design-system.md).
+See ADR 0003 and [`engineering/ui-design-system.md`](engineering/ui-design-system.md).
 
 ## Example: merchant transaction
 
@@ -311,9 +360,9 @@ The UI cannot make an apple appear in inventory by changing a GDScript array. NP
 
 ## Example: bandit attack
 
-Attackers, victims, hostility, movement, damage, death, loot, law/social consequences and resulting state are Simulation concerns.
+Attackers, victims, hostility, authoritative movement, damage, death, loot, law/social consequences and resulting state are Simulation concerns.
 
-If participants are in the current materialization projection, Godot renders movement/combat/FX/audio and sends player intervention as intent. If they are offscreen, Simulation resolves the event without scene nodes. Returning later materializes the consequences.
+If participants are materialized, Godot renders movement/combat/FX/audio and sends player intervention as intent. If they are offscreen, Simulation resolves the implemented causal event without scene nodes.
 
 ## Vertical capability rule
 
@@ -341,20 +390,21 @@ See [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md).
 
 ## Mechanical architecture verification
 
-Current executable structure establishes the first load-bearing boundaries:
+Current executable structure establishes load-bearing boundaries:
 
 - separate `sim_core` and `sim_protocol` targets encode protocol -> Simulation direction;
 - native domain tests link only `sim_core`;
 - `World` stores actors by stable `EntityId` rather than a special player field;
-- protocol/session owns the bootstrap human-control binding;
-- `SimulationTick` and `WorldRevision` are distinct;
-- `ObservedWorldProjection` is purpose-built and does not export bootstrap spatial state;
-- protocol tests prove malformed transport input cannot mutate the observed projection;
-- native tests prove different actor IDs use the same authoritative domain operation;
-- Godot has one `WorldPresentation` identity/presence owner and the controlled presentation carries `EntityBinding`;
-- bootstrap movement names explicitly discourage treating the grid probe as production locomotion;
+- protocol/session owns the current human-control binding;
+- `SimulationTick`, `WorldRevision` and `SpatialEpoch` have separate meanings;
+- exact `SpatialState` is optional and Godot-free;
+- `ObservedWorldProjection` and `ControlledActorSpatialProjection` are separate purpose-built reads;
+- native tests prove exact-spatial and non-exact actors can coexist and invalid spatial epoch cannot mutate the world;
+- protocol tests prove bootstrap grid movement changes revision but not production spatial position;
+- Godot has one `WorldPresentation` identity/presence owner and initializes the controlled representation from an authoritative spatial sample;
+- bootstrap movement names discourage treating the grid probe as production locomotion;
 - only `world_sim_gdextension` links godot-cpp;
 - `tools/check_architecture.py`/CTest rejects direct Godot include markers in `src/sim` and `src/protocol`;
-- the smoke artifact is designed to prove the same `EntityId`/`WorldRevision` reached native bootstrap result, observed projection, and Godot presentation once run in the pinned local environment.
+- smoke evidence is designed to prove bootstrap, observed identity, authoritative spatial sample and presentation initialization independently.
 
 As the graph grows, prefer real target/API boundaries over prose-only rules. Add a narrow mechanical check only when a real dependency edge cannot already be expressed by code/build ownership.

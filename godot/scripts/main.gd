@@ -10,6 +10,7 @@ extends Node3D
 var sim := SimFacade.new()
 var _bootstrap_projection: Dictionary = {}
 var _observed_world_projection: Dictionary = {}
+var _controlled_actor_spatial_projection: Dictionary = {}
 
 
 func _ready() -> void:
@@ -20,6 +21,15 @@ func _ready() -> void:
     ):
         push_error("failed to bind controlled presentation to authoritative EntityId")
         get_tree().quit(6)
+        return
+
+    _controlled_actor_spatial_projection = sim.controlled_actor_spatial_projection()
+    if not world_presentation.initialize_controlled_spatial_presentation(
+        _controlled_actor_spatial_projection,
+        player_entity_binding
+    ):
+        push_error("failed to initialize controlled presentation from authoritative spatial state")
+        get_tree().quit(7)
         return
 
     camera_rig.configure(controls, player)
@@ -49,9 +59,11 @@ func _on_input_device_changed(_device: int) -> void:
 
 
 func _refresh_debug_text() -> void:
+    var authoritative_position := _spatial_position_or_zero(_controlled_actor_spatial_projection)
     debug_label.text = (
         "controls: %s\n"
         + "authoritative entity: %d · tick: %d · revision: %d · protocol: %d\n"
+        + "authoritative spatial: (%.2f, %.2f, %.2f)m · epoch: %d\n"
         + "player presentation: (%.2f, %.2f, %.2f)\n"
         + "native bootstrap projection: %s\n"
         + "WASD / left stick move · mouse / right stick look · Shift / L3 sprint · Esc releases mouse"
@@ -61,6 +73,10 @@ func _refresh_debug_text() -> void:
         world_presentation.last_tick(),
         world_presentation.last_revision(),
         world_presentation.protocol_version(),
+        authoritative_position.x,
+        authoritative_position.y,
+        authoritative_position.z,
+        int(_controlled_actor_spatial_projection.get("spatial_epoch", 0)),
         player.global_position.x,
         player.global_position.y,
         player.global_position.z,
@@ -78,6 +94,7 @@ func _run_smoke(artifact_dir: String) -> void:
 
     _bootstrap_projection = response.get("projection", {})
     _observed_world_projection = sim.observed_world_projection()
+    _controlled_actor_spatial_projection = sim.controlled_actor_spatial_projection()
     if not world_presentation.apply_observed_world_projection(
         _observed_world_projection,
         player_entity_binding
@@ -109,13 +126,46 @@ func _write_debug_artifact(artifact_dir: String) -> bool:
         push_error("failed to open debug artifact: %s" % error_string(FileAccess.get_open_error()))
         return false
 
+    var spatial_evidence := _spatial_evidence(_controlled_actor_spatial_projection)
+    if spatial_evidence.is_empty():
+        push_error("controlled spatial projection is not serializable smoke evidence")
+        return false
+
     var evidence := {
         "bootstrap_projection": _bootstrap_projection,
         "observed_world_projection": _observed_world_projection,
+        "controlled_actor_spatial_projection": spatial_evidence,
         "presentation": world_presentation.debug_snapshot(),
     }
     file.store_string(JSON.stringify(evidence, "  "))
     return true
+
+
+func _spatial_evidence(projection: Dictionary) -> Dictionary:
+    var position_value = projection.get("position_m", null)
+    var velocity_value = projection.get("velocity_mps", null)
+    if typeof(position_value) != TYPE_VECTOR3 or typeof(velocity_value) != TYPE_VECTOR3:
+        return {}
+
+    var position: Vector3 = position_value
+    var velocity: Vector3 = velocity_value
+    return {
+        "entity_id": int(projection.get("entity_id", 0)),
+        "position_m": [position.x, position.y, position.z],
+        "velocity_mps": [velocity.x, velocity.y, velocity.z],
+        "spatial_epoch": int(projection.get("spatial_epoch", 0)),
+        "tick": int(projection.get("tick", -1)),
+        "revision": int(projection.get("revision", -1)),
+        "protocol_version": int(projection.get("protocol_version", 0)),
+    }
+
+
+func _spatial_position_or_zero(projection: Dictionary) -> Vector3:
+    var value = projection.get("position_m", null)
+    if typeof(value) != TYPE_VECTOR3:
+        return Vector3.ZERO
+    var position: Vector3 = value
+    return position
 
 
 func _write_screenshot(artifact_dir: String) -> bool:

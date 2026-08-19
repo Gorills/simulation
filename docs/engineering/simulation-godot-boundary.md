@@ -1,6 +1,6 @@
 # Simulation ↔ Godot boundary
 
-This guide is the implementation route for the authoritative-world decision in [`../decisions/0004-authoritative-world-presentation-boundary.md`](../decisions/0004-authoritative-world-presentation-boundary.md).
+This guide is the implementation route for ADR 0004 and the authoritative spatial decision in [`../decisions/0006-authoritative-spatial-contract.md`](../decisions/0006-authoritative-spatial-contract.md).
 
 Use it when adding a mechanic that crosses from C++ Simulation into Godot presentation or from Godot input/UI into an authoritative world action.
 
@@ -18,36 +18,17 @@ Godot may make presentation smoother. It may not invent authoritative state.
 
 A human-controlled actor and an NPC are simulated actors with stable `EntityId`s.
 
-Control source is outside the actor's world identity:
-
 ```text
 PlayerControls -> protocol control binding --+
                                            |
 NPC decision -------------------------------+-> same domain action path
 ```
 
-Do not add `is_player` branches to economy, relationships, institutions, inventory, ownership, damage or other world laws.
-
-If a feature is possible for an NPC but impossible for the player only because the code uses a different domain API, the architecture is wrong.
+Do not add `is_player` branches to movement, economy, relationships, institutions, inventory, ownership, damage or other world laws.
 
 ## Write path: intent into world change
 
-A Godot feature that wants to change the world submits a semantic command/intent through `SimFacade`/protocol.
-
-Example:
-
-```text
-UI Buy button
-  -> BuyItem command
-  -> protocol validates boundary data
-  -> Simulation checks real stock/funds/location/rights
-  -> domain transition
-  -> result + events
-```
-
-The UI does not pre-apply the transaction to authoritative state. Optimistic visuals are allowed only when explicitly reconciled.
-
-Prefer verbs that describe the actor's attempted action.
+A Godot feature that wants to change the world submits semantic intent through `SimFacade`/protocol.
 
 Good:
 
@@ -56,8 +37,8 @@ BuyItem
 OfferTrade
 Attack
 Travel
-ApplyForOffice
 GiveGift
+future: DesiredMovementIntent
 ```
 
 Bad:
@@ -67,70 +48,51 @@ SetMoney
 SetInventory
 SetRelationship
 SetPosition
-SetShopOpen
+SetVelocity
+SetTransform
 ```
 
-## Read path: projections into presentation
+The client may describe what an actor attempts. Simulation computes the resulting world state.
 
-Godot reads purpose-built projections, not domain objects.
+## Read path: purpose-built projections
 
-A projection is:
+Godot reads purpose-built projections, not domain objects or mutable `WorldState`.
 
-- read-only;
-- shaped for a presentation task;
-- stamped with `SimulationTick`/`WorldRevision` where ordering matters;
-- filtered to information the client is permitted to know;
-- disposable/rebuildable from authoritative state.
+Implemented durable reads:
 
-Do not keep arbitrary protocol Dictionaries as a second long-lived world model in GDScript.
-
-The first implemented durable read model is `ObservedWorldProjection`:
+### ObservedWorldProjection
 
 ```text
 controlled_actor_id
 SimulationTick
 WorldRevision
 protocol_version
-entities: [{ EntityId }, ...]
+entities: [{EntityId}, ...]
 ```
 
-Its current minimum observation set contains only the controlled actor. It deliberately contains **no bootstrap grid coordinates** and therefore cannot become a back door for treating the Milestone 0 grid probe as production spatial state.
+This projection answers identity/presence only. It deliberately contains no bootstrap grid coordinates and no exact 3D pose.
 
-Additional projections should appear from real feature needs, for example:
+### ControlledActorSpatialProjection
 
 ```text
-ControlledActorProjection
-ShopProjection
-InventoryProjection
-RelationshipProjection
-InstitutionProjection
-JournalProjection
+EntityId
+position: signed int64 millimeters X/Y/Z
+velocity: signed int64 millimeters/second X/Y/Z
+SpatialEpoch
+SimulationTick
+WorldRevision
+protocol_version
 ```
 
-Do not create a universal `WorldProjection` that serializes every domain subsystem.
+The protocol retains explicit integer metric units. GDExtension translates position/velocity to Godot meter-space `Vector3` values.
 
-## Domain events vs projections
+Do not add hidden state or reconstruct domain meaning in the adapter.
 
-Use projections for current readable state.
-
-Use domain events for facts that just happened and need explanation/feedback.
-
-Example:
-
-```text
-Projection: actor now owns 4 apples and 13 coins
-Events: TradeCompleted, ItemTransferred, MoneyTransferred
-```
-
-Godot can use events for animation, sound, notifications and causal history. It should render durable state from projections.
-
-Do not make the event stream the save format unless a later ADR explicitly adopts event sourcing.
+Future feature projections such as shops, inventory, relationships or institutions should appear only when real mechanics need them. Do not create a universal `WorldProjection`.
 
 ## Identity and presentation replicas
 
-Godot presentation objects are keyed by Simulation `EntityId`.
-
-The implemented owner is:
+Godot presentation objects are keyed by Simulation `EntityId` through one owner:
 
 ```text
 ObservedWorldProjection
@@ -138,193 +100,202 @@ ObservedWorldProjection
        -> EntityId -> EntityBinding -> presentation root
 ```
 
-`WorldPresentation` owns the Godot-side identity/presence index and last applied authoritative revision. `EntityBinding` is a small component under a presentation root; it stores the authoritative ID assigned by `WorldPresentation` and does not create IDs itself.
+Do not create another `EntityId -> Node` registry in combat, HUD, inventory or NPC scripts.
 
-The current stage binds the pre-existing controlled `Player` representation only. It does **not** introduce a generic scene factory before a second real presentation kind exists.
+The current stage binds only the pre-existing controlled `Player`. Generic NPC/item scene factories wait for real second/third presentation kinds.
 
-Future lifecycle operations remain presentation-only:
+## Exact spatial state and materialization are different
+
+Keep these states independent:
 
 ```text
-materialize(entity projection)
-update(entity projection)
-dematerialize(entity id)
+authoritative entity existence
+semantic location
+optional exact SpatialState
+knowledge/observation
+Godot materialization
+visual frustum/occlusion
 ```
 
-Dematerialize means “stop representing this entity here”, not “delete this entity from the world”.
+An entity can exist and remain causally important without exact 3D state. A materialized entity normally needs enough projected state to render, but Godot materialization itself does not create world existence.
 
-Never generate a new authoritative NPC/item because a scene wants one. Scene factories instantiate representations of already-existing projected entities.
+The current controlled actor is exact-spatial because active third-person movement needs it. ADR 0005 governs when other entities require identity-resolved exact spatial detail.
 
-Do not create another `EntityId -> Node` registry in HUD, inventory, combat, NPC or scene-specific scripts. Extend `WorldPresentation` when presentation-lifecycle responsibility genuinely belongs there.
+## Units and coordinates
 
-## Revision ordering
+Simulation exact spatial units:
 
-`WorldPresentation` accepts equal/newer projections and rejects a projection whose `WorldRevision` is older than the last applied revision.
+```text
+position = signed int64 millimeters
+velocity = signed int64 millimeters / second
+X/Z horizontal, Y up
+right-handed orientation aligned with Godot
+```
 
-This is an ordering guard, not an implementation of networking or rollback. The current in-process call path should naturally be ordered; the guard prevents a future asynchronous/prefetched presentation path from silently overwriting newer identity/presence state.
+Godot 4.7 uses one 3D unit = one meter. Convert only in GDExtension.
 
-Do not replace `WorldRevision` with Godot frame count, physics frame count or wall-clock time.
+Never include Godot `Vector3`, `Transform3D`, `CharacterBody3D`, physics RIDs or scene paths in `src/sim`/`src/protocol`.
 
-## Observation / materialization boundary
+Simulation's integer coordinates also remain independent of Godot's floating-point large-world precision. Do not enable Godot large-world coordinates or origin shifting until real playable scale requires it.
 
-The full simulation may contain far more entities than Godot needs to represent.
+## Tick, revision and spatial continuity
 
-The production local-world projection should be bounded around the controlled context and filtered by simulation-owned observation/information rules.
+These are different contracts:
 
-Godot may additionally cull visually for performance. That visual culling cannot change simulation existence or reveal information omitted by the projection.
+- `SimulationTick` — authoritative world-time context;
+- `WorldRevision` — monotonic authoritative mutation order;
+- `SpatialEpoch` — continuity identity for movement interpolation.
 
-Keep these concepts distinct:
+A non-spatial command can increase revision while position stays unchanged. A teleport/respawn/discontinuous transfer changes epoch. Ordinary continuous movement stays within an epoch.
 
-- authoritative existence;
-- semantic location;
-- actor knowledge/visibility;
-- presentation materialization;
-- camera frustum/occlusion.
+Godot must not replace any of these values with render frames, physics frames or wall-clock time.
 
-Do not collapse them into one `visible` boolean.
+## Initial placement
 
-The current one-actor observation set is intentionally minimal. Do not fake distance/visibility rules before the authoritative spatial and knowledge models exist.
+Current executable flow:
 
-## Spatial movement migration
+```text
+SimFacade.observed_world_projection()
+  -> WorldPresentation binds EntityId
 
-The current cardinal `GridPosition` path is only a Milestone 0 transport probe.
+SimFacade.controlled_actor_spatial_projection()
+  -> WorldPresentation.initialize_controlled_spatial_presentation()
+       -> validates matching EntityId/tick/revision/protocol
+       -> sets meter-space position
+       -> reset_physics_interpolation()
+```
 
-The production third-person path must eventually become:
+This API is **initial placement only**. Reusing it every authoritative update would turn continuous movement into repeated teleports and is forbidden by its contract.
+
+Godot's official interpolation guidance requires resetting physics interpolation after initial placement/teleport to avoid interpolating from an invalid previous transform.
+
+## Continuous movement — next stage
+
+The target path is:
 
 ```text
 PlayerControls semantic movement intent
-    -> protocol actor intent
-    -> authoritative spatial simulation
-    -> revisioned movement samples/projection
-    -> Godot presentation interpolation
+        ↓
+protocol movement intent
+        ↓
+Godot-free Simulation movement/collision solver
+        ↓
+ordered authoritative spatial samples
+        ↓
+Godot sample buffer
+        ↓
+interpolation
+        ↓
+optional local prediction + reconciliation if measured need exists
 ```
 
-The exact authoritative collision/navigation representation is not selected yet. Choose it from real world/terrain constraints and deterministic/performance requirements, not because `CharacterBody3D` already exists.
+The current `ThirdPersonPlayer.move_and_slide()` path remains presentation/prototype movement. Do **not** copy its resulting `global_position`/velocity back into Simulation.
 
-Until that migration is complete, `ThirdPersonPlayer` is a presentation/prediction shell only. Do not use its transform as proof of authoritative reachability, ownership, combat range or location-sensitive transaction success.
+The first real solver must choose neutral Simulation-owned environment/collision data from a concrete terrain/reachability requirement. Do not make Godot Physics/Jolt, `StaticBody3D`, a navmesh or `CharacterBody3D` authoritative by convenience.
 
 ## Smooth presentation
 
-Simulation tick rate and render frame rate are different clocks.
+Simulation tick rate and render rate are different clocks.
 
-Keep authoritative samples with identity and ordering. Presentation can interpolate between previous/current samples.
+Presentation may interpolate compatible authoritative samples. If samples arrive on timing boundaries that do not match local Godot physics ticks, evaluate deliberate custom sample interpolation rather than forcing them through an unrelated clock. Godot's own interpolation guidance calls out externally timed/server-style samples as a case where custom interpolation may fit better.
 
-Godot 4.7's interpolation documentation explicitly notes that custom interpolation can be a better fit when authoritative tick/timing information does not coincide with local physics ticks. That is the pattern to evaluate once Simulation begins emitting real spatial samples. Do not force those samples into the existing `CharacterBody3D` physics-interpolation path merely because it already exists.
+If `SpatialEpoch` changes, do not interpolate from the previous epoch. Snap/reset the representation and clear incompatible sample history.
 
-Prediction is optional and normally limited to the locally controlled actor when real playtest latency requires it.
+Prediction is optional. If later playtests justify it:
 
-Prediction rules:
+- predict from the same semantic intent sent to Simulation;
+- keep predicted state separate from authoritative samples;
+- reconcile to authoritative state;
+- never let prediction grant damage, ownership, purchases, access or another systemic success.
 
-- use the same semantic intent sent to the simulation;
-- store prediction separately from authoritative samples;
-- reconcile on authoritative update;
-- never predict systemic success such as item transfer, hit confirmation, ownership or access;
-- prefer interpolation before adding more complex prediction.
+## Revision ordering
+
+`WorldPresentation` rejects an observed-world projection older than its last applied revision.
+
+Future continuous spatial buffers must also order samples explicitly by authoritative tick/revision and reject impossible regressions/duplicates according to their own contract.
+
+This is an ordering guard, not networking architecture or rollback.
 
 ## Trading example ownership
 
 | Concern | Owner |
 | --- | --- |
-| merchant exists | Simulation |
-| merchant is at market | Simulation |
-| merchant owns/controls stock | Simulation |
-| apple quantity | Simulation |
-| current offer price | Simulation |
-| buyer money | Simulation |
+| merchant exists/location | Simulation |
+| stock/price/money | Simulation |
 | whether trade is permitted | Simulation |
 | transaction result | Simulation |
-| shop list layout | Godot UI |
-| hover/focus/button state | Godot UI/design system |
-| coin/apple transfer animation | Godot presentation |
-| purchase sound | Godot presentation |
+| shop layout/focus | Godot UI/design system |
+| transfer animation/sound | Godot presentation |
 
 ## Bandit attack example ownership
 
 | Concern | Owner |
 | --- | --- |
-| bandits choose/accept an attack intent | Simulation decision/action path |
-| attackers/targets exist and are located | Simulation |
-| hostility/legality/relationships | Simulation |
-| damage/death/loot/consequences | Simulation |
-| whether event falls in current materialization projection | Simulation/protocol observation policy |
-| actor scene nodes | Godot presenter |
-| combat animation/VFX/audio | Godot presentation |
-| camera shake | Godot presentation |
+| attackers/targets and authoritative position | Simulation |
+| attack intent/hostility/legality | Simulation |
+| collision/reachability once implemented | Simulation |
+| wounds/death/loot/consequences | Simulation |
+| actor scene nodes | Godot presentation |
+| animation/VFX/audio/camera | Godot presentation |
 
 Offscreen attacks do not need Godot nodes to resolve.
 
-## Time vs revision
-
-Do not use one counter for both concepts.
-
-- `SimulationTick`: authoritative world time progression.
-- `WorldRevision`: monotonic ordering of authoritative state changes.
-
-An immediate command can increase revision without advancing time. Advancing time increases tick and can produce one or many revisions as systems act.
-
-This distinction matters for schedules, prices, production, relationships, combat and stale presentation samples.
-
 ## GDExtension adapter rule
-
-The adapter translates only.
 
 Allowed:
 
 - Godot primitives ↔ protocol DTOs;
-- enums/error codes ↔ Godot-friendly values;
-- projections/events ↔ Dictionaries/Arrays or later typed Godot-facing wrappers;
+- explicit unit conversion such as millimeters ↔ meters;
+- enums/errors ↔ Godot-friendly values;
+- projections/events ↔ Dictionaries/Arrays/typed Godot values;
 - diagnostics.
 
 Not allowed:
 
-- computing shop prices;
-- deciding whether trade succeeds;
-- changing relationships;
-- spawning authoritative NPCs;
-- resolving attacks;
-- deciding ownership;
-- treating scene transforms as authoritative world state.
+- collision/movement resolution;
+- prices/trade decisions;
+- relationship changes;
+- authoritative spawning;
+- ownership/damage decisions;
+- using scene transforms as world truth.
 
 Current surface:
 
 ```text
-observed_world_projection()     # durable read
+observed_world_projection()
+controlled_actor_spatial_projection()
 bootstrap_submit_move(...)      # smoke only
 bootstrap_debug_projection()    # smoke/debug only
 ```
 
-If adapter code needs a world rule, move the rule into Simulation and expose a protocol operation/result.
+## Extension checklist
 
-## Extension checklist for a new feature
+For a feature crossing the boundary, answer:
 
-For a feature that crosses the boundary, answer in this order:
+1. Which authoritative entities participate?
+2. What semantic intent is attempted?
+3. Which Simulation state/rules decide it?
+4. What result/error is returned?
+5. Which events explain the consequence?
+6. Which purpose-built projection is needed?
+7. Which fields are actually observable?
+8. Which parts are presentation-only?
+9. Can an NPC use the same world capability?
+10. What deterministic native test proves the transition?
+11. What bounded Godot playtest proves presentation of the result?
 
-1. Which actor/entity IDs participate?
-2. What semantic intent/command is being attempted?
-3. Which authoritative state and rules decide it?
-4. What result/error must the caller receive immediately?
-5. Which domain events explain what happened?
-6. Which read projection does Godot need afterward?
-7. Does the projection expose only allowed information?
-8. Which parts are presentation-only animation/interpolation/UI?
-9. Can an NPC use the same domain capability without a second rule path?
-10. What deterministic test proves the authoritative transition?
-11. What Godot playtest proves the result is represented correctly?
-
-If the answer starts with “Godot sets…”, re-check the ownership boundary.
+If the answer begins with “Godot sets the world state”, stop and move the decision behind protocol.
 
 ## Deliberately not introduced yet
 
-This foundation does not introduce:
-
-- an ECS framework;
-- a message broker;
+- generic ECS;
 - networking/server infrastructure;
 - full event sourcing;
-- regional simulation LOD;
-- sharding;
-- multithreaded world jobs;
-- generic reflection/serialization frameworks;
-- a universal projection/event bus;
-- a generic Godot entity-scene factory before a second real materialized presentation kind exists.
-
-Add those only when measurements or a concrete mechanic justify them.
+- regional runtime LOD/sharding;
+- multithread world jobs;
+- universal projection/event bus;
+- generic Godot entity-scene factory;
+- authoritative continuous movement/collision solver;
+- authoritative facing/orientation;
+- automatic origin rebasing;
+- prediction/reconciliation framework.

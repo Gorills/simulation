@@ -8,16 +8,23 @@ World::World(const WorldSeed seed) noexcept : seed_(seed) {}
 
 std::expected<void, WorldError> World::spawn_actor(
     const EntityId id,
-    const GridPosition initial_bootstrap_position
+    const ActorSpawnState initial
 ) {
     if (!id.is_valid()) {
         return std::unexpected(WorldError::invalid_entity_id);
+    }
+    if (initial.spatial.has_value() && !initial.spatial->is_valid()) {
+        return std::unexpected(WorldError::invalid_spatial_state);
     }
     if (actor(id) != nullptr) {
         return std::unexpected(WorldError::duplicate_entity);
     }
 
-    actors_.push_back(ActorState{.id = id, .bootstrap_position = initial_bootstrap_position});
+    actors_.push_back(ActorState{
+        .id = id,
+        .bootstrap_position = initial.bootstrap_position,
+        .spatial = initial.spatial,
+    });
     ++revision_.value;
     return {};
 }
@@ -69,6 +76,14 @@ const ActorState *World::actor(const EntityId id) const noexcept {
         }
     }
     return nullptr;
+}
+
+const SpatialState *World::actor_spatial_state(const EntityId id) const noexcept {
+    const auto *state = actor(id);
+    if (state == nullptr || !state->spatial.has_value()) {
+        return nullptr;
+    }
+    return &*state->spatial;
 }
 
 SimulationTick World::tick() const noexcept {

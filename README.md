@@ -7,6 +7,7 @@ Playable systemic third-person RPG with one authoritative C++23 Simulation Core 
 - Product: [`docs/PRODUCT.md`](docs/PRODUCT.md)
 - Runtime architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Simulation/modeling: [`docs/MODELING.md`](docs/MODELING.md)
+- Authoritative spatial model: [`docs/models/spatial-location.md`](docs/models/spatial-location.md)
 - Simulation ↔ Godot boundary: [`docs/engineering/simulation-godot-boundary.md`](docs/engineering/simulation-godot-boundary.md)
 - Verification/playtest: [`docs/VERIFICATION.md`](docs/VERIFICATION.md)
 - Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
@@ -24,46 +25,39 @@ Godot 4 presentation/input/UI
   -> sim_core
 ```
 
-`src/sim` is the only authoritative world. Stable entity existence/identity and, as mechanics are implemented, location, inventory, ownership, economy, relationships, politics, combat consequences and magic effects are Simulation state.
+`src/sim` is the only authoritative world. Entity identity/existence and exact spatial state when causally required belong to Simulation, as will inventory, ownership, economy, relationships, politics, combat consequences and magic effects.
 
-Godot samples human input and renders a bounded presentation of that world. It may interpolate or predict visual movement, but a `CharacterBody3D` transform is not authoritative location and cannot decide trade range, inventory transfer, damage, relationships or another systemic result.
+Godot samples human input and renders a bounded presentation. It may interpolate or predict visual movement, but a `CharacterBody3D` transform cannot decide authoritative location or another systemic result.
 
-The player-controlled person is an ordinary simulated actor. Human input and NPC decisions are different intent sources feeding the same world rules; there is no privileged player domain species.
+The player-controlled person is an ordinary simulated actor. Human input and NPC decisions are different intent sources feeding the same world rules.
 
-The first production-shaped read bridge is `ObservedWorldProjection`: it carries authoritative `EntityId` presence plus controlled-actor identity and `SimulationTick`/`WorldRevision`, but deliberately carries no bootstrap grid coordinates. Godot applies it through one `WorldPresentation` owner, which binds scene representations to authoritative IDs and rejects stale revisions. The current minimum observed set contains only the controlled actor until a real spatial/visibility policy exists.
+`ObservedWorldProjection` carries authoritative identity/presence. `ControlledActorSpatialProjection` separately carries authoritative position/velocity, `SpatialEpoch`, `SimulationTick`, `WorldRevision` and protocol version. Simulation uses signed 64-bit millimeters; GDExtension converts those values to Godot meter-space `Vector3` values.
 
-The native cardinal `BootstrapMoveIntent` path remains only a Milestone 0 protocol/GDExtension transport probe. Its GDExtension methods are explicitly named `bootstrap_*`; production third-person locomotion must migrate to an authoritative actor-location/movement contract and revisioned spatial samples rather than extending the grid probe.
+Exact `SpatialState` is selective. An entity may exist authoritatively without an exact 3D pose when current gameplay causality only needs semantic or aggregate location.
 
-See [`docs/decisions/0004-authoritative-world-presentation-boundary.md`](docs/decisions/0004-authoritative-world-presentation-boundary.md).
+The native `BootstrapMoveIntent` grid path remains Milestone 0 transport evidence and does not change production spatial state. Continuous third-person locomotion still needs the next Godot-free deterministic movement/collision stage; do not extend the grid probe or copy Godot motor results back into Simulation.
+
+See [`docs/decisions/0004-authoritative-world-presentation-boundary.md`](docs/decisions/0004-authoritative-world-presentation-boundary.md) and [`docs/decisions/0006-authoritative-spatial-contract.md`](docs/decisions/0006-authoritative-spatial-contract.md).
 
 ## Controls
 
-The reference client is keyboard/mouse and gamepad from the start:
+The reference client supports keyboard/mouse and gamepad:
 
 - WASD / left stick — movement intent;
 - mouse / right stick — orbit camera;
 - Shift / L3 — sprint intent;
 - Escape — release captured mouse; click to recapture.
 
-Control code is split into small responsibilities. Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPersonCameraRig`, the current presentation/prediction movement shell in `ThirdPersonPlayer`, authoritative presentation identity in `WorldPresentation` / `EntityBinding`, and tuneable presentation feel values in `ControlProfile` / `LocomotionProfile` resources.
+Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPersonCameraRig`, the current local presentation motor in `ThirdPersonPlayer`, presentation identity/spatial initialization in `WorldPresentation` / `EntityBinding`, and tuneable feel values in `ControlProfile` / `LocomotionProfile` resources.
 
-The current playable motor remains useful for feel while authoritative spatial movement is migrated into Simulation. Do not treat its Godot transform as world truth.
-
-See [`docs/engineering/godot.md`](docs/engineering/godot.md), [`docs/engineering/simulation-godot-boundary.md`](docs/engineering/simulation-godot-boundary.md), and [`docs/decisions/0002-third-person-controls.md`](docs/decisions/0002-third-person-controls.md).
+The current playable motor remains useful for feel while authoritative continuous movement is migrated into Simulation. Its Godot transform is not world truth.
 
 ## Local development
 
 Requirements: Python 3.12+ and the exact Godot baseline recorded in [`tools/toolchain.lock.json`](tools/toolchain.lock.json). `GODOT_BIN` may point to the editor binary when it is not on `PATH`.
 
-Bootstrap the pinned CMake/Ninja environment and acquire pinned native dependencies:
-
 ```bash
 python3 tools/bootstrap.py
-```
-
-Canonical front door after bootstrap:
-
-```bash
 .venv/bin/python tools/dev.py check --preset native
 .venv/bin/python tools/dev.py build --preset dev
 .venv/bin/python tools/dev.py test --preset dev
@@ -72,6 +66,6 @@ Canonical front door after bootstrap:
 
 On Windows use `.venv\\Scripts\\python.exe` instead.
 
-`native` omits GDExtension but still builds/tests the Godot-free native graph. `dev` builds the debug GDExtension against the exact immutable godot-cpp revision in [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake). The smoke playtest is bounded, owns only its Godot process, and validates `debug.json` plus `final.png` under `.cache/play/`.
+`native` omits GDExtension but still builds/tests the Godot-free graph. `dev` builds the debug GDExtension against the immutable godot-cpp revision in [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake). The bounded smoke playtest validates `debug.json` plus `final.png` under `.cache/play/`.
 
-The selected client split is **GDScript + C++ GDExtension**, not C#. Version semantics and verification status live in [`docs/engineering/VERSIONS.md`](docs/engineering/VERSIONS.md).
+The client split is **GDScript + C++ GDExtension**, not C#. Version semantics live in [`docs/engineering/VERSIONS.md`](docs/engineering/VERSIONS.md).

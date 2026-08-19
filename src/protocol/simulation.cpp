@@ -28,7 +28,16 @@ namespace {
 } // namespace
 
 Simulation::Simulation(const std::uint64_t seed) : world_(sim::WorldSeed{seed}) {
-    const auto spawned = world_.spawn_actor(controlled_actor_);
+    const auto spawned = world_.spawn_actor(
+        controlled_actor_,
+        sim::ActorSpawnState{
+            .spatial = sim::SpatialState{
+                .position = {},
+                .velocity = {},
+                .epoch = sim::SpatialEpoch{1},
+            },
+        }
+    );
     assert(spawned.has_value());
     (void)spawned;
 }
@@ -70,7 +79,7 @@ ObservedWorldProjection Simulation::observed_world_projection() const {
     assert(actor != nullptr);
 
     ObservedWorldProjection result{
-        .controlled_actor_id = actor == nullptr ? 0U : actor->id.value,
+        .controlled_actor_id = actor == nullptr ? 0 : actor->id.value,
         .tick = world_.tick().value,
         .revision = world_.revision().value,
         .protocol_version = kProtocolVersion,
@@ -80,6 +89,30 @@ ObservedWorldProjection Simulation::observed_world_projection() const {
         result.entities.push_back(ObservedEntityProjection{.entity_id = actor->id.value});
     }
     return result;
+}
+
+ControlledActorSpatialProjection Simulation::controlled_actor_spatial_projection() const noexcept {
+    const auto *actor = world_.actor(controlled_actor_);
+    const auto *spatial = world_.actor_spatial_state(controlled_actor_);
+    assert(actor != nullptr);
+    assert(spatial != nullptr);
+    if (actor == nullptr || spatial == nullptr) {
+        return {};
+    }
+
+    return ControlledActorSpatialProjection{
+        .entity_id = actor->id.value,
+        .x_mm = spatial->position.x.value,
+        .y_mm = spatial->position.y.value,
+        .z_mm = spatial->position.z.value,
+        .velocity_x_mm_per_second = spatial->velocity.x.value,
+        .velocity_y_mm_per_second = spatial->velocity.y.value,
+        .velocity_z_mm_per_second = spatial->velocity.z.value,
+        .spatial_epoch = spatial->epoch.value,
+        .tick = world_.tick().value,
+        .revision = world_.revision().value,
+        .protocol_version = kProtocolVersion,
+    };
 }
 
 } // namespace worldsim::protocol

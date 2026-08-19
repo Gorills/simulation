@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <optional>
 
 namespace {
 
@@ -12,7 +13,14 @@ TEST(WorldActors, DifferentActorsUseTheSameAuthoritativeOperation) {
     const worldsim::sim::EntityId second{200};
 
     ASSERT_TRUE(world.spawn_actor(first).has_value());
-    ASSERT_TRUE(world.spawn_actor(second, {.x = 4, .y = 3}).has_value());
+    ASSERT_TRUE(
+        world.spawn_actor(
+            second,
+            worldsim::sim::ActorSpawnState{
+                .bootstrap_position = {.x = 4, .y = 3},
+            }
+        ).has_value()
+    );
     ASSERT_TRUE(world.apply_bootstrap_step(first, worldsim::sim::CardinalDirection::east).has_value());
     ASSERT_TRUE(world.apply_bootstrap_step(second, worldsim::sim::CardinalDirection::north).has_value());
 
@@ -22,6 +30,53 @@ TEST(WorldActors, DifferentActorsUseTheSameAuthoritativeOperation) {
     EXPECT_EQ(world.actor(second)->bootstrap_position, (worldsim::sim::GridPosition{.x = 4, .y = 2}));
     EXPECT_EQ(world.tick(), (worldsim::sim::SimulationTick{0}));
     EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{4}));
+}
+
+TEST(WorldSpatial, ExactSpatialStateIsSelectiveAndValidated) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{17}};
+    const worldsim::sim::EntityId resolved{10};
+    const worldsim::sim::EntityId unresolved{11};
+    const worldsim::sim::SpatialState spatial{
+        .position = {
+            .x = worldsim::sim::Millimeters{1250},
+            .y = worldsim::sim::Millimeters{0},
+            .z = worldsim::sim::Millimeters{-3750},
+        },
+        .velocity = {
+            .x = worldsim::sim::MillimetersPerSecond{120},
+            .y = worldsim::sim::MillimetersPerSecond{0},
+            .z = worldsim::sim::MillimetersPerSecond{-240},
+        },
+        .epoch = worldsim::sim::SpatialEpoch{2},
+    };
+
+    ASSERT_TRUE(
+        world.spawn_actor(
+            resolved,
+            worldsim::sim::ActorSpawnState{
+                .spatial = std::optional<worldsim::sim::SpatialState>{spatial},
+            }
+        ).has_value()
+    );
+    ASSERT_TRUE(world.spawn_actor(unresolved).has_value());
+
+    ASSERT_NE(world.actor_spatial_state(resolved), nullptr);
+    EXPECT_EQ(*world.actor_spatial_state(resolved), spatial);
+    EXPECT_EQ(world.actor_spatial_state(unresolved), nullptr);
+    EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{2}));
+
+    const auto invalid = world.spawn_actor(
+        worldsim::sim::EntityId{12},
+        worldsim::sim::ActorSpawnState{
+            .spatial = std::optional<worldsim::sim::SpatialState>{worldsim::sim::SpatialState{
+                .epoch = worldsim::sim::SpatialEpoch{0},
+            }},
+        }
+    );
+
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_EQ(invalid.error(), worldsim::sim::WorldError::invalid_spatial_state);
+    EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{2}));
 }
 
 TEST(WorldTime, ActorActionsDoNotPretendThatWorldTimeAdvanced) {

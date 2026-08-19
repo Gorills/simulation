@@ -46,7 +46,6 @@ script = ExtResource("7_world_presentation")
 
 [node name="Player" type="CharacterBody3D" parent="WorldPresentation"]
 unique_name_in_owner = true
-position = Vector3(0, 0.1, 0)
 script = ExtResource("4_player")
 profile = ExtResource("5_locomotion_profile")
 
@@ -85,6 +84,7 @@ current = true
 near = 0.08
 
 [node name="Ground" type="StaticBody3D" parent="."]
+position = Vector3(0, -0.1, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
 shape = SubResource("BoxShape_ground")

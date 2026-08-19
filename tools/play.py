@@ -117,9 +117,15 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
 
     bootstrap = evidence.get("bootstrap_projection")
     observed = evidence.get("observed_world_projection")
+    spatial = evidence.get("controlled_actor_spatial_projection")
     presentation = evidence.get("presentation")
-    if not isinstance(bootstrap, dict) or not isinstance(observed, dict) or not isinstance(presentation, dict):
-        raise SystemExit("debug artifact is missing bootstrap/observed/presentation sections")
+    if not all(isinstance(section, dict) for section in (bootstrap, observed, spatial, presentation)):
+        raise SystemExit("debug artifact is missing bootstrap/observed/spatial/presentation sections")
+
+    assert isinstance(bootstrap, dict)
+    assert isinstance(observed, dict)
+    assert isinstance(spatial, dict)
+    assert isinstance(presentation, dict)
 
     expected_bootstrap = {
         "entity_id": 1,
@@ -128,7 +134,7 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
         "tick": 0,
         "revision": 2,
         "seed": 1,
-        "protocol_version": 3,
+        "protocol_version": 4,
     }
     for key, value in expected_bootstrap.items():
         if bootstrap.get(key) != value:
@@ -138,7 +144,7 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
         "controlled_actor_id": 1,
         "tick": 0,
         "revision": 2,
-        "protocol_version": 3,
+        "protocol_version": 4,
     }
     for key, value in expected_observed.items():
         if observed.get(key) != value:
@@ -146,13 +152,30 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
     if observed.get("entities") != [{"entity_id": 1}]:
         raise SystemExit(f"unexpected observed entities: {observed.get('entities')}")
 
+    expected_spatial = {
+        "entity_id": 1,
+        "position_m": [0.0, 0.0, 0.0],
+        "velocity_mps": [0.0, 0.0, 0.0],
+        "spatial_epoch": 1,
+        "tick": 0,
+        "revision": 2,
+        "protocol_version": 4,
+    }
+    for key, value in expected_spatial.items():
+        if spatial.get(key) != value:
+            raise SystemExit(f"unexpected controlled spatial {key}: expected {value}, got {spatial.get(key)}")
+
     expected_presentation = {
         "controlled_entity_id": 1,
         "last_tick": 0,
         "last_revision": 2,
-        "protocol_version": 3,
+        "protocol_version": 4,
         "observed_entity_ids": [1],
         "bound_entity_ids": [1],
+        "controlled_spatial_initialized": True,
+        "controlled_spatial_epoch": 1,
+        "controlled_spatial_tick": 0,
+        "controlled_spatial_revision": 1,
     }
     for key, value in expected_presentation.items():
         if presentation.get(key) != value:
