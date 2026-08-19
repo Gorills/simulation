@@ -23,24 +23,27 @@ The first executable verification paths now exist:
 python tools/check_architecture.py
 python tools/dev.py check --preset native
 python tools/dev.py check --preset dev
-python tools/play.py --scenario smoke
+python tools/dev.py play --scenario smoke
 ```
 
 - `native` configures/builds/tests the Godot-free native graph.
 - `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
 - the smoke playtest is accepted only if Godot exits successfully and the supervisor validates the expected native projection plus screenshot artifact.
+- the third-person control foundation additionally requires real local keyboard/mouse and gamepad playtesting; the native smoke probe is not evidence of locomotion feel.
 
 The existence of these commands is not evidence that all of them have run in a particular environment.
 
 ## Capability proof
 
-A player-facing capability normally needs:
+A systemic player-facing capability normally needs:
 
 1. authoritative native behavior;
 2. explicit protocol input/output;
 3. targeted deterministic/regression evidence where relevant;
 4. visible player feedback;
 5. one bounded playtest proving the real round-trip.
+
+Engine-local presentation/control work does not need a fake native rule merely to satisfy this list, but it must be exercised in the real Godot client and must not create systemic authority in GDScript.
 
 Compile-green alone is not Definition of Done for gameplay.
 
@@ -52,7 +55,12 @@ Use behavior-oriented names. Prefer `EXPECT_*` for multiple independent observat
 
 Native rule tests must not require Godot. Core tests use real value objects/state where practical rather than mock-heavy designs.
 
-The first `sim_tests` cases prove equal initial seed/input produces equal movement projection and invalid diagonal movement does not mutate the world.
+The native test graph mirrors production ownership:
+
+- `sim_core_tests` links only `sim_core` + `GTest::gtest_main` and exercises domain state/transitions directly;
+- `protocol_tests` links `sim_protocol` + `GTest::gtest_main` and exercises validation plus the command-to-domain-to-projection round-trip.
+
+The first domain tests prove cardinal bootstrap movement advances authoritative probe position/time deterministically. The first protocol tests prove a valid probe move produces the expected projection and malformed diagonal input is rejected without mutating the world.
 
 CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces repository-level architecture policy.
 
@@ -91,11 +99,28 @@ The development client should expose a read-only debug surface sufficient to exp
 
 The debug surface must not expose authoritative mutation methods. Scenario setup belongs to explicit initialization before the world starts, not debugger cheats.
 
-Milestone 0 starts this surface with `SimFacade.debug_projection()` and an on-screen JSON projection. It is intentionally read-only.
+Milestone 0 starts this surface with the current local third-person presentation position plus `SimFacade.debug_projection()`/native smoke projection. The two are deliberately displayed as different concepts until semantic location has a real gameplay contract.
+
+## Third-person control verification
+
+Control feel is empirical. Source review and Godot import success are necessary but insufficient.
+
+Before accepting a material control change, use the pinned Godot runtime and verify the affected device path. For the foundation, check at least:
+
+- keyboard movement is camera-relative and releases cleanly without drift;
+- mouse look direction is correct, captured motion is stable across the supported window/stretch setup, and Escape/click pointer lifecycle works;
+- left-stick movement has a circular deadzone, reaches the full analog range and does not drift at rest;
+- right-stick look has no drift at rest, reaches useful angular speed at full deflection and has the expected vertical direction;
+- Shift and L3 both engage sprint without duplicating locomotion code;
+- acceleration/deceleration and turn response feel immediate rather than delayed by stacked smoothing;
+- `SpringArm3D` pulls the camera inward against nearby geometry and excludes the player collider;
+- walking across floor/slope contacts does not introduce obvious jitter or camera stepping.
+
+Tune values through `ControlProfile` / `LocomotionProfile` first. Change algorithms only when playtest evidence shows that tuning cannot solve the problem.
 
 ## Godot playtest supervisor
 
-`tools/play.py` is the single ordinary playtest entry point:
+`tools/play.py` is the single ordinary automated playtest entry point:
 
 ```bash
 python tools/play.py --scenario smoke
@@ -150,7 +175,7 @@ For the `smoke` scenario, success additionally requires `debug.json` to contain 
 x=1, y=0, tick=1, seed=1, protocol_version=1
 ```
 
-and `final.png` to exist. The Godot scene obtains that state by calling `SimFacade.submit_move(1, 0)` and rendering the returned projection; GDScript does not directly update authoritative coordinates.
+and `final.png` to exist. The Godot scene obtains that state by calling `SimFacade.submit_move(1, 0)`, writes the returned projection to the debug artifact/surface, and captures the real 3D client. It does not move the `CharacterBody3D` from this bootstrap grid-step result.
 
 Successful artifacts may be retained on a bounded rolling basis; failure artifacts should remain available for diagnosis until explicit cleanup.
 
@@ -165,12 +190,13 @@ build affected target
 -> affected Godot playtest when player-visible
 ```
 
-### Godot presentation-only change
+### Godot presentation/control change
 
 ```text
 Godot import/load
--> affected bounded playtest
--> screenshot/visible-state evidence
+-> affected keyboard/mouse or gamepad playtest
+-> collision/camera/input checks relevant to the change
+-> screenshot/visible-state evidence when useful
 ```
 
 ### Protocol / GDExtension change
@@ -196,7 +222,7 @@ Follow [`engineering/VERSIONS.md`](engineering/VERSIONS.md): build native code, 
 
 ## Local-only verification policy
 
-This project intentionally has **no CI**. Verification and milestone acceptance are performed on the developer machine with the repository-owned bootstrap, CMake/CTest presets, and bounded Godot playtests.
+This project intentionally has **no CI**. Verification and milestone acceptance are performed on the developer machine with the repository-owned bootstrap, CMake/CTest presets, bounded Godot playtests and direct local control playtesting.
 
 Do not add GitHub Actions, GitLab CI, CircleCI, Jenkins, Buildkite, Azure Pipelines, Travis, AppVeyor, or another project CI service/configuration. Do not create committed workflow files as a substitute for running the local gates.
 
@@ -206,14 +232,14 @@ A local failure must be fixed locally; it cannot be deferred with “CI will cat
 
 A capability is done only when all applicable items are true:
 
-- authoritative C++ implementation exists;
-- Godot has no bypass truth;
-- protocol expresses the input/output;
+- authoritative C++ implementation exists when the capability has systemic world consequences;
+- Godot has no bypass truth for systemic outcomes;
+- protocol expresses the systemic input/output when one is needed;
 - deterministic behavior is tested where required;
 - a targeted regression test protects important causality;
 - player-facing feedback exists;
 - the capability is actually reachable in the game;
-- the bounded playtest demonstrates the expected outcome;
+- the bounded/manual local playtest demonstrates the expected outcome;
 - relevant docs/model changed if and only if the real contract changed;
 - unrelated refactoring is absent.
 

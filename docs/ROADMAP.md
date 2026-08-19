@@ -4,9 +4,9 @@ This roadmap describes **product/build milestones**, not AI Layer Work/Task/Epic
 
 ## Current state
 
-Milestone 0's executable spine is now present in source: CMake presets, `sim_core`, protocol, deterministic GoogleTest coverage, pinned dependencies, the GDExtension adapter, a Godot 4.7 client, InputMap movement and a bounded smoke-playtest supervisor.
+Milestone 0's executable spine is now present in source: CMake presets, separated `sim_core`/`sim_protocol` targets, deterministic GoogleTest coverage, pinned dependencies, the GDExtension adapter, a Godot 4.7 third-person client, keyboard/mouse + gamepad InputMap controls, collision-aware camera, and a bounded smoke-playtest supervisor.
 
-**Milestone 0 is not accepted merely because the files exist.** Acceptance still requires a complete pinned dependency build, Godot 4.7.1 extension load and the smoke playtest artifact round-trip described below.
+**Milestone 0 is not accepted merely because the files exist.** Acceptance still requires a complete pinned dependency build, Godot 4.7.1 extension load, real third-person control playtesting, and the smoke artifact round-trip described below.
 
 Capability acceptance follows [`VERIFICATION.md`](VERIFICATION.md).
 
@@ -19,16 +19,22 @@ Every milestone becomes playable. Simulation-only depth may not silently accumul
 Implemented path:
 
 - explicit bootstrap in `tools/bootstrap.py`;
-- C++23 native `sim_core`;
+- C++23 native `sim_core` plus `sim_protocol` with one-way protocol -> domain dependency;
 - CMake/Ninja presets and CTest;
 - Godot 4.7 project using the baseline from [`engineering/VERSIONS.md`](engineering/VERSIONS.md);
 - immutable GoogleTest and godot-cpp revisions in `cmake/Dependencies.cmake`;
-- one move command/result/projection round-trip;
-- InputMap movement that invokes the authoritative command;
-- deterministic native tests;
-- a read-only native projection rendered by Godot;
+- one native move command/result/projection round-trip retained as a small protocol/GDExtension smoke probe;
+- a real `CharacterBody3D` third-person locomotion shell for the reference client;
+- semantic InputMap actions for WASD/left-stick movement, mouse/right-stick camera and keyboard/gamepad sprint;
+- separate tuneable control/camera and locomotion profiles;
+- camera-relative analog movement with explicit acceleration/deceleration and turn response;
+- `SpringArm3D` camera collision and physics-interpolated target following;
+- deterministic native domain/protocol tests;
+- a read-only native projection exposed in the Godot debug surface;
 - bounded `tools/play.py --scenario smoke` ownership/timeouts/artifacts;
 - smoke assertions for `debug.json` plus `final.png`.
+
+The native grid-step probe is **not** the third-person locomotion contract. Godot owns the immediate local kinematic shell; systemic world outcomes remain native. Semantic location/interaction boundaries become explicit protocol capabilities when gameplay requires them.
 
 Pending acceptance evidence:
 
@@ -36,11 +42,12 @@ Pending acceptance evidence:
 2. build and run CTest through the normal presets;
 3. build the GDExtension against the pinned godot-cpp revision targeting API 4.7;
 4. load it in the pinned Godot 4.7.1 engine;
-5. run `tools/play.py --scenario smoke` and retain the generated projection/screenshot evidence.
+5. play the third-person client with keyboard/mouse and with a gamepad, verifying movement response, full analog range, look direction/inversion defaults, sprint, slope/collision behavior and SpringArm camera collision;
+6. run `tools/play.py --scenario smoke` and retain the generated native projection/screenshot evidence.
 
 Acceptance:
 
-> The game opens in the pinned Godot environment, the player can move, and evidence proves the movement/state round-trip through the authoritative C++ core.
+> The game opens in the pinned Godot environment; the player can move and control the third-person camera responsively with keyboard/mouse and gamepad; and separate smoke evidence proves the Godot -> GDExtension -> protocol -> C++ round-trip.
 
 ## Milestone 1 — Living Need
 

@@ -1,23 +1,23 @@
 #pragma once
 
-#include "protocol/move.hpp"
-
-#include <cstdint>
+#include "sim/types.hpp"
 
 namespace worldsim::sim {
 
 class World final {
 public:
-    explicit World(std::uint64_t seed = 1) noexcept;
+    explicit World(WorldSeed seed = WorldSeed{1}) noexcept;
 
-    [[nodiscard]] protocol::MoveOutcome move(const protocol::MoveIntent &intent) noexcept;
-    [[nodiscard]] protocol::PlayerProjection player_projection() const noexcept;
+    void move(CardinalDirection direction) noexcept;
+
+    [[nodiscard]] GridPosition player_position() const noexcept;
+    [[nodiscard]] SimulationTick tick() const noexcept;
+    [[nodiscard]] WorldSeed seed() const noexcept;
 
 private:
-    std::int32_t player_x_{};
-    std::int32_t player_y_{};
-    std::uint64_t tick_{};
-    std::uint64_t seed_{};
+    GridPosition player_position_{};
+    SimulationTick tick_{};
+    WorldSeed seed_{};
 };
 
 } // namespace worldsim::sim

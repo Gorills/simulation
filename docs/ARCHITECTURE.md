@@ -16,7 +16,7 @@ Current source, build configuration, executable tests and lock files are authori
 
 ## Runtime dependency graph
 
-The intended graph is one-way:
+The graph is one-way:
 
 ```text
 Godot 4 client
@@ -39,49 +39,83 @@ Hard direction:
 ```text
 godot/ -> src/adapters/gdextension -> src/protocol -> src/sim
 
-src/sim      !-> Godot / godot-cpp / GDExtension
+src/sim      !-> src/protocol / Godot / godot-cpp / GDExtension
 src/protocol !-> Godot / godot-cpp / GDExtension
-godot/       !-> authoritative world state
+godot/       !-> authoritative systemic world outcomes
 ```
 
-Folder names do not enforce architecture. Real CMake targets/import checks must prove the edges.
+Folder names do not enforce architecture. The CMake target graph is the primary executable expression of the dependency direction.
 
-## Implemented Milestone 0 target graph
+## Implemented native target graph
 
-The first executable graph now exists:
+The native graph is physically split by responsibility:
 
 ```text
-sim_tests ----------------> sim_core
-                                ^
-                                |
-world_sim_gdextension ----------+----> godot::cpp
-        ^
-        |
-Godot project / world_sim.gdextension
+sim_core_tests ---------> sim_core
+                              ^
+                              |
+protocol_tests --------> sim_protocol
+                              ^
+                              |
+world_sim_gdextension -------+----> godot::cpp
 ```
 
-- `sim_core` is the C++23 Godot-free project library.
-- `sim_tests` links `sim_core` + `GTest::gtest_main` and does not link Godot.
-- `world_sim_gdextension` links `sim_core` + `godot::cpp`; it is the only project target with the Godot binding dependency.
+`sim_protocol` has a private link dependency on `sim_core`; `sim_core` has no dependency on protocol or Godot.
+
+- `sim_core` owns domain types and authoritative world transitions.
+- `sim_protocol` owns client-facing intents/results/projections and translates validated protocol requests into domain operations.
+- `sim_core_tests` test the domain directly with no protocol/Godot dependency.
+- `protocol_tests` test validation plus command-to-domain-to-projection behavior.
+- `world_sim_gdextension` links `sim_protocol` + `godot::cpp`; it does not own the authoritative `sim::World` directly.
 - `architecture_no_godot_in_core` runs `tools/check_architecture.py` through CTest and rejects Godot/godot-cpp include markers under `src/sim` and `src/protocol`.
 
-The first protocol path is `MoveIntent -> MoveOutcome -> PlayerProjection`. `World::move` accepts exactly one cardinal step, mutates authoritative coordinates/tick and returns the resulting projection. Invalid movement is rejected without changing the world.
+The first executable native smoke path is:
+
+```text
+MoveIntent(dx, dy)
+  -> protocol::Simulation validation
+  -> sim::CardinalDirection
+  -> sim::World::move
+  -> PlayerProjection
+```
+
+Malformed transport values such as diagonal or zero deltas are rejected in the protocol layer before the domain is called. The domain API accepts a valid `CardinalDirection`, so an invalid movement delta is not representable inside `sim::World::move`.
+
+This path is deliberately retained as a Milestone 0 protocol/GDExtension round-trip probe. It is **not** the locomotion contract for the third-person client.
 
 ## Ownership by layer
 
 | Layer | Owns | Must not own |
 | --- | --- | --- |
-| `src/sim` | world state, laws, deterministic outcomes, seeded RNG state, domain/application behavior | Godot types, input, frames, UI, wall-clock gameplay truth |
-| `src/protocol` | commands/intents, results, events, projections, versioned boundary DTOs | rendering, scene state, duplicated domain rules |
-| `src/adapters/gdextension` | translation between Godot-facing values and protocol API; GDExtension registration | world laws or alternate gameplay truth |
-| `godot/` | scenes, input, camera, audio, animation, UI, presentation state | authoritative money, inventory, relationships, ownership, spell/trade outcomes |
+| `src/sim` | world state, domain value types, laws, deterministic outcomes, seeded RNG state | protocol DTOs, Godot types, input, frames, UI, wall-clock gameplay truth |
+| `src/protocol` | commands/intents, validation/translation, results, events, projections, versioned boundary DTOs | rendering, scene state, duplicated domain rules |
+| `src/adapters/gdextension` | translation between Godot-facing values and protocol API; GDExtension registration | direct world ownership, world laws or alternate gameplay truth |
+| `godot/` | scenes, input, local `CharacterBody3D` kinematics/collision, camera, audio, animation, UI, presentation state | authoritative inventory, economy, relationships, ownership, access rights, spell/trade/damage outcomes |
 | native tools/tests | scenarios, diagnostics, verification, developer orchestration | a second simulator or alternate gameplay implementation |
 
-The authoritative world exists once: in the C++ Simulation Core. Presentation prediction/interpolation may exist only when it cannot create authoritative outcomes.
+The authoritative systemic world exists once: in the C++ Simulation Core. Godot may own engine-local kinematic/presentation state when that state cannot create systemic outcomes by itself. When local locomotion needs to affect semantic location, reachability or another world law, add an explicit protocol capability rather than promoting arbitrary scene transforms into world truth.
+
+See [`decisions/0002-third-person-controls.md`](decisions/0002-third-person-controls.md) for the third-person locomotion boundary.
+
+## Domain API quality bar
+
+Simulation code should expose semantic domain operations and types rather than transport-shaped primitives.
+
+The initial native smoke examples are intentionally small:
+
+- `SimulationTick` is distinct from an arbitrary integer counter;
+- `WorldSeed` is distinct from simulation time;
+- `GridPosition` is an explicit value used by the current bootstrap probe;
+- `CardinalDirection` represents a valid bootstrap movement choice;
+- `World::move(CardinalDirection)` cannot receive a malformed `dx/dy` pair.
+
+Do not infer from those bootstrap names that the final third-person world uses a tile/grid locomotion model. The production client uses a local 3D locomotion shell; future semantic-location modeling must be introduced from an actual gameplay requirement.
+
+Do not introduce a strong type merely to wrap every scalar. Add one when it prevents mixing different domain meanings, removes invalid states, or makes an authoritative contract materially clearer.
 
 ## Protocol boundary
 
-Clients express **intent**, never desired state:
+Clients express **intent**, never desired systemic state:
 
 ```text
 Input Intent
@@ -89,6 +123,8 @@ Input Intent
   -> authoritative transition
   -> CommandResult + DomainEvents + Projections
 ```
+
+`protocol::Simulation` is the current thin application surface. It may validate/translate boundary data and orchestrate calls into `sim`; it must not become a second home for world rules.
 
 The protocol is a small application contract, not an exported `WorldState`. Internal simulation types do not automatically become public/client types.
 
@@ -103,30 +139,42 @@ Godot crosses into native gameplay through exactly one runtime seam: the GDExten
 The adapter should be deliberately boring:
 
 1. receive a semantic client request;
-2. validate/translate Godot-facing values into protocol values;
+2. translate Godot-facing values into protocol values;
 3. invoke the application/protocol surface;
 4. translate results/projections/events back to Godot-facing values;
 5. expose diagnostics without embedding world rules.
 
-The Milestone 0 `SimFacade` follows that contract: it owns the native `sim::World`, exposes `submit_move` and read-only `debug_projection`, and converts only returned protocol projections into Godot dictionaries.
+The Milestone 0 `SimFacade` follows that contract: it owns `protocol::Simulation`, exposes `submit_move` and read-only `debug_projection`, and converts only protocol projections into Godot dictionaries.
 
-If a gameplay rule is implemented inside a `GDCLASS`, GDScript node, UI script or serialization helper, the boundary is probably being violated.
+If a systemic gameplay rule is implemented inside a `GDCLASS`, GDScript node, UI script or serialization helper, the boundary is probably being violated.
 
 The adapter may depend on godot-cpp. `src/sim` and `src/protocol` may not. Version rules live only in [`engineering/VERSIONS.md`](engineering/VERSIONS.md).
 
 ## Godot client architecture
 
-Godot is the real reference client, not merely a debug visualizer, but it remains presentation/application input rather than world authority.
+Godot is the real reference client, not merely a debug visualizer. It owns the latency-sensitive local third-person control shell while remaining a client of systemic world authority.
 
-Prefer a composition root shaped around persistent application/UI ownership and replaceable world views, following Godot scene-organization guidance. Scene independence, parent-mediated wiring, typed GDScript, InputMap and restrained Autoload usage are detailed in [`engineering/godot.md`](engineering/godot.md).
+The implemented control graph is:
 
-The first client creates `SimFacade`, maps InputMap actions to semantic moves and renders only the returned native projection. Its automated smoke scenario exercises that same path and captures read-only projection/screenshot evidence.
+```text
+InputMap
+  -> PlayerControls + ControlProfile
+       -> ThirdPersonPlayer + LocomotionProfile
+       -> ThirdPersonCameraRig
+            -> SpringArm3D -> Camera3D
+```
 
-Do not let a convenient Autoload, Resource or UI model become an authoritative parallel inventory/economy/social state.
+`Main` is the composition root that wires these components together. `ThirdPersonPlayer` never reads raw keys/joypad indices; `ThirdPersonCameraRig` never moves the player; `PlayerControls` never owns kinematic/world state. Tuneable feel lives in profile Resources rather than branching implementations by device.
+
+The ordinary third-person client and the native smoke probe are intentionally separate concerns. Ordinary WASD/left-stick locomotion drives the Godot kinematic shell. The bounded smoke scenario separately calls `SimFacade.submit_move(1, 0)` and exposes the resulting native projection as debug evidence that the GDExtension/protocol path works.
+
+Detailed ownership and extension points are in [`engineering/godot.md`](engineering/godot.md).
+
+Do not let a convenient Autoload, Resource, transform cache or UI model become an authoritative parallel inventory/economy/social state.
 
 ## Vertical capability rule
 
-Normal gameplay work follows the product contract:
+Normal systemic gameplay work follows the product contract:
 
 ```text
 minimal world rule
@@ -136,6 +184,8 @@ minimal world rule
   -> focused deterministic/regression proof
   -> bounded real playtest
 ```
+
+Purely engine-local presentation/control work does not need a fake native rule merely to satisfy the diagram. It must still respect the authority boundary and be verified in the real Godot client.
 
 A coherent capability may touch several layers. It must not broaden into unrelated subsystem work.
 
@@ -158,7 +208,7 @@ See [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md) for how agent instructions are packag
 
 ## Repository shape
 
-The Milestone 0 paths below now exist; `content/`, mechanic models/research and additional adapters remain future-on-demand areas:
+The current paths below exist; `content/`, mechanic models/research and additional adapters remain future-on-demand areas:
 
 ```text
 src/
@@ -168,6 +218,12 @@ src/
     gdextension/
 
 godot/
+  config/
+  scenes/
+  scripts/
+    controls/
+    player/
+
 tests/
 tools/
 cmake/
@@ -190,11 +246,13 @@ Do not create future directories solely to satisfy this picture. Establish physi
 
 ## Mechanical architecture verification
 
-Current executable checks establish the first load-bearing boundaries:
+Current executable structure establishes the first load-bearing boundaries:
 
-- CMake target dependencies keep native tests Godot-free and isolate godot-cpp to `world_sim_gdextension`;
+- separate `sim_core` and `sim_protocol` CMake targets encode protocol -> simulation dependency direction;
+- native domain tests link only `sim_core`;
+- protocol tests link `sim_protocol`, whose implementation depends on `sim_core`;
+- only `world_sim_gdextension` links godot-cpp;
 - `tools/check_architecture.py`/CTest rejects direct Godot include markers in `src/sim` and `src/protocol`;
-- native tests prove the first command-to-core behavior independently from Godot;
 - the smoke playtest is designed to prove Godot load plus a real protocol/projection round-trip once run in the pinned local environment.
 
-As the graph grows, add narrow checks for new real dependency edges. Do not add speculative architecture tooling before there is code to check, but do not leave a mechanically checkable invariant as prose once the relevant targets exist.
+As the graph grows, prefer real target/API boundaries over prose-only rules. Add a narrow mechanical check only when a real dependency edge cannot already be expressed by the build graph.

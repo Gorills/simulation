@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sim/world.hpp"
+#include "protocol/simulation.hpp"
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -24,7 +24,7 @@ protected:
 private:
     [[nodiscard]] static godot::Dictionary to_dictionary(const protocol::PlayerProjection &projection);
 
-    sim::World world_;
+    protocol::Simulation simulation_;
 };
 
 } // namespace worldsim::gdextension

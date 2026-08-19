@@ -5,7 +5,7 @@
 
 namespace worldsim::gdextension {
 
-SimFacade::SimFacade() : world_(1) {}
+SimFacade::SimFacade() : simulation_(1) {}
 
 void SimFacade::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("submit_move", "dx", "dy"), &SimFacade::submit_move);
@@ -13,13 +13,13 @@ void SimFacade::_bind_methods() {
 }
 
 godot::Dictionary SimFacade::submit_move(const std::int32_t dx, const std::int32_t dy) {
-    const auto outcome = world_.move({.dx = dx, .dy = dy});
+    const auto outcome = simulation_.move({.dx = dx, .dy = dy});
 
     godot::Dictionary response;
     if (!outcome.has_value()) {
         response["ok"] = false;
         response["error"] = godot::String("invalid_delta");
-        response["projection"] = to_dictionary(world_.player_projection());
+        response["projection"] = to_dictionary(simulation_.player_projection());
         return response;
     }
 
@@ -29,7 +29,7 @@ godot::Dictionary SimFacade::submit_move(const std::int32_t dx, const std::int32
 }
 
 godot::Dictionary SimFacade::debug_projection() const {
-    return to_dictionary(world_.player_projection());
+    return to_dictionary(simulation_.player_projection());
 }
 
 godot::Dictionary SimFacade::to_dictionary(const protocol::PlayerProjection &projection) {

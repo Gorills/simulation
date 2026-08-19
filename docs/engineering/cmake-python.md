@@ -16,13 +16,18 @@ Primary upstream references are tracked in [`SOURCES.md`](SOURCES.md).
 The root `CMakeLists.txt` owns the executable native graph:
 
 ```text
-sim_core
-  ^
-  |-- sim_tests (+ GTest::gtest_main)
-  `-- world_sim_gdextension (+ godot::cpp)
+sim_core_tests ------> sim_core
+                           ^
+                           |
+protocol_tests ------> sim_protocol
+                           ^
+                           |
+world_sim_gdextension ----+----> godot::cpp
 ```
 
-`sim_core` is C++23 and Godot-free. `world_sim_gdextension` is the only project target that links godot-cpp. The architecture check is registered with CTest when tests are enabled.
+`sim_core` contains only authoritative domain code and is Godot/protocol-free. `sim_protocol` is a separate static library that validates/translates application requests and has a private dependency on `sim_core`. `world_sim_gdextension` links `sim_protocol` plus godot-cpp rather than owning the domain world directly.
+
+This target split is intentional: the desired dependency direction is expressed by the build graph, not only by folder names.
 
 ## CMake principles
 
@@ -31,6 +36,8 @@ sim_core
 Use `target_sources`, `target_include_directories`, `target_compile_features`, `target_compile_options` and `target_link_libraries`. Avoid project-wide `include_directories()`, `add_definitions()` and broad `add_compile_options()` for project code.
 
 C++23 and no compiler extensions are target/project requirements, not ambient compiler assumptions.
+
+Project-owned C++ targets share the same warning policy through the small `world_sim_enable_project_warnings()` CMake helper. Keep warnings target-scoped; do not push project warning settings into third-party targets.
 
 ### Explicit project sources
 
@@ -42,8 +49,8 @@ Upstream dependencies may internally choose different source-management policy; 
 
 `CMakePresets.json` is shared project configuration:
 
-- `native` — Debug native core/tests, no GDExtension;
-- `dev` — Debug native core/tests + `template_debug` GDExtension;
+- `native` — Debug native core/protocol/tests, no GDExtension;
+- `dev` — Debug native graph + `template_debug` GDExtension;
 - `release` — Release verification + `template_release` GDExtension.
 
 Machine-specific overrides belong in uncommitted `CMakeUserPresets.json`.
@@ -64,7 +71,12 @@ Project warning policy must not accidentally turn third-party warnings into proj
 
 ## Native tests
 
-`sim_tests` links `sim_core` plus `GTest::gtest_main`; it does not link Godot. CTest discovery is used after the executable exists.
+Native tests follow the same layer ownership as production code:
+
+- `sim_core_tests` links only `sim_core` + `GTest::gtest_main`;
+- `protocol_tests` links `sim_protocol` + `GTest::gtest_main`.
+
+A domain test should not need protocol DTOs merely to exercise a world law. A protocol test should verify boundary validation/translation and the observable application result without duplicating the world rule.
 
 Prefer independent fresh state per test. Use behavior-oriented suite/test names. Prefer `EXPECT_*` when multiple observations can still be useful after one failure; use `ASSERT_*` when continuing would be invalid.
 
@@ -114,6 +126,8 @@ Forbidden shortcuts include:
 
 ## Agent traps
 
+- putting protocol DTOs back into `sim_core` because it is convenient for one call site;
+- letting the GDExtension adapter own or mutate `sim::World` directly instead of using the protocol/application surface;
 - adding SCons beside CMake because an upstream example uses SCons;
 - changing dependency versions during ordinary gameplay work;
 - treating a configured immutable pin as a verified build/load;

@@ -1,33 +1,38 @@
 #include "sim/world.hpp"
 
-#include <expected>
-
 namespace worldsim::sim {
 
-World::World(const std::uint64_t seed) noexcept : seed_(seed) {}
+World::World(const WorldSeed seed) noexcept : seed_(seed) {}
 
-protocol::MoveOutcome World::move(const protocol::MoveIntent &intent) noexcept {
-    const bool horizontal = (intent.dx == -1 || intent.dx == 1) && intent.dy == 0;
-    const bool vertical = (intent.dy == -1 || intent.dy == 1) && intent.dx == 0;
-    if (!horizontal && !vertical) {
-        return std::unexpected(protocol::MoveError::invalid_delta);
+void World::move(const CardinalDirection direction) noexcept {
+    switch (direction) {
+    case CardinalDirection::north:
+        --player_position_.y;
+        break;
+    case CardinalDirection::east:
+        ++player_position_.x;
+        break;
+    case CardinalDirection::south:
+        ++player_position_.y;
+        break;
+    case CardinalDirection::west:
+        --player_position_.x;
+        break;
     }
 
-    player_x_ += intent.dx;
-    player_y_ += intent.dy;
-    ++tick_;
-
-    return protocol::MoveResult{.player = player_projection()};
+    ++tick_.value;
 }
 
-protocol::PlayerProjection World::player_projection() const noexcept {
-    return protocol::PlayerProjection{
-        .x = player_x_,
-        .y = player_y_,
-        .tick = tick_,
-        .seed = seed_,
-        .protocol_version = protocol::kProtocolVersion,
-    };
+GridPosition World::player_position() const noexcept {
+    return player_position_;
+}
+
+SimulationTick World::tick() const noexcept {
+    return tick_;
+}
+
+WorldSeed World::seed() const noexcept {
+    return seed_;
 }
 
 } // namespace worldsim::sim

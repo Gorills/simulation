@@ -1,15 +1,22 @@
-extends Node2D
+extends Node3D
 
-const TILE_PIXELS := 48.0
-const ORIGIN := Vector2(480.0, 270.0)
-
-@onready var player_view: Polygon2D = $Player
-@onready var debug_label: Label = $HUD/Debug
+@onready var controls: PlayerControls = %PlayerControls
+@onready var player: ThirdPersonPlayer = %Player
+@onready var camera_rig: ThirdPersonCameraRig = %CameraRig
+@onready var debug_label: Label = %Debug
 
 var sim := SimFacade.new()
+var _native_projection: Dictionary = {}
+
 
 func _ready() -> void:
-    _render_projection(sim.debug_projection())
+    camera_rig.configure(controls, player)
+    player.configure(controls, camera_rig.get_camera())
+    controls.input_device_changed.connect(_on_input_device_changed)
+    controls.capture_pointer()
+
+    _native_projection = sim.debug_projection()
+    _refresh_debug_text()
 
     var scenario := _user_arg_value("--scenario")
     if scenario == "smoke":
@@ -21,44 +28,42 @@ func _ready() -> void:
         call_deferred("_run_smoke", artifact_dir)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-    if event is InputEventKey and event.echo:
-        return
-    if event.is_action_pressed("move_left"):
-        _submit_move(-1, 0)
-    elif event.is_action_pressed("move_right"):
-        _submit_move(1, 0)
-    elif event.is_action_pressed("move_up"):
-        _submit_move(0, -1)
-    elif event.is_action_pressed("move_down"):
-        _submit_move(0, 1)
+func _process(_delta: float) -> void:
+    _refresh_debug_text()
 
 
-func _submit_move(dx: int, dy: int) -> Dictionary:
-    var response: Dictionary = sim.submit_move(dx, dy)
-    var projection: Dictionary = response.get("projection", {})
-    _render_projection(projection)
-    return response
+func _on_input_device_changed(_device: int) -> void:
+    _refresh_debug_text()
 
 
-func _render_projection(projection: Dictionary) -> void:
-    var x := int(projection.get("x", 0))
-    var y := int(projection.get("y", 0))
-    player_view.position = ORIGIN + Vector2(float(x), float(y)) * TILE_PIXELS
-    debug_label.text = "native projection\n%s" % JSON.stringify(projection)
+func _refresh_debug_text() -> void:
+    debug_label.text = (
+        "controls: %s\n"
+        + "player presentation: (%.2f, %.2f, %.2f)\n"
+        + "native smoke projection: %s\n"
+        + "WASD / left stick move · mouse / right stick look · Shift / L3 sprint · Esc releases mouse"
+    ) % [
+        controls.active_device_name(),
+        player.global_position.x,
+        player.global_position.y,
+        player.global_position.z,
+        JSON.stringify(_native_projection),
+    ]
 
 
 func _run_smoke(artifact_dir: String) -> void:
     await get_tree().process_frame
-    var response := _submit_move(1, 0)
+    var response: Dictionary = sim.submit_move(1, 0)
     if not bool(response.get("ok", false)):
         push_error("native smoke move failed")
         get_tree().quit(3)
         return
 
+    _native_projection = response.get("projection", {})
+    _refresh_debug_text()
+
     await RenderingServer.frame_post_draw
-    var projection: Dictionary = response["projection"]
-    if not _write_debug_artifact(artifact_dir, projection):
+    if not _write_debug_artifact(artifact_dir, _native_projection):
         get_tree().quit(4)
         return
     if not _write_screenshot(artifact_dir):
