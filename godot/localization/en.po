@@ -46,6 +46,18 @@ msgstr "World seed"
 msgid "UI_DEBUG_SCENARIO"
 msgstr "Scenario"
 
+msgid "UI_DEBUG_LIVING_NEED"
+msgstr "NPC rest need"
+
+msgid "UI_NEED_TRAVELING"
+msgstr "Traveling to rest"
+
+msgid "UI_NEED_BLOCKED"
+msgstr "Rest place blocked"
+
+msgid "UI_NEED_SATISFIED"
+msgstr "Rest place available"
+
 msgid "UI_DEBUG_SPATIAL"
 msgstr "SPATIAL"
 
@@ -78,3 +90,6 @@ msgstr "Interactive"
 
 msgid "UI_SCENARIO_SMOKE"
 msgstr "Smoke test"
+
+msgid "UI_SCENARIO_REST_INTERFERENCE"
+msgstr "Rest interference"
