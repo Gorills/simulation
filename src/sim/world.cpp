@@ -42,11 +42,6 @@ struct PendingGroundedMove final {
     return GroundedLocomotionTickError::arithmetic_overflow;
 }
 
-// This is the single actor-state -> solver-limits seam. Today it resolves only
-// the actor's stored base locomotion capability plus semantic pace. When a real
-// mechanic later introduces wounds, carried load, progression or a concrete
-// magical effect, its authoritative state belongs here rather than in input,
-// Godot, an NPC-only multiplier, or a duplicate movement solver.
 [[nodiscard]] std::expected<GroundedStepConfig, GroundedLocomotionTickError>
 resolve_grounded_step_config(
     const GroundedStepConfig &world_config,
@@ -116,6 +111,63 @@ std::expected<void, WorldError> World::spawn_actor(
         throw;
     }
 
+    ++revision_.value;
+    return {};
+}
+
+std::expected<void, HouseholdResourceError> World::spawn_household(
+    const HouseholdId id,
+    const HouseholdSpawnState initial
+) {
+    if (!id.is_valid()) {
+        return std::unexpected(HouseholdResourceError::invalid_household_id);
+    }
+    if (!initial.grain.is_valid()) {
+        return std::unexpected(HouseholdResourceError::invalid_grain_state);
+    }
+
+    const auto [index_entry, inserted] = household_index_by_id_.emplace(
+        id.value,
+        households_.size()
+    );
+    if (!inserted) {
+        return std::unexpected(HouseholdResourceError::duplicate_household);
+    }
+
+    try {
+        households_.push_back(HouseholdState{
+            .id = id,
+            .grain = initial.grain,
+        });
+    } catch (...) {
+        household_index_by_id_.erase(index_entry);
+        throw;
+    }
+
+    ++revision_.value;
+    return {};
+}
+
+std::expected<void, HouseholdResourceError> World::consume_household_grain(
+    const HouseholdId id,
+    const GrainGrams amount
+) noexcept {
+    if (!id.is_valid()) {
+        return std::unexpected(HouseholdResourceError::invalid_household_id);
+    }
+    if (amount.value <= 0) {
+        return std::unexpected(HouseholdResourceError::invalid_amount);
+    }
+
+    auto *household = find_household(id);
+    if (household == nullptr) {
+        return std::unexpected(HouseholdResourceError::unknown_household);
+    }
+    if (household->grain.stored.value < amount.value) {
+        return std::unexpected(HouseholdResourceError::insufficient_stock);
+    }
+
+    household->grain.stored.value -= amount.value;
     ++revision_.value;
     return {};
 }
@@ -227,8 +279,6 @@ World::advance_grounded_locomotion_tick(
         });
     }
 
-    // Build and order the complete public result before mutating World state.
-    // Allocation failure therefore cannot leave a successful subset committed.
     std::vector<GroundedLocomotionSample> samples;
     samples.reserve(pending.size());
     for (const auto &update : pending) {
@@ -275,6 +325,7 @@ WorldSnapshot World::snapshot() const {
         .tick = tick_,
         .revision = revision_,
         .actors = actors_,
+        .households = households_,
     };
 }
 
@@ -283,11 +334,11 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         return std::unexpected(WorldSnapshotError::unsupported_schema_version);
     }
 
-    // Build into a temporary World so malformed snapshots or allocation failure
-    // never partially mutate the current authoritative state.
     World restored{snapshot_state.seed};
     restored.actors_.reserve(snapshot_state.actors.size());
     restored.actor_index_by_id_.reserve(snapshot_state.actors.size());
+    restored.households_.reserve(snapshot_state.households.size());
+    restored.household_index_by_id_.reserve(snapshot_state.households.size());
 
     for (const auto &actor : snapshot_state.actors) {
         if (!actor.id.is_valid()) {
@@ -316,6 +367,22 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
             return std::unexpected(WorldSnapshotError::duplicate_entity);
         }
         restored.actors_.push_back(actor);
+    }
+
+    for (const auto &household : snapshot_state.households) {
+        if (!household.id.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_household_id);
+        }
+        if (!household.grain.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_household_grain_state);
+        }
+        const bool inserted = restored.household_index_by_id_
+                                  .emplace(household.id.value, restored.households_.size())
+                                  .second;
+        if (!inserted) {
+            return std::unexpected(WorldSnapshotError::duplicate_household);
+        }
+        restored.households_.push_back(household);
     }
 
     restored.tick_ = snapshot_state.tick;
@@ -358,6 +425,18 @@ std::optional<RestNeedState> World::actor_rest_need(const EntityId id) const noe
         return std::nullopt;
     }
     return actors_[*index].rest_need;
+}
+
+bool World::contains_household(const HouseholdId id) const noexcept {
+    return id.is_valid() && household_index_by_id_.contains(id.value);
+}
+
+std::optional<HouseholdGrainState> World::household_grain_state(const HouseholdId id) const noexcept {
+    const auto index = household_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
+    }
+    return households_[*index].grain;
 }
 
 bool World::is_planar_position_occupied_by_other_actor(
@@ -418,6 +497,29 @@ ActorState *World::find_actor(const EntityId id) noexcept {
         return nullptr;
     }
     return &actors_[*index];
+}
+
+std::optional<std::size_t> World::household_index(const HouseholdId id) const noexcept {
+    if (!id.is_valid()) {
+        return std::nullopt;
+    }
+
+    const auto entry = household_index_by_id_.find(id.value);
+    if (entry == household_index_by_id_.end()) {
+        return std::nullopt;
+    }
+
+    assert(entry->second < households_.size());
+    assert(households_[entry->second].id == id);
+    return entry->second;
+}
+
+HouseholdState *World::find_household(const HouseholdId id) noexcept {
+    const auto index = household_index(id);
+    if (!index.has_value()) {
+        return nullptr;
+    }
+    return &households_[*index];
 }
 
 } // namespace worldsim::sim
