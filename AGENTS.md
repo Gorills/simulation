@@ -26,7 +26,7 @@ If admission is `PREMATURE`, `CONFLICT`, or `RESEARCH REQUIRED`, stop before pro
 - Gameplay work is a small playable vertical capability: rule → contract → experience → proof.
 - Performance is correctness: do not add unjustified per-frame/tick work, full-world scans, hot-path serialization/allocation, per-entity bridge chatter, or synchronous multi-millisecond jobs without an explicit bounded need and measurement. Long calculations must not freeze the interactive main thread.
 - A user request does not waive missing prerequisites or project invariants. Do not fake a downstream capability with hardcoded stand-ins, wrong-layer state, player-only shortcuts, or temporary APIs likely to become accidental contracts.
-- Verification is local-only. Do not add project CI services, committed CI workflow files, or CI configuration; use the repository bootstrap, CMake/CTest presets, and bounded Godot playtests on the developer machine.
+- Verification uses repository-owned local gates plus the minimal native CI gate. CI is independent evidence for the exact revision it ran on; it does not replace required Godot/manual playtests, and no check may be claimed if it did not actually run.
 - Do not restore the deleted Fenster / TypeScript / WASM / Playwright architecture.
 - Do not add speculative frameworks, abstractions, or subsystems without a current demonstrated need.
 - Do not claim verification that was not actually run.

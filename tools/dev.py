@@ -34,7 +34,11 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("configure", "build", "test", "check"):
         command = sub.add_parser(name)
-        command.add_argument("--preset", default="dev", choices=("native", "dev", "release"))
+        command.add_argument(
+            "--preset",
+            default="dev",
+            choices=("native", "sanitize", "dev", "release"),
+        )
     play = sub.add_parser("play")
     play.add_argument("--scenario", default="smoke")
     sub.add_parser("run", help="launch the configured main scene without opening the Godot editor")
