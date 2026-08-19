@@ -65,7 +65,7 @@ msgid "UI_DEBUG_TRANSPORT_NOTE"
 msgstr "Bootstrap transport probe is retained in smoke evidence, not presented as authoritative spatial truth."
 
 msgid "UI_DEBUG_CONTROLS_HINT"
-msgstr "WASD / left stick move  ·  mouse / right stick look  ·  Shift / L3 sprint  ·  Esc releases pointer"
+msgstr "WASD / left stick move  ·  mouse / right stick look  ·  Esc releases pointer"
 
 msgid "UI_INPUT_KEYBOARD_MOUSE"
 msgstr "Keyboard / mouse"

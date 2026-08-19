@@ -24,6 +24,24 @@ constexpr double kMillimetersPerMeter = 1000.0;
     return godot::String("unknown_bootstrap_move_error");
 }
 
+[[nodiscard]] godot::String movement_error_name(
+    const protocol::ControlledActorMovementError error
+) {
+    switch (error) {
+    case protocol::ControlledActorMovementError::invalid_intent:
+        return godot::String("invalid_intent");
+    case protocol::ControlledActorMovementError::protocol_integer_exhausted:
+        return godot::String("protocol_integer_exhausted");
+    case protocol::ControlledActorMovementError::controlled_actor_missing:
+        return godot::String("controlled_actor_missing");
+    case protocol::ControlledActorMovementError::controlled_actor_spatial_state_missing:
+        return godot::String("controlled_actor_spatial_state_missing");
+    case protocol::ControlledActorMovementError::world_rejected:
+        return godot::String("world_rejected");
+    }
+    return godot::String("unknown_movement_error");
+}
+
 [[nodiscard]] godot::Dictionary protocol_integer_error_dictionary() {
     godot::Dictionary result;
     result["bridge_error"] = godot::String("protocol_integer_out_of_range");
@@ -66,6 +84,14 @@ void SimFacade::_bind_methods() {
     godot::ClassDB::bind_method(
         godot::D_METHOD("controlled_actor_spatial_projection"),
         &SimFacade::controlled_actor_spatial_projection
+    );
+    godot::ClassDB::bind_method(
+        godot::D_METHOD("controlled_actor_submit_move_intent", "x", "z"),
+        &SimFacade::controlled_actor_submit_move_intent
+    );
+    godot::ClassDB::bind_method(
+        godot::D_METHOD("advance_locomotion_tick"),
+        &SimFacade::advance_locomotion_tick
     );
 }
 
@@ -114,6 +140,42 @@ godot::Dictionary SimFacade::controlled_actor_spatial_projection() const {
     }
 }
 
+godot::Dictionary SimFacade::controlled_actor_submit_move_intent(
+    const std::int32_t x,
+    const std::int32_t z
+) {
+    godot::Dictionary response;
+    const auto outcome = simulation_.submit_controlled_actor_move_intent({.x = x, .z = z});
+    if (!outcome.has_value()) {
+        response["ok"] = false;
+        response["error"] = movement_error_name(outcome.error());
+        return response;
+    }
+
+    response["ok"] = true;
+    return response;
+}
+
+godot::Dictionary SimFacade::advance_locomotion_tick() {
+    godot::Dictionary response;
+    try {
+        const auto outcome = simulation_.advance_locomotion_tick();
+        if (!outcome.has_value()) {
+            response["ok"] = false;
+            response["error"] = movement_error_name(outcome.error());
+            return response;
+        }
+
+        response["ok"] = true;
+        response["batch"] = to_dictionary(*outcome);
+        return response;
+    } catch (const std::overflow_error &) {
+        response["ok"] = false;
+        response["error"] = godot::String("protocol_integer_out_of_range");
+        return response;
+    }
+}
+
 godot::Dictionary SimFacade::to_dictionary(const protocol::BootstrapActorProjection &projection) {
     godot::Dictionary result;
     result["entity_id"] = projection.entity_id;
@@ -158,6 +220,31 @@ godot::Dictionary SimFacade::to_dictionary(
     result["tick"] = projection.tick;
     result["revision"] = projection.revision;
     result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
+    return result;
+}
+
+godot::Dictionary SimFacade::to_dictionary(
+    const protocol::AuthoritativeMovementSampleBatch &batch
+) {
+    godot::Array samples;
+    for (const auto &sample : batch.samples) {
+        godot::Dictionary item;
+        item["entity_id"] = sample.entity_id;
+        item["position_m"] = meters_vector(sample.x_mm, sample.y_mm, sample.z_mm);
+        item["velocity_mps"] = meters_vector(
+            sample.velocity_x_mm_per_second,
+            sample.velocity_y_mm_per_second,
+            sample.velocity_z_mm_per_second
+        );
+        item["spatial_epoch"] = sample.spatial_epoch;
+        samples.push_back(item);
+    }
+
+    godot::Dictionary result;
+    result["tick"] = batch.tick;
+    result["revision"] = batch.revision;
+    result["protocol_version"] = static_cast<std::int64_t>(batch.protocol_version);
+    result["samples"] = samples;
     return result;
 }
 

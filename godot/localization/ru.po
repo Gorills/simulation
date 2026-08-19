@@ -65,7 +65,7 @@ msgid "UI_DEBUG_TRANSPORT_NOTE"
 msgstr "Bootstrap-зонд сохраняется только в smoke evidence и не считается авторитетным пространственным состоянием."
 
 msgid "UI_DEBUG_CONTROLS_HINT"
-msgstr "WASD / левый стик — движение  ·  мышь / правый стик — обзор  ·  Shift / L3 — бег  ·  Esc — освободить курсор"
+msgstr "WASD / левый стик — движение  ·  мышь / правый стик — обзор  ·  Esc — освободить курсор"
 
 msgid "UI_INPUT_KEYBOARD_MOUSE"
 msgstr "Клавиатура / мышь"
