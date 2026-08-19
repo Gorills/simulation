@@ -8,7 +8,7 @@ Milestone 0's executable spine is present in source: CMake presets, separated `s
 
 The architecture foundation establishes stable positive `EntityId`, actor parity, protocol-owned human-control binding, separate `SimulationTick` / `WorldRevision`, `ObservedWorldProjection`, and one Godot `WorldPresentation` identity/presence owner. Godot is a presentation replica rather than world authority.
 
-The historical/magic/causal-fidelity foundation is accepted. The authoritative spatial representation contract is accepted, and the grounded locomotion acceptance/test-arena contract is now accepted. The real deterministic movement/collision solver is still pending.
+The historical/magic/causal-fidelity foundation, authoritative spatial representation contract, and grounded locomotion acceptance/test-arena contract are accepted. The first Godot-free grounded locomotion implementation now proves deterministic flat-ground integration and head-on/oblique wall blocking against neutral Simulation-owned geometry. It is not yet wired into the live controlled-actor protocol/presentation path, and slope/step/fall remain pending.
 
 The current `CharacterBody3D` motor remains a responsive presentation/prediction shell. It is not authoritative world movement.
 
@@ -85,7 +85,7 @@ See [`decisions/0006-authoritative-spatial-contract.md`](decisions/0006-authorit
 
 ### Stage B — grounded locomotion acceptance contract — accepted
 
-Before selecting a solver, the repository now defines the minimum native/test-arena outcomes it must prove:
+The repository defines the minimum native/test-arena outcomes the solver must prove:
 
 1. stable flat-ground movement/rest;
 2. blocking head-on wall contact;
@@ -98,25 +98,37 @@ Before selecting a solver, the repository now defines the minimum native/test-ar
 9. ordinary movement remains in one `SpatialEpoch`;
 10. the same world-rule transition remains usable for NPC intent later.
 
-No body shape, tick rate, slope angle, step height, gravity magnitude or collision algorithm is chosen by this stage.
-
 See [`models/grounded-locomotion.md`](models/grounded-locomotion.md).
 
-### Stage C — next bounded solver implementation
+### Stage C1 — flat/wall native solver slice — implemented
 
-Still required before locomotion is authoritative:
+The first implementation deliberately covers only what it can prove:
 
-1. choose the **smallest neutral static collision representation** that can express the accepted flat/wall/slope/step/ledge fixtures deterministically;
-2. choose only the minimum grounded-body/contact/timing parameters needed by that representation and record them as repository-owned values rather than copied engine defaults;
-3. implement flat-ground + wall collision as the first deterministic `sim_core` vertical slice;
-4. extend the same representation to the accepted slope/step/fall fixtures only after the first slice is stable;
-5. send semantic controlled-actor movement intent through protocol — never a final-position setter;
-6. produce ordered authoritative movement samples;
-7. buffer/interpolate those samples in Godot and reconcile the existing presentation shell;
-8. add local prediction only if real playtest latency requires it;
-9. prove equivalent NPC intent can drive the same movement rule without a player-only world path.
+1. neutral static environment data starts with bounded `GroundPatch` support plus axis-aligned `VerticalBarrier` blockers;
+2. the first body is an upright capsule matching the existing playable shell: **380 mm radius / 1800 mm height**;
+3. the first fixed step uses the existing project **60 Hz** baseline;
+4. the first authoritative speed fixture uses the existing playable **5800 mm/s** walk-speed baseline; response/acceleration semantics are not yet promoted into authority;
+5. `PlanarMoveIntent` is bounded analog intent, never final displacement/state;
+6. integer integration retains per-axis remainder so fixed-step millimeter motion does not lose fractional distance each tick;
+7. flat support, exact one-second replay, stable head-on wall blocking, oblique tangential progress, zero-input rest and deterministic replay are native-test contracts;
+8. sloped support is represented in environment data but explicitly rejected by this first transition rather than silently producing incorrect results.
 
-Do not build the visual first location before the native fixture/solver slice proves the collision representation. Do not turn this bridge into ECS, networking, sharding, a general rigid-body engine or automatic regional simulation LOD work.
+These dimensions/timing/speed values are repository migration baselines taken from the already playable client, not copied engine defaults. They remain reviewable as later authoritative feel/collision work becomes playable.
+
+### Stage C2 — next grounded solver slice
+
+Still required before locomotion is authoritative end-to-end:
+
+1. extend the neutral environment/body transition to accepted slope classification and grounded traversal;
+2. add ordinary step-up and blocking-step semantics;
+3. add ledge support loss, gravity/falling and stable landing;
+4. only then expose the shared transition through `World` and semantic controlled-actor movement protocol — never a final-position setter;
+5. produce ordered authoritative movement samples;
+6. buffer/interpolate those samples in Godot and reconcile/remove duplicate local world-law movement;
+7. add local prediction only if real playtest latency requires it;
+8. prove equivalent NPC intent drives the same transition without a player-only world path.
+
+Do not build the visual first content location before the neutral fixture/solver stages prove the collision representation. Do not turn this bridge into ECS, networking, sharding, a general rigid-body engine or automatic regional simulation LOD work.
 
 Acceptance for the full bridge:
 

@@ -5,38 +5,18 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import venv
 
+from godot_runtime import LOCK, expected_godot_version, resolve_godot
+
 ROOT = Path(__file__).resolve().parents[1]
 VENV = ROOT / ".venv"
-LOCK = ROOT / "tools" / "toolchain.lock.json"
 
 
 def venv_python() -> Path:
     return VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-
-
-def godot_binary() -> str | None:
-    override = os.environ.get("GODOT_BIN")
-    if override:
-        return override
-    return shutil.which("godot") or shutil.which("godot4")
-
-
-def verify_godot(expected: str) -> None:
-    binary = godot_binary()
-    if binary is None:
-        raise SystemExit(
-            f"Godot {expected} is required. Install the exact baseline and set GODOT_BIN if it is not on PATH."
-        )
-    result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10, check=True)
-    actual = result.stdout.strip()
-    if not actual.startswith(expected):
-        raise SystemExit(f"Godot version mismatch: expected {expected}, got {actual}")
-    print(f"Godot OK: {actual}")
 
 
 def main() -> int:
@@ -54,12 +34,22 @@ def main() -> int:
 
     python = venv_python()
     subprocess.run(
-        [str(python), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(ROOT / "requirements-dev.txt")],
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--no-cache-dir",
+            "-r",
+            str(ROOT / "requirements-dev.txt"),
+        ],
         cwd=ROOT,
         check=True,
     )
 
-    verify_godot(lock["godot"])
+    godot = resolve_godot()
+    print(f"Godot OK: {expected_godot_version()} at {godot}")
 
     if not args.no_configure:
         subprocess.run([str(python), str(ROOT / "tools" / "dev.py"), "configure", "--preset", "dev"], cwd=ROOT, check=True)

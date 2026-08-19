@@ -37,11 +37,13 @@ add_library(sim_core STATIC)
 target_sources(
     sim_core
     PRIVATE
+        src/sim/grounded_locomotion.cpp
         src/sim/world.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS src
         FILES
+            src/sim/grounded_locomotion.hpp
             src/sim/spatial.hpp
             src/sim/types.hpp
             src/sim/world.hpp
@@ -77,7 +79,11 @@ if(WORLD_SIM_BUILD_TESTS)
     include(cmake/Dependencies.cmake)
     world_sim_fetch_googletest()
 
-    add_executable(sim_core_tests tests/sim/world_test.cpp)
+    add_executable(
+        sim_core_tests
+        tests/sim/grounded_locomotion_test.cpp
+        tests/sim/world_test.cpp
+    )
     target_link_libraries(sim_core_tests PRIVATE sim_core GTest::gtest_main)
     target_compile_features(sim_core_tests PRIVATE cxx_std_23)
     set_target_properties(sim_core_tests PROPERTIES CXX_EXTENSIONS OFF)
