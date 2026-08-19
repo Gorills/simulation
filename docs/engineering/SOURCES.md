@@ -20,6 +20,7 @@ Prefer versioned official documentation, project upstream repositories, language
 | captured mouse mouselook and `screen_relative` | Godot 4.7 [`InputEventMouseMotion`](https://docs.godotengine.org/en/4.7/classes/class_inputeventmousemotion.html) and [Mouse and input coordinates](https://docs.godotengine.org/en/4.7/tutorials/inputs/mouse_and_input_coordinates.html) | `godot.md`, ADR 0002 |
 | third-person camera collision | Godot 4.7 [Third-person camera with spring arm](https://docs.godotengine.org/en/4.7/tutorials/3d/spring_arm.html) | `godot.md`, ADR 0002 |
 | fixed-step smooth rendering and manual camera follow | Godot 4.7 [Physics interpolation quick start](https://docs.godotengine.org/en/4.7/tutorials/physics/interpolation/physics_interpolation_quick_start_guide.html) and [Advanced physics interpolation](https://docs.godotengine.org/en/4.7/tutorials/physics/interpolation/advanced_physics_interpolation.html) | `godot.md`, ADR 0002 |
+| custom interpolation can better fit externally timed authoritative samples | Godot 4.7 [Physics interpolation introduction](https://docs.godotengine.org/en/4.7/tutorials/physics/interpolation/physics_interpolation_introduction.html) | [`simulation-godot-boundary.md`](simulation-godot-boundary.md), ADR 0004 |
 | official third-person input/camera/movement reference | [`godotengine/tps-demo`](https://github.com/godotengine/tps-demo) — `player/player_input.gd`, `player/player.gd` | `godot.md`, ADR 0002 |
 | Godot 4.7 `CharacterBody3D`, camera-relative movement, acceleration/deceleration and interpolation reference | [`godot-demo-projects` 4.7 `3d/platformer`](https://github.com/godotengine/godot-demo-projects/tree/4.7-6ad6167/3d/platformer) | `godot.md`, ADR 0002 |
 | commercial precedent that movement response needs explicit tuning | CD PROJEKT RED [The Witcher 3 patch 1.07 changelog](https://www.thewitcher.com/us/en/news/1081/patch-1-07-changelog) | ADR 0002 |
@@ -31,6 +32,17 @@ Prefer versioned official documentation, project upstream repositories, language
 | multi-resolution `canvas_items` / `expand` strategy | Godot 4.7 [Multiple resolutions](https://docs.godotengine.org/en/4.7/tutorials/rendering/multiple_resolutions.html) and [4.7 changed defaults](https://docs.godotengine.org/en/4.7/tutorials/migrating/upgrading_to_godot_4.7.html#changed-defaults) | `ui-design-system.md`, ADR 0003 |
 
 The Witcher changelog is used only as product-design evidence that movement response is a deliberate player-facing tuning concern. No proprietary Witcher implementation or numeric tuning value is treated as a project API.
+
+## Simulation / presentation boundary
+
+| Topic | Primary source | Encoded in |
+| --- | --- | --- |
+| separate task-oriented writes from purpose-built read models | Microsoft Azure Architecture Center [CQRS pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs) | [`simulation-godot-boundary.md`](simulation-godot-boundary.md), ADR 0004 |
+| isolate/translate between subsystems with different semantics instead of leaking one model into another | Microsoft Azure Architecture Center [Anti-Corruption Layer pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer) | `simulation-godot-boundary.md`, ADR 0004 |
+| filter a large virtual environment to a relevant presentation subset | Liu & Theodoropoulos, ACM Computing Surveys / IBM Research [Interest management for distributed virtual environments: A survey](https://research.ibm.com/publications/interest-management-for-distributed-virtual-environments-a-survey) | `simulation-godot-boundary.md`, ADR 0004 |
+| heterogeneous autonomous actors and emergent outcomes from individual interactions | Eric Bonabeau, PNAS [Agent-based modeling: Methods and techniques for simulating human systems](https://pmc.ncbi.nlm.nih.gov/articles/PMC128598/) | [`../MODELING.md`](../MODELING.md), ADR 0004 |
+
+These are conceptual precedents, not dependency choices. This project does **not** import Azure services, a distributed CQRS stack, networking middleware or full event sourcing. Commands/projections, translation boundaries and bounded presentation sets are adapted to one in-process Simulation + Godot client because those concepts protect authority and presentation ownership here.
 
 ## UI accessibility / interaction quality
 

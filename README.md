@@ -1,12 +1,13 @@
 # World Simulation
 
-Playable systemic third-person RPG with one authoritative C++23 Simulation Core and one Godot 4 client.
+Playable systemic third-person RPG with one authoritative C++23 Simulation Core and one Godot 4 presentation client.
 
 ## Start here
 
 - Product: [`docs/PRODUCT.md`](docs/PRODUCT.md)
 - Runtime architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Simulation/modeling: [`docs/MODELING.md`](docs/MODELING.md)
+- Simulation ↔ Godot boundary: [`docs/engineering/simulation-godot-boundary.md`](docs/engineering/simulation-godot-boundary.md)
 - Verification/playtest: [`docs/VERIFICATION.md`](docs/VERIFICATION.md)
 - Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - Documentation router: [`docs/INDEX.md`](docs/INDEX.md)
@@ -17,26 +18,36 @@ Playable systemic third-person RPG with one authoritative C++23 Simulation Core 
 ## Architecture
 
 ```text
-Godot 4
+Godot 4 presentation/input/UI
   -> world_sim_gdextension
   -> sim_protocol
   -> sim_core
 ```
 
-`src/sim` owns systemic world truth. Godot owns the latency-sensitive local third-person locomotion/camera shell plus presentation, input, audio and UI. The distinction is deliberate: a `CharacterBody3D` transform is not permission for GDScript to invent inventory, access rights, trade results or other authoritative outcomes.
+`src/sim` is the only authoritative world. Stable entity existence/identity and, as mechanics are implemented, location, inventory, ownership, economy, relationships, politics, combat consequences and magic effects are Simulation state.
 
-The native `MoveIntent` path remains a small Milestone 0 protocol/GDExtension smoke probe. Normal third-person locomotion does not send discrete grid steps to the Simulation Core; future semantic-location rules get an explicit protocol contract when gameplay requires them.
+Godot samples human input and renders a bounded presentation of that world. It may interpolate or predict visual movement, but a `CharacterBody3D` transform is not authoritative location and cannot decide trade range, inventory transfer, damage, relationships or another systemic result.
+
+The player-controlled person is an ordinary simulated actor. Human input and NPC decisions are different intent sources feeding the same world rules; there is no privileged player domain species.
+
+The native cardinal `BootstrapMoveIntent` path remains only a Milestone 0 protocol/GDExtension transport probe. Production third-person locomotion must migrate to an authoritative actor-location/movement contract and revisioned presentation samples rather than extending the grid probe.
+
+See [`docs/decisions/0004-authoritative-world-presentation-boundary.md`](docs/decisions/0004-authoritative-world-presentation-boundary.md).
 
 ## Controls
 
 The reference client is keyboard/mouse and gamepad from the start:
 
-- WASD / left stick — move;
+- WASD / left stick — movement intent;
 - mouse / right stick — orbit camera;
-- Shift / L3 — sprint;
+- Shift / L3 — sprint intent;
 - Escape — release captured mouse; click to recapture.
 
-Control code is intentionally split into small responsibilities. Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPersonCameraRig`, local kinematic movement in `ThirdPersonPlayer`, and tuneable feel values in `ControlProfile` / `LocomotionProfile` resources. See [`docs/engineering/godot.md`](docs/engineering/godot.md) and [`docs/decisions/0002-third-person-controls.md`](docs/decisions/0002-third-person-controls.md).
+Control code is split into small responsibilities. Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPersonCameraRig`, the current presentation/prediction movement shell in `ThirdPersonPlayer`, and tuneable presentation feel values in `ControlProfile` / `LocomotionProfile` resources.
+
+The current playable motor remains useful for feel while authoritative spatial movement is migrated into Simulation. Do not treat its Godot transform as world truth.
+
+See [`docs/engineering/godot.md`](docs/engineering/godot.md), [`docs/engineering/simulation-godot-boundary.md`](docs/engineering/simulation-godot-boundary.md), and [`docs/decisions/0002-third-person-controls.md`](docs/decisions/0002-third-person-controls.md).
 
 ## Local development
 

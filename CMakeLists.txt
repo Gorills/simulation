@@ -59,7 +59,7 @@ target_sources(
         FILE_SET HEADERS
         BASE_DIRS src
         FILES
-            src/protocol/move.hpp
+            src/protocol/bootstrap_move.hpp
             src/protocol/simulation.hpp
 )
 target_compile_features(sim_protocol PUBLIC cxx_std_23)

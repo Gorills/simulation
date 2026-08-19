@@ -1,11 +1,13 @@
-# Godot 4 client — third-person 3D
+# Godot 4 client — third-person 3D presentation
 
-Godot is the real presentation/input/UI client. It owns the latency-sensitive third-person locomotion shell but does not own systemic world laws or consequences.
+Godot is the real presentation/input/UI client. It owns latency-sensitive input, camera, rendering and presentation state; it does **not** own authoritative world state, including actor location.
 
 Canonical contracts:
 
 - runtime boundary: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
-- third-person ownership decision: [`../decisions/0002-third-person-controls.md`](../decisions/0002-third-person-controls.md)
+- authoritative Simulation ↔ Godot boundary: [`simulation-godot-boundary.md`](simulation-godot-boundary.md)
+- authoritative-world decision: [`../decisions/0004-authoritative-world-presentation-boundary.md`](../decisions/0004-authoritative-world-presentation-boundary.md)
+- third-person control/presentation decision: [`../decisions/0002-third-person-controls.md`](../decisions/0002-third-person-controls.md)
 - product/playable rule: [`../PRODUCT.md`](../PRODUCT.md)
 - Godot/GDExtension version policy: [`VERSIONS.md`](VERSIONS.md)
 - player-facing evidence: [`../VERIFICATION.md`](../VERIFICATION.md)
@@ -21,7 +23,7 @@ Current composition:
 ```text
 Main
 ├── PlayerControls
-├── Player (CharacterBody3D)
+├── Player (CharacterBody3D)       # current presentation/prediction shell
 │   ├── CollisionShape3D
 │   └── VisualRoot
 ├── CameraRig
@@ -32,27 +34,30 @@ Main
 └── HUD
 ```
 
-`Main` is the composition root. It wires the input source, player motor and camera together; the reusable components do not discover unrelated siblings through hardcoded `../../` paths.
+`Main` is the composition root. It wires the input source, player presentation motor and camera together; reusable components do not discover unrelated siblings through hardcoded `../../` paths.
 
-## Ownership: locomotion shell vs world authority
+The current `CharacterBody3D` motor predates the final authoritative spatial bridge. Under ADR 0004 its transform is **presentation/prediction state only** until it is driven/reconciled from Simulation movement samples.
+
+## Ownership: presentation shell vs world authority
 
 Godot owns immediate engine-facing state:
 
 - sampled keyboard/mouse/gamepad input;
 - captured-pointer state;
-- `CharacterBody3D` local transform, collision response and slope handling;
+- presentation-side `CharacterBody3D` transform/collision response used by the current migration shell;
 - camera orbit/collision;
-- animation/audio/UI presentation state.
+- animation/audio/VFX/UI presentation state;
+- interpolation/prediction caches keyed by Simulation identity when those are introduced.
 
-The C++ Simulation Core owns systemic world truth and causal outcomes.
+The C++ Simulation Core owns world truth and causal outcomes, including authoritative entity existence/location, inventory, ownership, economy, relationships, politics, combat consequences and magic effects as those mechanics are implemented.
 
-A Godot transform alone must not grant money, inventory, ownership, access rights, relationships, damage, trade success, law state or another systemic consequence. When local movement affects semantic location or a gameplay rule, add an explicit application/protocol contract.
+A Godot transform must not decide authoritative reachability, trade range, attack range, semantic location, ownership or another world rule. The cross-boundary implementation route is [`simulation-godot-boundary.md`](simulation-godot-boundary.md).
 
-The Milestone 0 native `MoveIntent(dx, dy)` is a protocol/GDExtension round-trip proof. It is not the reference API for fluid third-person locomotion.
+The Milestone 0 native `MoveIntent(dx, dy)` is a protocol/GDExtension round-trip proof. It is not the production API for fluid third-person locomotion.
 
 ## Control stack
 
-The production control code is intentionally decomposed:
+The production control/presentation code is intentionally decomposed:
 
 ```text
 default_control_profile.tres
@@ -64,7 +69,7 @@ default_control_profile.tres
        -> active-device signal
 
 default_locomotion_profile.tres
-  -> ThirdPersonPlayer
+  -> ThirdPersonPlayer     # current presentation/prediction response
 
 PlayerControls + Player
   -> ThirdPersonCameraRig
@@ -88,14 +93,16 @@ Tuning these values should normally be a `.tres` edit, not a new code path.
 
 ### `LocomotionProfile`
 
-Owns motor feel only:
+Currently owns presentation-motor feel only:
 
-- normal/sprint speed;
+- normal/sprint speed baseline;
 - acceleration/deceleration;
 - direction-change acceleration;
 - turn response;
 - sprint analog threshold;
-- floor snap and slope policy.
+- presentation-side floor/slope behavior used by the migration shell.
+
+Do not infer that these values are authoritative Simulation movement constants. When the authoritative spatial model is introduced, authoritative rules get their own domain configuration/contracts and this Resource remains presentation tuning unless a deliberate bridge says otherwise.
 
 Do not put combat, inventory, animation-state-machine or camera settings into this resource.
 
@@ -121,21 +128,23 @@ This preserves the Godot-provided circular deadzone behavior for a two-axis cont
 
 Mouse look is event-based and uses `InputEventMouseMotion.screen_relative` while the mouse is captured. Controller look is continuously sampled through a second `Input.get_vector()` using the right-stick actions.
 
-These are intentionally separate paths: Godot's own controller guidance notes that mouse and controller look should not be treated as identical input devices.
+These are intentionally separate paths: Godot's controller guidance notes that mouse and controller look should not be treated as identical input devices.
 
-`PlayerControls` also tracks the most recently active device so future button-prompt UI can react without duplicating device detection throughout the interface. Left-stick activity uses the radial `move_deadzone`; right-stick activity uses the radial `look_deadzone`, so independently tuning the two profiles does not desynchronize prompt detection from the controls.
+`PlayerControls` also tracks the most recently active device so button-prompt UI can react without duplicating device detection throughout the interface. Left-stick activity uses the radial `move_deadzone`; right-stick activity uses the radial `look_deadzone`.
+
+In the authoritative movement migration, `PlayerControls` remains the semantic input source. Its movement intent will be sent through protocol to the controlled Simulation actor while the presentation shell uses the same intent only for allowed prediction/response.
 
 ### Pointer lifecycle
 
 Gameplay starts with the mouse captured. Escape releases it. A **left click** while released recaptures it and consumes that recapture click. Wheel/right/middle-button events do not recapture the pointer.
 
-Do not permanently hide/lock the mouse in a global singleton; menus and dialogue UI will need to own pointer visibility at appropriate times.
+Do not permanently hide/lock the mouse in a global singleton; menus and dialogue UI need to own pointer visibility at appropriate times.
 
 ### Gameplay input gate
 
-`Input` singleton polling reflects global device state; GUI event handling does not suppress `Input.get_vector()` or `Input.is_action_pressed()`. Modal UI/dialogue therefore must not rely on `accept_event()` alone to stop locomotion.
+`Input` singleton polling reflects global device state; GUI event handling does not suppress `Input.get_vector()` or `Input.is_action_pressed()`. Modal UI/dialogue therefore must not rely on `accept_event()` alone to stop gameplay input.
 
-Use `PlayerControls.set_gameplay_enabled(false)` while a modal client state owns the controls. This zeros movement/look/sprint intent and clears buffered mouse look while **continuing active-device detection** for UI prompts. Pointer visibility remains a separate responsibility: the composition root or modal UI should call `release_pointer()`/`capture_pointer()` as appropriate.
+Use `PlayerControls.set_gameplay_enabled(false)` while a modal client state owns the controls. This zeros movement/look/sprint intent and clears buffered mouse look while **continuing active-device detection** for UI prompts. Pointer visibility remains separate: the composition root or modal UI should call `release_pointer()`/`capture_pointer()` as appropriate.
 
 Passive device tracking and captured mouse motion run in `_input()` so GUI consumption does not hide device changes. Pointer release and recapture run in `_unhandled_input()` so Controls get the first opportunity to consume those gameplay lifecycle events.
 
@@ -154,7 +163,7 @@ yaw root
 
 Keep `Camera3D` a direct child of the spring arm and leave the arm shape empty unless there is a measured reason to change it. Godot then uses the camera near-plane pyramid for the collision sweep instead of falling back to an inaccurate ray.
 
-Exclude the player collision RID from the spring arm.
+Exclude the player presentation collider RID from the spring arm.
 
 Mouse rotation:
 
@@ -172,32 +181,69 @@ Gamepad rotation:
 
 Pitch is clamped. Yaw is unbounded.
 
-The camera follows `get_global_transform_interpolated()` from the player while rendering. This keeps camera follow aligned with Godot's physics interpolation instead of manually adding another positional smoothing layer.
+The current camera follows `get_global_transform_interpolated()` from the presentation player while rendering. Once authoritative samples drive the presentation, keep the camera attached to the **rendered/interpolated representation**, not raw unsmoothed Simulation state.
 
-Do not add camera lag, auto-centering, shoulder swaps, lock-on or combat zoom until a real gameplay state needs them. When they are added, keep them inside the camera component/profile rather than the motor.
+Do not add camera lag, auto-centering, shoulder swaps, lock-on or combat zoom until a real gameplay state needs them. When added, keep them inside the camera component/profile rather than authoritative movement rules.
 
-## Third-person locomotion
+## Third-person movement migration
 
-`ThirdPersonPlayer` is a `CharacterBody3D`.
+`ThirdPersonPlayer` is currently a `CharacterBody3D` presentation/prediction shell.
 
-Movement is:
+Its existing response pipeline is:
 
-1. sampled from `PlayerControls`;
-2. transformed into the horizontal camera frame;
-3. scaled by analog magnitude;
-4. converted to a target horizontal velocity;
-5. approached using separate acceleration, deceleration and direction-change response rates;
-6. applied with `move_and_slide()` in `_physics_process()`.
+1. sample semantic intent from `PlayerControls`;
+2. transform it into the horizontal camera frame;
+3. preserve analog magnitude;
+4. derive a presentation target velocity;
+5. approach it with separate acceleration/deceleration/direction-change response rates;
+6. run `move_and_slide()` for the current presentation shell.
 
-The controller does **not** smooth the raw movement axis separately. An opaque input filter adds latency and makes response harder to reason about; translational response belongs in explicit motor response rates. Acceleration, braking and direction changes are separate knobs so tuning one meaning does not silently change another.
+This produces good local feel for the current playable but is **not** the final world-authority path.
 
-The player body turns toward the desired travel direction with a frame-rate-independent exponential response. Rotation response is a separate tuning value from linear acceleration.
+The production path must migrate toward:
 
-Analog stick magnitude is preserved, so slight stick deflection produces slower travel. Keyboard movement naturally produces full action strength.
+```text
+PlayerControls semantic intent
+  -> protocol intent for controlled EntityId
+  -> Simulation authoritative spatial transition
+  -> ordered/revisioned authoritative sample(s)
+  -> Godot presenter
+       -> interpolation
+       -> optional local prediction + reconciliation if measured latency requires it
+       -> CharacterBody3D/Node3D representation
+```
 
-Sprint changes target speed only when movement input exceeds the configured threshold; this avoids accidental full sprint from tiny stick deflection.
+Do not copy the current `move_and_slide()` result back into Simulation as authoritative position. The authoritative spatial/collision representation has not been selected yet and must be designed from actual terrain/navigation/determinism/performance constraints.
 
-Physics interpolation is enabled. Teleports/respawns must call `reset_physics_interpolation()` after setting the new transform.
+### Presentation-response rules
+
+The current presentation shell does **not** low-pass-filter the raw movement axis separately. Acceleration, braking and direction changes are separate presentation knobs so tuning one meaning does not silently change another.
+
+The body turns toward desired movement using a frame-rate-independent exponential response. Rotation response is separate from translational response.
+
+Analog stick magnitude is preserved, so slight stick deflection produces slower presentation movement. Keyboard movement naturally produces full action strength.
+
+Sprint changes the current presentation target speed only when movement input exceeds the configured threshold.
+
+When authoritative movement is introduced, presentation parameters may need re-interpretation or reconciliation. Do not let a `.tres` presentation speed become an alternative authoritative speed rule.
+
+### Prediction/reconciliation
+
+Prediction is not required merely because the architecture permits it.
+
+If playtest measurements show local input latency is unacceptable, local prediction may use the same semantic intent sent to Simulation. Keep predicted samples separate from authoritative samples and reconcile on authoritative updates.
+
+Prediction must never grant:
+
+- item transfer;
+- trade success;
+- hit/damage confirmation;
+- ownership/access;
+- relationship/political result;
+- hidden information;
+- another systemic consequence.
+
+Prefer simple interpolation and measured evidence before adding complex prediction.
 
 ## InputMap baseline
 
@@ -210,47 +256,73 @@ Current semantic actions:
 | sprint | Shift | L3 |
 | pointer release | Escape | — |
 
-Future actions such as interact, dodge, light/heavy attack, guard/aim, quick item and radial menu belong in InputMap when the corresponding gameplay capability exists. Do not prebuild combat state machines merely to fill the controller.
+Future actions such as interact, dodge, light/heavy attack, guard/aim, quick item and radial menu belong in InputMap when the corresponding gameplay capability exists. A systemic action then becomes a semantic intent/command through the Simulation boundary; do not implement its outcome in the control script.
 
-Bindings are defaults, not hardcoded gameplay assumptions. Remapping can be added on top of the semantic action layer without rewriting the motor/camera.
+Bindings are defaults, not hardcoded gameplay assumptions. Remapping can be added on top of the semantic action layer without rewriting presentation or Simulation rules.
 
-## Frame and physics processing
+## Frame, physics and Simulation processing
 
-- player motion and collision: `_physics_process()`;
-- right-stick camera integration and interpolated camera follow: `_process()`;
+Current Godot presentation processing:
+
+- presentation motor/collision shell: `_physics_process()`;
+- right-stick camera integration and rendered camera follow: `_process()`;
 - passive device tracking and captured mouse motion: `_input()`;
 - pointer release/recapture after GUI handling: `_unhandled_input()`.
 
-Neither `delta` is simulation time. Godot physics time drives the local locomotion shell only; authoritative world advancement follows the Simulation Core contract in [`../MODELING.md`](../MODELING.md).
+Neither Godot `delta` is Simulation time. Authoritative world advancement follows the Simulation Core contract in [`../MODELING.md`](../MODELING.md).
+
+Once authoritative transforms arrive on a timing boundary that does not coincide with local Godot physics ticks, do not assume built-in physics interpolation is automatically the correct fit. Store ordered authoritative samples and use a deliberately chosen presentation interpolation strategy. Godot's own interpolation guidance notes externally timed samples as a case where custom interpolation can be more suitable; source is recorded in [`SOURCES.md`](SOURCES.md).
+
+## Presentation replicas
+
+As multiple Simulation entities become visible, Godot should represent them by stable Simulation `EntityId`, conceptually:
+
+```text
+EntityId -> presentation node + animation state + interpolation samples + transient effects
+```
+
+Presentation lifecycle:
+
+- materialize a representation when an entity enters the allowed local projection;
+- update it from authoritative projections/events;
+- dematerialize/pool it when it leaves that projection.
+
+A presentation node disappearing is not entity death/deletion. An authoritative entity being created is not accomplished by instantiating a `.tscn`.
+
+Do not create a Godot `World`/`GameState` cache that becomes the real owner of entity existence, inventory, relationships or shops.
 
 ## Scene independence and wiring
 
 Prefer:
 
 - typed component scripts;
-- exported Resources for tuning;
+- exported Resources for **presentation tuning**;
 - cached `@onready` references for owned children;
 - parent/composition-root dependency wiring;
-- semantic signals for child-to-parent notification.
+- semantic signals for child-to-parent notification;
+- stable Simulation `EntityId` for materialized world-representation identity.
 
 Avoid:
 
 - global input/controller Autoloads unless a later cross-scene lifecycle proves they are needed;
 - hardcoded cross-scene `get_node("../../...")`;
 - a mega `player.gd` containing input, camera, motor, combat, inventory and world state;
-- component scripts reaching into sibling internals.
+- component scripts reaching into sibling internals;
+- scene-node paths or Godot instance IDs as Simulation identity.
 
 ## Typed GDScript
 
 Type parameters, returns and member state when the type is known. Use inference when it remains obvious and static.
 
-Boundary DTO representation may initially use Godot-friendly `Dictionary` values, but UI code must not preserve arbitrary protocol blobs as live world state.
+Boundary DTO representation may initially use Godot-friendly `Dictionary` values, but UI/presentation code must not preserve arbitrary protocol blobs as a live mutable world model.
+
+Purpose-built Godot-facing wrappers may be introduced when repeated Dictionary handling becomes a demonstrated maintenance problem. Do not create a generic object-mapping framework first.
 
 ## Resources
 
-Godot Resources are shared data containers. The committed control/locomotion profiles are intentionally shared immutable-style tuning resources at runtime.
+Godot Resources are shared data containers. The committed control/locomotion profiles are shared presentation-tuning resources at runtime.
 
-Do not put per-player mutable authoritative state into those `.tres` resources.
+Do not put per-actor mutable authoritative state into those `.tres` resources.
 
 If a runtime settings menu changes a profile, decide explicitly whether it is editing a user settings copy or a shared project default; do not accidentally mutate a globally shared asset and treat that as save-game state.
 
@@ -260,7 +332,7 @@ Autoloads are process-wide services, not a default dependency injection containe
 
 Potentially appropriate future uses are small genuinely global presentation services such as user settings or a debug overlay.
 
-Forbidden patterns include an Autoload `World`, authoritative `GameState`, global inventory/economy dictionaries or a global EventBus that becomes the ownership model for unrelated scenes.
+Forbidden patterns include an Autoload authoritative `World`, authoritative `GameState`, global inventory/economy/relationship dictionaries or a global EventBus that becomes the ownership model for unrelated scenes.
 
 ## Files and project layout
 
@@ -283,7 +355,7 @@ godot/
       third_person_player.gd
 ```
 
-Keep new control features near the component they modify. Do not create a generic `managers/` directory as a dumping ground.
+Future presentation/materialization code should live near the presentation concern it owns. Do not create a generic `managers/` directory as a dumping ground.
 
 ## Anti-patterns
 
@@ -297,20 +369,23 @@ Keep new control features near the component they modify. Do not create a generi
 | mouse displacement multiplied by `delta` | makes mouse feel frame-rate dependent |
 | gamepad angular rate not multiplied by `delta` | makes stick camera frame-rate dependent |
 | camera without collision arm | clips through geometry |
-| smoothing input and velocity simultaneously | compounds latency and obscures tuning |
-| Godot transform granting systemic outcome | turns local kinematic state into a second world authority |
+| smoothing input and velocity simultaneously without need | compounds latency and obscures tuning |
+| Godot transform as authoritative location/reachability | creates a second world authority |
+| GDScript inventory/shop/relationship as world truth | duplicates Simulation state and rules |
+| spawning a `.tscn` to create an authoritative NPC/item | scene lifetime becomes world lifetime |
 | shared `.tres` as save-game/player state | resource identity leaks mutable state |
 | `_process`/physics delta as Simulation Core clock | frame/physics rate becomes a world law |
 
 ## Agent extension rule
 
-When changing controls, identify the ownership first:
+When changing the Godot client, identify ownership first:
 
 - binding, device translation or gameplay-input enable/disable -> InputMap / `PlayerControls`;
 - sensitivity/deadzone/inversion/FOV/distance -> `ControlProfile`;
-- acceleration/deceleration/direction-change/speed/turn/slope feel -> `LocomotionProfile`;
-- movement algorithm/collision response -> `ThirdPersonPlayer`;
+- presentation acceleration/deceleration/direction-change/turn feel -> `LocomotionProfile` / presenter;
+- presentation interpolation/reconciliation -> presentation/materialization layer;
 - camera orbit/collision/recenter/lock-on -> `ThirdPersonCameraRig`;
-- combat/world consequence -> **not** the control stack; use the gameplay/protocol layer.
+- authoritative movement/location -> Simulation + protocol, then presentation samples;
+- inventory/economy/social/politics/combat/magic/world consequence -> Simulation + protocol, not the control stack.
 
-A change that touches three of these areas for one tuning request is probably in the wrong place.
+For any cross-boundary gameplay feature, use [`simulation-godot-boundary.md`](simulation-godot-boundary.md). A change that makes Godot decide world truth is in the wrong place even if it looks visually convenient.
