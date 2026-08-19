@@ -14,6 +14,19 @@ struct EntityId final {
     constexpr bool operator==(const EntityId &) const = default;
 };
 
+// Stable identity for an authoritative household aggregate. A household is not
+// an actor and must not be represented by a fake actor EntityId merely to reuse
+// storage or presentation machinery.
+struct HouseholdId final {
+    std::int64_t value{};
+
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return value > 0;
+    }
+
+    constexpr bool operator==(const HouseholdId &) const = default;
+};
+
 struct SimulationTick final {
     std::uint64_t value{};
 
