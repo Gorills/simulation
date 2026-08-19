@@ -64,6 +64,7 @@ target_sources(
         FILES
             src/protocol/version.hpp
             src/protocol/bootstrap_move.hpp
+            src/protocol/movement.hpp
             src/protocol/observed_world.hpp
             src/protocol/spatial.hpp
             src/protocol/simulation.hpp
@@ -83,13 +84,18 @@ if(WORLD_SIM_BUILD_TESTS)
         sim_core_tests
         tests/sim/grounded_locomotion_test.cpp
         tests/sim/world_test.cpp
+        tests/sim/world_locomotion_test.cpp
     )
     target_link_libraries(sim_core_tests PRIVATE sim_core GTest::gtest_main)
     target_compile_features(sim_core_tests PRIVATE cxx_std_23)
     set_target_properties(sim_core_tests PROPERTIES CXX_EXTENSIONS OFF)
     world_sim_enable_project_warnings(sim_core_tests)
 
-    add_executable(protocol_tests tests/protocol/simulation_test.cpp)
+    add_executable(
+        protocol_tests
+        tests/protocol/simulation_test.cpp
+        tests/protocol/movement_test.cpp
+    )
     target_link_libraries(protocol_tests PRIVATE sim_protocol GTest::gtest_main)
     target_compile_features(protocol_tests PRIVATE cxx_std_23)
     set_target_properties(protocol_tests PROPERTIES CXX_EXTENSIONS OFF)
