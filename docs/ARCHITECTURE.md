@@ -73,6 +73,22 @@ BootstrapMoveIntent(dx, dy)
 
 Malformed transport values are rejected before the domain is called. `GridPosition`, `CardinalDirection`, `BootstrapMoveIntent`, `apply_bootstrap_step` and `BootstrapActorProjection` are Milestone 0 transport evidence, **not** the production third-person spatial contract.
 
+The first durable presentation read path is separate:
+
+```text
+protocol::Simulation::observed_world_projection()
+  -> ObservedWorldProjection
+       controlled_actor_id
+       SimulationTick
+       WorldRevision
+       observed EntityId set
+  -> GDExtension field-for-field translation
+  -> Godot WorldPresentation
+  -> EntityBinding on the controlled presentation
+```
+
+`ObservedWorldProjection` deliberately contains no bootstrap grid coordinates. The minimum implemented observation set contains only the controlled actor until a real spatial/knowledge/visibility policy exists.
+
 ## Ownership by layer
 
 | Layer | Owns | Must not own |
@@ -140,16 +156,19 @@ Commands mutate through world rules. Projections answer presentation needs witho
 
 The protocol is a small application contract, not an exported `WorldState`. Internal Simulation types do not automatically become public/client types.
 
+The shared application protocol version lives in `src/protocol/version.hpp`; a temporary feature DTO must not become the version owner merely because it was implemented first.
+
 Breaking protocol changes update the explicit protocol version and affected native/client verification together.
 
 See [`MODELING.md`](MODELING.md#protocol-semantics) and [`engineering/simulation-godot-boundary.md`](engineering/simulation-godot-boundary.md).
 
 ## Purpose-built projections
 
-Godot reads projections shaped for a presentation task. Likely families as real mechanics arrive include:
+Godot reads projections shaped for a presentation task. The first implemented durable read model is `ObservedWorldProjection`.
+
+Likely additional families as real mechanics arrive include:
 
 ```text
-ObservedWorldProjection
 ControlledActorProjection
 ShopProjection
 InventoryProjection
@@ -161,6 +180,8 @@ JournalProjection
 Do not introduce one universal projection containing every person, secret relationship, inventory, market, law and internal subsystem field.
 
 A projection exposes only information the client is allowed to know. A shop UI may see offered stock/price without receiving hidden merchant knowledge or unrelated world state.
+
+The current `ObservedWorldProjection` is intentionally identity/presence-only. Do not add grid coordinates to it to make the bootstrap demo convenient; authoritative spatial samples get their own real contract once the spatial model is chosen.
 
 ## Domain events
 
@@ -176,12 +197,15 @@ World existence and Godot scene-node lifetime are different concepts.
 
 ```text
 full authoritative Simulation world
-  -> Simulation/protocol observation + materialization policy
-      -> bounded projection for the controlled context
-          -> Godot presentation replica keyed by EntityId
+  -> Simulation/protocol observation policy
+      -> bounded ObservedWorldProjection
+          -> Godot WorldPresentation keyed by EntityId
+              -> presentation nodes / bindings
 ```
 
-Godot materializes, updates and dematerializes representations according to projections. Dematerializing an NPC because the player left town does not delete or pause the simulated NPC. Returning later materializes the **current** resulting state after offscreen simulation.
+The first executable Godot bridge is intentionally smaller than the final materializer: `WorldPresentation` validates monotonic `WorldRevision`, tracks the observed authoritative ID set, and binds the pre-existing controlled `Player` representation through an `EntityBinding`. It does **not** yet invent a generic NPC scene factory because no second real presentation kind exists.
+
+Future materialization will extend this owner to instantiate/update/dematerialize typed presentation scenes when real observed NPC/item capabilities exist. Removing a Godot representation must never delete the simulated entity.
 
 Keep these concepts separate:
 
@@ -211,7 +235,13 @@ Godot crosses into native gameplay through exactly one runtime seam. The adapter
 4. translate results/projections/events back to Godot-facing values;
 5. expose diagnostics without embedding world rules.
 
-The current `SimFacade` owns `protocol::Simulation`, exposes bootstrap `submit_move` and read-only `debug_projection`, and converts only protocol projections into Godot dictionaries.
+The current `SimFacade` owns `protocol::Simulation` and exposes:
+
+```text
+observed_world_projection()     # durable identity/presence read model
+bootstrap_submit_move(dx, dy)   # Milestone 0 probe only
+bootstrap_debug_projection()    # Milestone 0 diagnostics only
+```
 
 If a systemic gameplay rule is implemented inside a `GDCLASS`, GDScript node, UI script or serialization helper, the boundary is violated.
 
@@ -229,7 +259,13 @@ InputMap
        -> ThirdPersonPlayer + LocomotionProfile   # presentation/prediction shell
        -> ThirdPersonCameraRig
             -> SpringArm3D -> Camera3D
+
+SimFacade.observed_world_projection()
+  -> WorldPresentation
+       -> EntityBinding -> Player presentation
 ```
+
+`WorldPresentation` is the Godot owner of authoritative presentation identity/presence. Feature scripts must not create parallel `EntityId -> Node` registries or assign authoritative IDs themselves.
 
 ADR 0004 supersedes the earlier interpretation that local `CharacterBody3D` state is authoritative. Production locomotion must migrate toward:
 
@@ -312,11 +348,13 @@ Current executable structure establishes the first load-bearing boundaries:
 - `World` stores actors by stable `EntityId` rather than a special player field;
 - protocol/session owns the bootstrap human-control binding;
 - `SimulationTick` and `WorldRevision` are distinct;
-- protocol tests prove malformed transport input cannot mutate the projection;
+- `ObservedWorldProjection` is purpose-built and does not export bootstrap spatial state;
+- protocol tests prove malformed transport input cannot mutate the observed projection;
 - native tests prove different actor IDs use the same authoritative domain operation;
+- Godot has one `WorldPresentation` identity/presence owner and the controlled presentation carries `EntityBinding`;
 - bootstrap movement names explicitly discourage treating the grid probe as production locomotion;
 - only `world_sim_gdextension` links godot-cpp;
 - `tools/check_architecture.py`/CTest rejects direct Godot include markers in `src/sim` and `src/protocol`;
-- the smoke playtest validates actor identity plus tick/revision in the native projection once run in the pinned local environment.
+- the smoke artifact is designed to prove the same `EntityId`/`WorldRevision` reached native bootstrap result, observed projection, and Godot presentation once run in the pinned local environment.
 
 As the graph grows, prefer real target/API boundaries over prose-only rules. Add a narrow mechanical check only when a real dependency edge cannot already be expressed by code/build ownership.

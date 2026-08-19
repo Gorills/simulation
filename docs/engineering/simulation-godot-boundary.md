@@ -84,10 +84,21 @@ A projection is:
 
 Do not keep arbitrary protocol Dictionaries as a second long-lived world model in GDScript.
 
-Typical future projections:
+The first implemented durable read model is `ObservedWorldProjection`:
 
 ```text
-ObservedWorldProjection
+controlled_actor_id
+SimulationTick
+WorldRevision
+protocol_version
+entities: [{ EntityId }, ...]
+```
+
+Its current minimum observation set contains only the controlled actor. It deliberately contains **no bootstrap grid coordinates** and therefore cannot become a back door for treating the Milestone 0 grid probe as production spatial state.
+
+Additional projections should appear from real feature needs, for example:
+
+```text
 ControlledActorProjection
 ShopProjection
 InventoryProjection
@@ -117,15 +128,21 @@ Do not make the event stream the save format unless a later ADR explicitly adopt
 
 ## Identity and presentation replicas
 
-Godot presentation objects are keyed by simulation `EntityId`.
+Godot presentation objects are keyed by Simulation `EntityId`.
 
-A presentation registry may conceptually own:
+The implemented owner is:
 
 ```text
-EntityId -> scene node + render/interpolation state
+ObservedWorldProjection
+  -> WorldPresentation
+       -> EntityId -> EntityBinding -> presentation root
 ```
 
-Its operations are presentation lifecycle only:
+`WorldPresentation` owns the Godot-side identity/presence index and last applied authoritative revision. `EntityBinding` is a small component under a presentation root; it stores the authoritative ID assigned by `WorldPresentation` and does not create IDs itself.
+
+The current stage binds the pre-existing controlled `Player` representation only. It does **not** introduce a generic scene factory before a second real presentation kind exists.
+
+Future lifecycle operations remain presentation-only:
 
 ```text
 materialize(entity projection)
@@ -136,6 +153,16 @@ dematerialize(entity id)
 Dematerialize means “stop representing this entity here”, not “delete this entity from the world”.
 
 Never generate a new authoritative NPC/item because a scene wants one. Scene factories instantiate representations of already-existing projected entities.
+
+Do not create another `EntityId -> Node` registry in HUD, inventory, combat, NPC or scene-specific scripts. Extend `WorldPresentation` when presentation-lifecycle responsibility genuinely belongs there.
+
+## Revision ordering
+
+`WorldPresentation` accepts equal/newer projections and rejects a projection whose `WorldRevision` is older than the last applied revision.
+
+This is an ordering guard, not an implementation of networking or rollback. The current in-process call path should naturally be ordered; the guard prevents a future asynchronous/prefetched presentation path from silently overwriting newer identity/presence state.
+
+Do not replace `WorldRevision` with Godot frame count, physics frame count or wall-clock time.
 
 ## Observation / materialization boundary
 
@@ -154,6 +181,8 @@ Keep these concepts distinct:
 - camera frustum/occlusion.
 
 Do not collapse them into one `visible` boolean.
+
+The current one-actor observation set is intentionally minimal. Do not fake distance/visibility rules before the authoritative spatial and knowledge models exist.
 
 ## Spatial movement migration
 
@@ -178,6 +207,8 @@ Until that migration is complete, `ThirdPersonPlayer` is a presentation/predicti
 Simulation tick rate and render frame rate are different clocks.
 
 Keep authoritative samples with identity and ordering. Presentation can interpolate between previous/current samples.
+
+Godot 4.7's interpolation documentation explicitly notes that custom interpolation can be a better fit when authoritative tick/timing information does not coincide with local physics ticks. That is the pattern to evaluate once Simulation begins emitting real spatial samples. Do not force those samples into the existing `CharacterBody3D` physics-interpolation path merely because it already exists.
 
 Prediction is optional and normally limited to the locally controlled actor when real playtest latency requires it.
 
@@ -253,6 +284,14 @@ Not allowed:
 - deciding ownership;
 - treating scene transforms as authoritative world state.
 
+Current surface:
+
+```text
+observed_world_projection()     # durable read
+bootstrap_submit_move(...)      # smoke only
+bootstrap_debug_projection()    # smoke/debug only
+```
+
 If adapter code needs a world rule, move the rule into Simulation and expose a protocol operation/result.
 
 ## Extension checklist for a new feature
@@ -285,6 +324,7 @@ This foundation does not introduce:
 - sharding;
 - multithreaded world jobs;
 - generic reflection/serialization frameworks;
-- a universal projection/event bus.
+- a universal projection/event bus;
+- a generic Godot entity-scene factory before a second real materialized presentation kind exists.
 
 Add those only when measurements or a concrete mechanic justify them.

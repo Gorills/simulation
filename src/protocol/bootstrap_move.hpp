@@ -1,11 +1,11 @@
 #pragma once
 
+#include "protocol/version.hpp"
+
 #include <cstdint>
 #include <expected>
 
 namespace worldsim::protocol {
-
-inline constexpr std::uint32_t kProtocolVersion = 2;
 
 // Milestone 0 transport probe only. Production third-person locomotion must use
 // a real authoritative actor-location/movement contract.
@@ -24,7 +24,7 @@ enum class BootstrapMoveError : std::uint8_t {
 // Milestone 0 projection only. Grid coordinates are deliberately not exposed as
 // the generic production actor-projection contract.
 struct BootstrapActorProjection final {
-    std::uint64_t entity_id{};
+    std::int64_t entity_id{};
     std::int32_t x{};
     std::int32_t y{};
     std::uint64_t tick{};

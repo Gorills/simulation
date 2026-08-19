@@ -16,6 +16,7 @@ Current executable behavior wins over prose. Accepted ADRs record intentional ar
 - C++23 Simulation Core is the only authoritative world.
 - Player-controlled people and NPCs are the same kind of simulated actors; control source must not create a privileged `Player` domain model or bypass world rules.
 - Godot 4 is presentation, input, audio, and UI; it may interpolate or predict presentation, but entity existence/location, inventory, economy, relationships and systemic consequences come from Simulation projections/results.
+- Godot presentation identity/presence is keyed by authoritative `EntityId` through `WorldPresentation`; GDScript must not invent entity IDs or create a parallel world registry.
 - `src/sim` and `src/protocol` remain Godot-free.
 - The GDExtension adapter is the only Godot ↔ protocol runtime seam.
 - Gameplay work is a small playable vertical capability: rule → contract → experience → proof.

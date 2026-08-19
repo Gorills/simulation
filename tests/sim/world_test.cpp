@@ -39,14 +39,23 @@ TEST(WorldTime, ActorActionsDoNotPretendThatWorldTimeAdvanced) {
     EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{3}));
 }
 
-TEST(WorldActors, RejectsDuplicateAndUnknownEntityWithoutMutation) {
+TEST(WorldActors, RejectsInvalidDuplicateAndUnknownEntityWithoutMutation) {
     worldsim::sim::World world{worldsim::sim::WorldSeed{9}};
     const worldsim::sim::EntityId actor{3};
+
+    const auto invalid = world.spawn_actor(worldsim::sim::EntityId{0});
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_EQ(invalid.error(), worldsim::sim::WorldError::invalid_entity_id);
+    EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{0}));
 
     ASSERT_TRUE(world.spawn_actor(actor).has_value());
     const auto before = world.revision();
 
     const auto duplicate = world.spawn_actor(actor);
+    const auto invalid_move = world.apply_bootstrap_step(
+        worldsim::sim::EntityId{-1},
+        worldsim::sim::CardinalDirection::south
+    );
     const auto unknown_move = world.apply_bootstrap_step(
         worldsim::sim::EntityId{999},
         worldsim::sim::CardinalDirection::south
@@ -54,6 +63,8 @@ TEST(WorldActors, RejectsDuplicateAndUnknownEntityWithoutMutation) {
 
     ASSERT_FALSE(duplicate.has_value());
     EXPECT_EQ(duplicate.error(), worldsim::sim::WorldError::duplicate_entity);
+    ASSERT_FALSE(invalid_move.has_value());
+    EXPECT_EQ(invalid_move.error(), worldsim::sim::WorldError::invalid_entity_id);
     ASSERT_FALSE(unknown_move.has_value());
     EXPECT_EQ(unknown_move.error(), worldsim::sim::WorldError::unknown_entity);
     EXPECT_EQ(world.revision(), before);
