@@ -1,14 +1,14 @@
 # Model: first living need
 
-Status: IMPLEMENTED — Milestone 1 acceptance candidate
+Status: IMPLEMENTED — Milestone 1 accepted
 
 ## Purpose
 
 Establish the smallest complete causal NPC behavior that is more than locomotion acceptance: an identity-resolved actor has authoritative need state, that state produces a concrete task intention, the task uses the shared movement law, other actors can change the outcome through the same world, presentation lifetime is not a prerequisite for causal progress, and the real client exposes the derived outcome without owning it.
 
-The implemented vertical loop is **need -> task -> travel -> shared-world interference -> offscreen continuation -> read-only client outcome -> bounded interference/help evidence**.
+The accepted vertical loop is **need -> task -> travel -> shared-world interference -> offscreen continuation -> read-only client outcome -> bounded interference/help evidence**.
 
-This document may describe the candidate as complete because the branch is not accepted into `main` unless the exact-revision native and Godot evidence passes. [`../VERIFICATION.md`](../VERIFICATION.md) owns that evidence rule.
+Milestone acceptance follows the evidence contract in [`../VERIFICATION.md`](../VERIFICATION.md); this model owns mechanic semantics rather than CI-run history.
 
 ## First need: assigned rest place
 
@@ -119,14 +119,14 @@ Satisfaction, blocking, the read-only projection and presentation materializatio
 
 ## Milestone 1 acceptance
 
-Milestone 1 is accepted when the exact revision passes the required native/protocol and Godot scenarios proving:
+Milestone 1 is accepted with executable evidence for:
 
 - need-driven deterministic NPC intent from authoritative state;
 - human/NPC parity through shared movement rules;
-- another actor can change the need outcome through ordinary world movement;
-- the causal path continues without an NPC Godot node;
-- the client exposes authoritative `traveling` / `blocked` / `satisfied` status without owning the mechanic;
-- the bounded real-client interference/help loop reaches `blocked` and then `satisfied`.
+- another actor changing the need outcome through ordinary world movement;
+- causal continuation without an NPC Godot node;
+- authoritative `traveling` / `blocked` / `satisfied` status exposed without client ownership;
+- a bounded real-client interference/help loop reaching `blocked` and then `satisfied`.
 
 Acceptance means the first living-need vertical capability is complete. It does **not** imply the current rest-point fixture is a production needs/planning/home framework.
 
@@ -147,4 +147,4 @@ Add those only when a concrete later capability requires them.
 
 ## Next bounded work
 
-After Milestone 1 acceptance, re-admit the first **Milestone 2 — Household Resource Loop** vertical slice from the current product/roadmap contracts rather than extending RestNeed infrastructure for hypothetical future needs.
+Milestone 1 is complete. Re-admit the first **Milestone 2 — Household Resource Loop** vertical slice from the current product/roadmap contracts rather than extending RestNeed infrastructure for hypothetical future needs.

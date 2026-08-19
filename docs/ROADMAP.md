@@ -8,11 +8,9 @@ For detail, route to [`INDEX.md`](INDEX.md). Current source/tests remain authori
 
 The playable/native spine, authoritative world/presentation boundary, historical/causal-fidelity foundation, exact-spatial contract and first grounded locomotion bridge are accepted.
 
-**Milestone 1 — Living Need is an acceptance candidate.** The vertical loop now contains authoritative need state, Core-owned decision output, actor-generic movement, shared player interference, offscreen continuation, a purpose-built read-only client outcome and a bounded real-client `traveling -> blocked -> satisfied` scenario.
+**Milestone 1 — Living Need is accepted.** The vertical loop contains authoritative need state, Core-owned decision output, actor-generic movement, shared player interference, offscreen continuation, a purpose-built read-only client outcome and a bounded real-client `traveling -> blocked -> satisfied` scenario.
 
-This branch may mark M1 as the next accepted milestone only if the exact revision passes the required native/protocol and Godot evidence. If that scenario exposes a defect, fix the defect rather than weakening the acceptance condition.
-
-No additional RestNeed framework work belongs ahead of that gate.
+Active development now moves to **Milestone 2 — Household Resource Loop**. Do not expand RestNeed horizontally unless a later capability exposes a concrete defect or missing causal requirement.
 
 ## Milestone rule
 
@@ -52,13 +50,13 @@ Canonical mechanic owner: [`models/grounded-locomotion.md`](models/grounded-loco
 
 The accepted bridge proves the authority seam; it is not a commitment to build a general physics/navigation engine. Production spatial dependencies are admitted only from a concrete blocked capability under ADR 0009.
 
-## Milestone 1 — Living Need — acceptance candidate
+## Milestone 1 — Living Need — accepted
 
 Goal:
 
 > An NPC acts because of authoritative world state, and the player can change the outcome through the same causal system rather than a player-only shortcut.
 
-Implemented vertical capability:
+Accepted vertical capability:
 
 - one identity-resolved NPC has authoritative RestNeed state;
 - Core derives deterministic local-task movement from that state;
@@ -73,9 +71,9 @@ Implemented vertical capability:
 
 Acceptance evidence is defined in [`VERIFICATION.md`](VERIFICATION.md). Mechanic semantics are in [`models/living-need.md`](models/living-need.md).
 
-If the final exact-revision gates pass, M1 is accepted and active development moves to Milestone 2 rather than expanding the first need horizontally.
+Milestone 1 is complete; active work must move to M2 instead of growing a generic need/planner framework.
 
-## Milestone 2 — Household Resource Loop — next after M1 acceptance
+## Milestone 2 — Household Resource Loop — active
 
 Minimum scope:
 
@@ -89,7 +87,14 @@ Acceptance:
 
 > The village can develop a resource problem without the player, and the player can address it through more than one real path while resource transfers remain authoritative Simulation state.
 
-The first M2 slice must remain vertical and observable. Re-admit its minimum state/rule/read/presentation/evidence after M1 is green; do not prebuild a general inventory/economy framework.
+The first M2 slice must remain vertical and observable. It should introduce the minimum real household resource state, one causal stock/consumption rule, a derived shortage read and visible Godot feedback without prebuilding a general inventory/economy framework.
+
+Two admission gates apply immediately:
+
+1. **composition:** M2 is the first scenario expansion beyond the current two named actors, so ADR 0009 requires replacing the hardcoded application fixture with the minimum real composition/observation owner in the same bounded capability slice rather than adding more named IDs/feature branches;
+2. **time:** the first stock/consumption slice must not invent independent time progression merely to make depletion happen. An immediate authoritative resource transition may change `WorldRevision` without advancing `SimulationTick`. Before recurring/non-locomotion systems advance simulation time independently, re-admit movement-stream ordering under ADR 0009.
+
+Use a concrete historically plausible household staple/resource for the first slice and clearly separate acceptance-fixture quantities from historical rate claims. Precise regional yields, consumption rates or prices require targeted research before they become model constants.
 
 ## Milestone 3 — Social Consequence
 
@@ -160,7 +165,7 @@ These gates prevent roadmap drift without pre-selecting implementations:
 - **Navigation/production spatial dependency:** admit only when a real gameplay route/reachability requirement is blocked by the current bounded spatial capability.
 - **Offscreen scheduler/time architecture:** admit only the minimum mechanism required by a real offscreen continuation; the first M1 proof did not require a scheduler.
 - **Independent time advancement:** before a non-locomotion production system advances time independently, re-evaluate movement-stream ordering under ADR 0009.
-- **Dynamic scenario composition:** replace the current bounded acceptance composition only when a real scenario requires dynamic population/content ownership.
+- **Dynamic scenario composition:** replace the current bounded acceptance composition when a real scenario requires dynamic population/content ownership; M2 now triggers this gate.
 - **External/LLM policy:** implement deterministic shared world actions/goals and validation first; language interpretation or an external policy may be added later above that contract.
 
 ## Roadmap discipline
