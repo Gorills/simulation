@@ -1,32 +1,34 @@
 # World Simulation
 
-Playable systemic RPG: one C++23 Simulation Core, one Godot 4 client.
+Playable systemic RPG with one authoritative C++23 Simulation Core and one Godot 4 client.
 
-- Contract: [`docs/specs/TZ.md`](docs/specs/TZ.md)
-- Docs map: [`docs/INDEX.md`](docs/INDEX.md)
-- Stack how/how-not: [`docs/engineering/STACK.md`](docs/engineering/STACK.md)
-- Stack decision: [`docs/decisions/0001-cpp-godot-gdextension.md`](docs/decisions/0001-cpp-godot-gdextension.md)
-- Agent pointer: [`AGENTS.md`](AGENTS.md)
+## Start here
 
-## Stack
+- Product: [`docs/PRODUCT.md`](docs/PRODUCT.md)
+- Runtime architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Simulation/modeling: [`docs/MODELING.md`](docs/MODELING.md)
+- Verification/playtest: [`docs/VERIFICATION.md`](docs/VERIFICATION.md)
+- Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- Documentation router: [`docs/INDEX.md`](docs/INDEX.md)
+- Stack guides: [`docs/engineering/STACK.md`](docs/engineering/STACK.md)
+- Godot/GDExtension versions: [`docs/engineering/VERSIONS.md`](docs/engineering/VERSIONS.md)
+- Agent bootstrap: [`AGENTS.md`](AGENTS.md)
 
-| Layer | Owns | Must not own |
-| --- | --- | --- |
-| `src/sim` C++23 | world laws, state, outcomes | Godot, input, frames, UI |
-| `src/protocol` | commands, results, events, projections | rendering |
-| `src/adapters/gdextension` | Godot ↔ protocol translation | domain rules |
-| `godot/` | scenes, input, camera, UI, audio | inventory/money/world truth |
+## Architecture
 
-Details: [TZ §3–5](docs/specs/TZ.md#3-архитектура-верхнего-уровня), [ADR 0001](docs/decisions/0001-cpp-godot-gdextension.md), [engineering how/how-not](docs/engineering/STACK.md).
+```text
+Godot 4
+  -> GDExtension adapter
+  -> application protocol
+  -> C++23 Simulation Core
+```
 
-## Local tools (checked 2026-08-19)
+`src/sim` owns world truth. Godot owns presentation/input/UI. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Present: g++ 13.3.0 (C++23 `std::expected`), Python 3.12.3, Godot 4.7.1.stable.mono, gdb.
+## Local development
 
-Missing until bootstrap: cmake, ninja. Do not claim they are installed.
+Runtime/build bootstrap has not landed yet. Do not infer available tools or successful builds from documentation.
 
-The installed Godot binary is the Mono editor. This project still uses **GDScript + C++ GDExtension**, not C#. Toolchain policy: [TZ §2](docs/specs/TZ.md#2-проверенный-локальный-toolchain-и-выбранный-стек).
+The selected client split is **GDScript + C++ GDExtension**, not C#. Exact Godot/GDExtension policy is in [`docs/engineering/VERSIONS.md`](docs/engineering/VERSIONS.md).
 
-## First spine
-
-Do not restore deleted Fenster/TypeScript/WASM work. Next implementation step is [Milestone 0](docs/specs/TZ.md#38-roadmap-слои-развиваются-одновременно): native `sim_core` + Godot 2D client + one authoritative move command.
+The next implementation target is [`docs/ROADMAP.md`](docs/ROADMAP.md#milestone-0--toolchain--playable-spine).

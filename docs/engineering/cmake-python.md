@@ -1,75 +1,132 @@
-# CMake, tests, and Python tools
+# CMake, native tests, and Python developer tools
 
-Contract: TZ §2.3–2.7, §6.7–6.8. Python is **tooling only**, never Simulation Core.
+Python in this project is developer tooling/orchestration only; it is not a second Simulation Core.
 
-Canonical sources: [CMake `file(GLOB)`](https://cmake.org/cmake/help/latest/command/file.html) (explicitly **not** for sources), [Using dependencies / FetchContent](https://cmake.org/cmake/help/latest/guide/using-dependencies.html), [GoogleTest primer](https://google.github.io/googletest/primer.html), [Python `subprocess` security](https://docs.python.org/3/library/subprocess.html#security-considerations).
+Canonical contracts:
 
-## CMake: how
+- target/dependency direction: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+- Godot/godot-cpp version dimensions: [`VERSIONS.md`](VERSIONS.md)
+- verification/playtest lifecycle: [`../VERIFICATION.md`](../VERIFICATION.md)
+- C++ implementation policy: [`cpp.md`](cpp.md)
 
-**Targets, not directory globals.** TZ: no project-wide `include_directories()` / `add_definitions()`. Use `target_include_directories`, `target_compile_options`, `target_compile_features(cxx_std_23)` with `CMAKE_CXX_EXTENSIONS OFF`.
+Primary upstream references are tracked in [`SOURCES.md`](SOURCES.md): CMake dependency/file guidance, GoogleTest and Python `subprocess` security/lifecycle behavior.
 
-**List sources explicitly.** CMake: *“We do not recommend using GLOB to collect a list of source files.”* `CONFIGURE_DEPENDS` is still not reliable on all generators and still costs a check every rebuild. godot-jolt globs anyway — **do not copy that**. Adding a `.cpp` means editing `CMakeLists.txt` / `target_sources` so every clone regenerates.
+## CMake principles
 
-**Presets:** `CMakePresets.json` is the shared contract. `CMakeUserPresets.json` is local and uncommitted. Ninja is the generator once bootstrap installs it. Do not claim cmake/ninja exist until re-checked (TZ §2.1).
+### Targets, not directory-wide globals
 
-**Dependencies:** one `cmake/Dependencies.cmake`, exact version/commit + integrity hash. GoogleTest **1.17.0 test-only**. nlohmann/json only on serialization/adapter/persistence targets. godot-cpp 4.7.x only on the GDExtension target. No floating `main`/`latest`. Network fetch is **bootstrap**, not an accidental side effect of `ctest` or `play.py`.
+Use target-scoped configuration:
 
-**FetchContent:** `FetchContent_Declare` + `FetchContent_MakeAvailable` with a pinned tag. Optional `FIND_PACKAGE_ARGS` if a system package is acceptable; this repo prefers pinned source for reproducibility. `INSTALL_GTEST OFF`. `gtest_force_shared_crt` only if a Windows CRT mismatch appears — do not cargo-cult it on Linux.
+- `target_sources`;
+- `target_include_directories`;
+- `target_compile_features`;
+- `target_compile_options`;
+- `target_link_libraries`.
 
-**Warnings:** TZ §6.7 on **project** targets. Do not `add_compile_options` so godot-cpp/gtest inherit `-Werror`.
+Avoid project-wide `include_directories()`, `add_definitions()` and broad `add_compile_options()` for project code.
 
-**Tests:** `enable_testing()`, CTest, `gtest_discover_tests` after the test binary exists. Test executables link `sim_core` + `GTest::gtest_main`. They must build **without** Godot.
+The initial project uses C++23 without compiler extensions. Express that through target features/project configuration rather than relying on ambient compiler defaults.
+
+### Explicit source lists
+
+Do not use `file(GLOB)` / `GLOB_RECURSE` to discover project source files. CMake documentation explicitly discourages source collection by glob because source additions/removals are not an explicit build-graph change.
+
+Adding a `.cpp` means updating the owning target's source list.
+
+### Presets
+
+Shared project configuration belongs in `CMakePresets.json`. Machine-specific developer overrides belong in uncommitted `CMakeUserPresets.json`.
+
+Do not state that CMake/Ninja/Clang are installed merely because the project intends to use them. Bootstrap/current environment must prove tool availability.
+
+## Dependency policy
+
+Declare third-party native dependencies centrally (planned location: `cmake/Dependencies.cmake`) and use immutable reviewed revisions/versions.
+
+Initial intended dependency roles:
+
+- GoogleTest — tests only;
+- nlohmann/json — serialization/persistence/adapter boundaries only, not live domain state;
+- godot-cpp — GDExtension target only.
+
+Exact active revisions belong in build/lock files once those files exist. Godot/godot-cpp compatibility semantics belong in [`VERSIONS.md`](VERSIONS.md).
+
+Never use floating `main`, `master` or `latest` as the project pin.
+
+Initial dependency acquisition may use explicit bootstrap/network access, but `ctest`, an ordinary playtest or a narrow local check should not unexpectedly mutate/fetch dependencies as a hidden side effect.
+
+Third-party warnings must not inherit the project's strongest warning/`-Werror` policy accidentally.
+
+## FetchContent
+
+When FetchContent is used, declare an immutable dependency revision and keep the ownership centralized.
+
+Do not add system-package fallback complexity until there is a concrete environment requirement. Do not cargo-cult Windows/gtest flags onto platforms that do not need them.
+
+## Native tests
+
+Enable CTest and use GoogleTest discovery after test executables exist.
+
+Test executables prove simulation/protocol behavior by linking native project targets plus GoogleTest; they do not link Godot merely to access world rules.
+
+Use `GTest::gtest_main` unless a test executable has a real process-level initialization need not expressible through fixtures/environment.
 
 ```cmake
-# Good
+add_library(sim_core STATIC)
 target_sources(sim_core PRIVATE src/sim/application/step.cpp)
-target_link_libraries(sim_tests PRIVATE sim_core GTest::gtest_main)
 
-# Bad
+target_link_libraries(sim_tests PRIVATE
+  sim_core
+  GTest::gtest_main
+)
+```
+
+Bad:
+
+```cmake
 include_directories(src)
-file(GLOB_RECURSE SRC CONFIGURE_DEPENDS src/*.cpp)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_compile_options(-Werror)
 ```
 
-## GoogleTest: how / how not
+## Python tooling policy
 
-| Do | Don't |
-| --- | --- |
-| One fixture instance per test (framework already does this) | Share a process-global `World` across tests |
-| `TEST(Trade, RejectsInsufficientFunds)` — no `_` in macro names | `TEST(Trade_Test, ...)` |
-| `EXPECT_*` for multiple checks; `ASSERT_*` before a deref | `ASSERT_TRUE` on every equality |
-| Determinism tests: same seed + commands → same projection | Tests that read `std::chrono::system_clock` |
-| Prove a rule in C++ first | “We’ll cover it in Godot later” as the only test |
+Use a repository `.venv` and pin the Python developer tooling actually required. Ruff is the intended formatter/linter when Python tooling is bootstrapped; the active pinned version belongs in machine-readable dependency configuration.
 
-## Python tools: how
+Use:
 
-TZ: `.venv`, pinned **ruff**, type hints on public functions, `pathlib`, one Godot playtest entry `tools/play.py`.
+- `pathlib` for paths;
+- typed public tool functions where it improves clarity;
+- `subprocess` with an explicit argv sequence;
+- explicit `cwd` and deliberate environment handling;
+- bounded timeouts/deadlines;
+- `try/finally` or context managers for child/process cleanup.
 
-**Process control.** `subprocess.run([...], cwd=..., env=..., timeout=..., check=False)` with an **argv list**. Official Python docs: `shell=True` is a security hazard and a quoting bug factory. Forbidden without a recorded exception.
-
-**Lifecycle.** Godot is spawned in **one** module. `try/finally` or a context manager always terminates the child (TZ: never `pkill godot`). No unbounded polling; bound waits with timeout.
-
-**Do not** use Playwright, Chromium, or a second simulator in Python. Do not import `src/sim` via bindings invented ad hoc — native tests already own that.
+Avoid `shell=True` unless an exceptional, reviewed command genuinely requires shell semantics. Do not build command strings that rely on shell quoting.
 
 ```python
-# Good
 subprocess.run(
     [godot, "--path", str(godot_dir), "--", "--scenario", name],
     cwd=root,
     timeout=120,
     check=False,
 )
-
-# Bad
-os.system("godot --path godot &")
-subprocess.run("pkill godot", shell=True)
 ```
+
+Forbidden process shortcuts include `os.system("godot ... &")`, `pkill godot`, `killall godot` and unbounded polling.
+
+## Playtest process ownership
+
+Godot process lifecycle is implemented in one supervisor path once `tools/play.py` exists. The full contract for locking, timeouts, artifacts and process-group ownership is in [`../VERIFICATION.md`](../VERIFICATION.md#godot-playtest-supervisor).
+
+Do not create a second test runner around Playwright/Chromium, and do not create Python bindings that reimplement the native simulation merely for test convenience.
 
 ## Agent traps
 
-- Running `pip install` of random Godot tooling into the system interpreter instead of `.venv`.
-- Fetching godot-cpp during `ctest` because Dependencies.cmake was not bootstrapped.
-- Adding SCons “for the extension” beside CMake.
-- GLOB “until we have more files”.
-- Custom `main()` in every test file while also linking `gtest_main` (duplicate entry).
-- Treating compile-green as DoD (TZ §39).
+- Installing random project tooling globally instead of using the repository environment/bootstrap.
+- Fetching godot-cpp during an unrelated `ctest` or playtest.
+- Adding SCons beside CMake because upstream godot-cpp examples use SCons.
+- Using GLOB “temporarily”.
+- Writing custom `main()` while also linking `gtest_main`.
+- Letting global compiler flags poison third-party targets.
+- Treating compile-green as gameplay acceptance; see [`../VERIFICATION.md`](../VERIFICATION.md).

@@ -1,21 +1,23 @@
 ---
-description: GDExtension adapter is the only Godot ↔ sim seam
-globs: src/adapters/**,godot/**/*.gdextension
+description: GDExtension adapter — the only Godot to application-protocol runtime seam
+globs: src/adapters/gdextension/**,godot/**/*.gdextension
 alwaysApply: false
 ---
 
 # GDExtension adapter
 
-Details: `docs/engineering/gdextension.md`. Contract: TZ §10.
+Canonical guidance: `docs/engineering/gdextension.md`. Version policy: `docs/engineering/VERSIONS.md`. Runtime boundary: `docs/ARCHITECTURE.md`.
 
-Thin facade: GDScript → protocol → `sim_core`. Pin godot-cpp to **4.7.x**. Build with **this repo’s CMake**, not a second SCons graph.
+Keep the adapter thin: Godot-facing values -> protocol -> authoritative core -> result/projection/events -> Godot-facing values.
 
-```cpp
-// BAD — GDCLASS is the world
-void WorldNode::set_gold(int g) { gold = g; }
+Godot Engine, API target and godot-cpp revision are separate version dimensions. Never write `godot-cpp 4.7.x`; use the exact immutable v10 revision from active build/lock configuration and the policy in `VERSIONS.md`.
 
-// GOOD — translate only
-Dictionary SimFacade::submit_move(int32_t dx, int32_t dy);
-```
+Do not:
+- export mutable `World*` or internal object graphs;
+- put trade/spell/world laws in `GDCLASS` methods;
+- include godot-cpp from `src/sim` or `src/protocol`;
+- throw ordinary gameplay outcomes across the boundary;
+- add a second SCons project build graph;
+- depend on floating godot-cpp branches.
 
-Don't: export `World*`; put trade/spell laws in the adapter; throw gameplay results across the C ABI; register every domain type in ClassDB; include godot-cpp from `src/sim`.
+A binding change is not verified until native tests, adapter build, Godot load and the relevant round-trip check actually run.

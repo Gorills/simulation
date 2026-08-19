@@ -1,24 +1,30 @@
 ---
-description: C++23 Simulation Core and protocol — how and how not
-globs: src/sim/**,src/protocol/**,tests/**/*.cpp
+description: C++23 Simulation Core and protocol — native authority and deterministic coding
+globs: src/sim/**,src/protocol/**,tests/**/*.cpp,tests/**/*.hpp
 alwaysApply: false
 ---
 
 # C++ Simulation Core
 
-Details: `docs/engineering/cpp.md`. Contract: TZ §5–9.
+Canonical guidance: `docs/engineering/cpp.md`. Runtime boundary: `docs/ARCHITECTURE.md`. Determinism/model semantics: `docs/MODELING.md`.
 
-`src/sim` is the only world. It builds and tests with **no Godot headers**. Clients send intents, never desired state.
+`src/sim` is the only authoritative world and `src/sim` + `src/protocol` remain Godot-free.
 
-```cpp
-// BAD
-void SetGold(World&, int);
-#include <godot_cpp/godot.hpp>
+Do:
+- semantic intents/commands, not desired-state setters;
+- RAII and explicit ownership;
+- `std::expected`/typed results for ordinary gameplay failure;
+- one explicit seeded RNG state;
+- integer/scaled load-bearing domain values by default;
+- deterministic iteration/order where outcome depends on order;
+- concrete types until a real variation point exists.
 
-// GOOD
-std::expected<TradeResult, TradeError> execute_trade(World&, const OfferTrade&);
-```
+Do not:
+- include godot-cpp/Godot headers;
+- use frame delta or wall clock as simulation time;
+- use hidden/system RNG;
+- use `nlohmann::json` as live domain state;
+- add ECS/job/service-locator frameworks speculatively;
+- make exceptions the normal “not enough gold” channel.
 
-Do: RAII; `std::expected` for ordinary failure; seeded RNG as world state; integer ticks/money; `unordered_map` lookup-only; concrete types until a second implementation exists.
-
-Don't: god-object `World` + service locator; ECS/job system on day one; `nlohmann::json` as domain; `shared_ptr` everywhere; exceptions as “not enough gold”; `std::random_device` / wall clock as gameplay.
+Read current headers/tests before naming an API.
