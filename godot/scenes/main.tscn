@@ -348,6 +348,22 @@ theme_type_variation = &"DsBodyLabel"
 text = "—"
 horizontal_alignment = 2
 
+[node name="LivingNeedLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "UI_DEBUG_LIVING_NEED"
+
+[node name="DebugLivingNeedStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+horizontal_alignment = 2
+
 [node name="SpatialDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
 layout_mode = 2
 mouse_filter = 2
