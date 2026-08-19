@@ -16,11 +16,13 @@ enum class NpcRestNeedDecisionError : std::uint8_t {
 };
 
 // One bounded causal decision for Milestone 1: an NPC with RestNeedState either
-// already satisfies the assigned rest point or emits the ordinary actor movement
-// intent required to approach it. This is not a generic task planner, schedule,
-// behavior tree or navigation route.
+// approaches its assigned rest point, waits there because another exact-spatial
+// actor currently occupies the same tolerance area, or satisfies the need there.
+// This is not a generic task planner, reservation system, schedule, behavior tree
+// or navigation route.
 struct NpcRestNeedDecision final {
     bool satisfied{};
+    bool blocked_by_other_actor{};
     ActorGroundedMoveIntent movement{};
 
     constexpr bool operator==(const NpcRestNeedDecision &) const = default;
