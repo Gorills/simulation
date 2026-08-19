@@ -24,12 +24,13 @@ Implemented in the Godot-free native transition:
 - oblique wall motion with preserved tangential component;
 - walkable-slope classification and grounded traversal;
 - too-steep slope blocking of the gradient component while valid tangential motion remains;
+- ordinary flat-support step-up at or below the explicit step threshold;
+- blocking-step semantics above the threshold while valid tangential motion remains;
 - zero-input rest on flat and walkable sloped support without downhill creep;
 - deterministic replay for the implemented fixtures.
 
 Still deliberately pending:
 
-- ordinary step-up / blocking-step semantics;
 - ledge support loss, gravity, falling and landing;
 - `World` / protocol movement wiring;
 - ordered authoritative movement samples and Godot reconciliation;
@@ -57,7 +58,7 @@ Still deliberately pending:
 
 This is intentionally the smallest representation required by the acceptance arena. Finite arbitrary wall meshes, triangle-mesh collision, terrain acceleration structures and general rigid-body physics are not selected yet.
 
-Acceptance fixtures should avoid ambiguous overlapping support patches except deliberate equal-height seams. A real-location collision representation must define lookup/overlap semantics explicitly instead of depending on vector order.
+Acceptance fixtures should avoid ambiguous overlapping support patches except deliberate equal-height seams. The step fixture uses adjacent, non-overlapping flat patches with an integer-contiguous boundary so the support transition has one deterministic owner on each side. A real-location collision representation must define lookup/overlap semantics explicitly instead of depending on vector order.
 
 ### Body / timing / movement baseline
 
@@ -70,11 +71,14 @@ The first `UprightCapsule` uses the existing project shell values:
 
 - **60 authoritative steps/second**;
 - **5800 mm/s** full-strength planar move-speed fixture;
-- maximum walkable slope: **1192 mm rise per 1000 mm horizontal run**, an integer approximation of the existing project-owned **50°** Godot locomotion-profile baseline.
+- maximum walkable slope: **1192 mm rise per 1000 mm horizontal run**, an integer approximation of the existing project-owned **50°** Godot locomotion-profile baseline;
+- maximum ordinary step-up: **300 mm**.
+
+The 300 mm step threshold is a project-owned first acceptance baseline. It is numerically aligned with the existing playable profile's **0.3 m** local floor-contact reach so the migration does not introduce an unrelated scale, but step-up and floor snap remain different semantics. It is not copied from an engine default and remains reviewable through real playtest before authoritative locomotion becomes player-facing.
 
 These are repository migration values, not engine defaults and not immutable final feel tuning.
 
-Acceleration/deceleration, sprint, facing/turn response, step height, grounding snap and gravity are not yet authoritative.
+Acceleration/deceleration, sprint, facing/turn response, grounding snap and gravity are not yet authoritative.
 
 ### Input
 
@@ -125,9 +129,24 @@ When a candidate step enters a too-steep patch:
 
 Sliding/falling on steep surfaces belongs to the future gravity/fall slice; this stage does not invent it.
 
+### Ordinary step-up and blocking step
+
+The first step slice deliberately covers a discrete **upward transition between distinct adjacent flat support patches**. It does not reinterpret ordinary movement inside one patch as a step and does not use a flat patch's `gradient_axis` as a hidden step normal.
+
+When a candidate move enters a higher flat patch:
+
+- the solver compares the positive support-height discontinuity with `max_step_up`;
+- a rise at or below **300 mm** is ordinary grounded movement and authoritative Y moves to the higher support in the same `SpatialEpoch`;
+- a rise above **300 mm** blocks only the planar axis or axes by which the candidate entered the higher patch;
+- blocked axes clear velocity and integration remainder;
+- valid tangential movement on the lower support remains;
+- the entry axis is derived from actual patch-boundary membership, not from presentation geometry or client collision results.
+
+The paired acceptance fixture is intentionally sharp: **300 mm traverses; 301 mm blocks**. Compound ramp-to-step seams, arbitrary staircases, finite tread depth and step-down/fall behavior are not generalized by this slice. They should be added only when the next real geometry requires them rather than by inventing a generic character-physics framework now.
+
 ### Deterministic replay
 
-Native tests require exact equality for repeated flat/wall and slope intent streams from identical state/configuration/environment.
+Native tests require exact equality for repeated flat/wall, slope and step intent streams from identical state/configuration/environment.
 
 ## Neutral acceptance arena
 
@@ -139,9 +158,9 @@ wall lane:
 slope lane:
   below-threshold ramp
   above-threshold ramp
-step lane (pending):
-  below-threshold step
-  above-threshold step
+step lane:
+  300 mm traversable step
+  301 mm blocking step
 ledge lane (pending):
   platform
   drop
@@ -161,7 +180,6 @@ Rules:
 Still require reviewed choices backed by the next real mechanic/playtest:
 
 - contact/skin tolerance beyond the exact current boundaries;
-- ordinary step-up threshold;
 - grounding/snap tolerance;
 - gravity and falling integration;
 - acceleration/deceleration/gait semantics;
@@ -209,11 +227,11 @@ The behavior categories are adapted from established controller contracts, not t
 - Unreal Engine `UCharacterMovementComponent`: <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UCharacterMovementComponent>
 - Unity 6 Character Controller: <https://docs.unity3d.com/6000.0/Documentation/Manual/class-CharacterController.html>
 
-The 50° migration baseline comes from this repository's existing `godot/config/default_locomotion_profile.tres`, not from an engine default.
+The 50° slope migration baseline and the numerical 0.3 m reference used to select the initial 300 mm step acceptance baseline come from this repository's existing `godot/config/default_locomotion_profile.tres`, not from an engine default. Their semantics remain separate.
 
 ## Next bounded task
 
-Implement ordinary **step-up versus blocking-step** semantics using the accepted neutral fixture. Then implement ledge/fall/landing. Only after the native grounded set is stable should the shared transition enter `World`/protocol and drive ordered Godot presentation samples.
+Implement **ledge support loss, gravity/falling and stable landing** in the neutral native fixture. Only after the native grounded set is stable should the shared transition enter `World`/protocol and drive ordered Godot presentation samples.
 
 Do not build the first visual content location before the required native collision semantics are proven.
 

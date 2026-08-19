@@ -14,6 +14,7 @@ constexpr GroundedStepConfig kPlayableStep{
     .ticks_per_second = 60,
     .move_speed = MillimetersPerSecond{5800},
     .max_slope_rise_per_1000_run = 1192,
+    .max_step_up = Millimeters{300},
 };
 
 [[nodiscard]] GroundedEnvironment flat_arena(const bool with_wall) {
@@ -62,6 +63,25 @@ constexpr GroundedStepConfig kPlayableStep{
         .gradient_axis = PlanarAxis::x,
         .height_at_min = Millimeters{0},
         .height_at_max = Millimeters{15'000},
+    });
+    return environment;
+}
+
+[[nodiscard]] GroundedEnvironment step_gate(const Millimeters step_height) {
+    GroundedEnvironment environment;
+    environment.ground.push_back(GroundPatch{
+        .x = MillimeterRange{Millimeters{-10'000}, Millimeters{0}},
+        .z = MillimeterRange{Millimeters{-10'000}, Millimeters{10'000}},
+        .gradient_axis = PlanarAxis::x,
+        .height_at_min = Millimeters{0},
+        .height_at_max = Millimeters{0},
+    });
+    environment.ground.push_back(GroundPatch{
+        .x = MillimeterRange{Millimeters{1}, Millimeters{10'000}},
+        .z = MillimeterRange{Millimeters{-10'000}, Millimeters{10'000}},
+        .gradient_axis = PlanarAxis::x,
+        .height_at_min = step_height,
+        .height_at_max = step_height,
     });
     return environment;
 }
@@ -176,6 +196,22 @@ TEST(GroundedLocomotion, RejectsIntentOutsideUnitCircle) {
     EXPECT_EQ(result.error(), GroundedStepError::invalid_intent);
 }
 
+TEST(GroundedLocomotion, RejectsNegativeStepThreshold) {
+    auto invalid_config = kPlayableStep;
+    invalid_config.max_step_up = Millimeters{-1};
+
+    const auto result = step_grounded(
+        flat_arena(false),
+        kPlayableBody,
+        invalid_config,
+        initial_state(),
+        PlanarMoveIntent{}
+    );
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), GroundedStepError::invalid_config);
+}
+
 TEST(GroundedLocomotion, TraversesWalkableSlopeAndDerivesAuthoritativeHeight) {
     const auto environment = walkable_slope_arena();
     const auto state = replay(environment, PlanarMoveIntent{.x = 1000, .z = 0}, 60);
@@ -224,6 +260,61 @@ TEST(GroundedLocomotion, IdenticalSlopeReplayProducesIdenticalState) {
     const auto second = replay(environment, PlanarMoveIntent{.x = 1000, .z = 0}, 60);
 
     EXPECT_EQ(first, second);
+}
+
+TEST(GroundedLocomotion, StepAtConfiguredThresholdTraversesAndRaisesAuthoritativeHeight) {
+    const auto result = step_grounded(
+        step_gate(Millimeters{300}),
+        kPlayableBody,
+        kPlayableStep,
+        initial_state(),
+        PlanarMoveIntent{.x = 1000, .z = 0}
+    );
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->spatial.position.x.value, 96);
+    EXPECT_EQ(result->spatial.position.y.value, 300);
+    EXPECT_EQ(result->spatial.velocity.x.value, 5800);
+    EXPECT_EQ(result->spatial.velocity.y.value, 18'000);
+    EXPECT_EQ(result->spatial.epoch.value, 1U);
+}
+
+TEST(GroundedLocomotion, StepAboveConfiguredThresholdBlocksEntryAxis) {
+    const auto state = replay(step_gate(Millimeters{301}), PlanarMoveIntent{.x = 1000, .z = 0}, 60);
+
+    EXPECT_EQ(state.spatial.position.x.value, 0);
+    EXPECT_EQ(state.spatial.position.y.value, 0);
+    EXPECT_EQ(state.spatial.velocity.x.value, 0);
+    EXPECT_EQ(state.remainder.x, 0);
+    EXPECT_EQ(state.spatial.epoch.value, 1U);
+}
+
+TEST(GroundedLocomotion, BlockingStepPreservesTangentialMotion) {
+    const auto result = step_grounded(
+        step_gate(Millimeters{301}),
+        kPlayableBody,
+        kPlayableStep,
+        initial_state(),
+        PlanarMoveIntent{.x = 707, .z = 707}
+    );
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->spatial.position.x.value, 0);
+    EXPECT_GT(result->spatial.position.z.value, 0);
+    EXPECT_EQ(result->spatial.velocity.x.value, 0);
+    EXPECT_GT(result->spatial.velocity.z.value, 0);
+    EXPECT_EQ(result->spatial.position.y.value, 0);
+}
+
+TEST(GroundedLocomotion, IdenticalStepReplayProducesIdenticalState) {
+    const auto environment = step_gate(Millimeters{300});
+    const auto first = replay(environment, PlanarMoveIntent{.x = 1000, .z = 0}, 60);
+    const auto second = replay(environment, PlanarMoveIntent{.x = 1000, .z = 0}, 60);
+
+    EXPECT_EQ(first, second);
+    EXPECT_EQ(first.spatial.position.x.value, 5800);
+    EXPECT_EQ(first.spatial.position.y.value, 300);
+    EXPECT_EQ(first.spatial.epoch.value, 1U);
 }
 
 } // namespace

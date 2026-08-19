@@ -100,11 +100,15 @@ struct GroundedStepConfig final {
     // 1192 approximates the existing project-owned 50 degree presentation
     // baseline without floating-point/trigonometry in authoritative code.
     std::uint32_t max_slope_rise_per_1000_run{};
+    // Maximum positive support discontinuity that ordinary grounded movement
+    // may step up in one transition. This is independent from grounding snap.
+    Millimeters max_step_up{};
 
     [[nodiscard]] constexpr bool is_valid() const noexcept {
         return ticks_per_second > 0
             && move_speed.value >= 0
-            && max_slope_rise_per_1000_run > 0;
+            && max_slope_rise_per_1000_run > 0
+            && max_step_up.value >= 0;
     }
 
     constexpr bool operator==(const GroundedStepConfig &) const = default;
