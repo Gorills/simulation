@@ -1,25 +1,29 @@
 ---
-description: Godot 4 presentation client — how and how not
+description: Godot 4 presentation client — scenes, typed GDScript and semantic input
 globs: godot/**
 alwaysApply: false
 ---
 
 # Godot client
 
-Details: `docs/engineering/godot.md`. Contract: TZ §10–11.
+Canonical guidance: `docs/engineering/godot.md`. Runtime boundary: `docs/ARCHITECTURE.md`. Version policy: `docs/engineering/VERSIONS.md`.
 
-Typed GDScript, 2D. Godot displays projections; it does not own inventory, money, or outcomes. Mono editor ≠ C#.
+Godot displays projections and sends semantic input. It does not own authoritative inventory, money, relationships, ownership or outcomes.
 
-```gdscript
-# BAD
-get_node("../../HUD/Gold").text = str(gold)
-GameState.gold += 10
+Do:
+- typed GDScript;
+- reusable/independent scenes;
+- parent-mediated wiring and semantic signals;
+- InputMap actions;
+- presentation interpolation separated from simulation time;
+- restrained Autoload use;
+- treat Resources as shared client-side data containers, not native world truth.
 
-# GOOD
-trade_panel.trade_offered.connect(_on_trade_offered)
-gold_label.text = str(projection.player_gold)
-```
+Do not:
+- create Autoload `World` / authoritative `GameState`;
+- mutate world truth directly from UI or animation callbacks;
+- hardcode cross-scene `../../..` dependencies;
+- use frame `delta` to advance the simulation;
+- add C# gameplay because the editor is Mono-capable.
 
-Do: Main / World / GUI; parent injects deps; call down, signal up; InputMap; `_physics_process` for physics, `_process` for frames; duplicate Resources for per-entity runtime state.
-
-Don't: Autoload world/EventBus; hard NodePaths across scenes; mutate shared `.tres`; use frame `delta` as sim time; parent the player to a disposable room; AnimationPlayer as the only outcome path.
+Inspect the current projection/adapter API before using it.

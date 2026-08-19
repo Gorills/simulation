@@ -1,34 +1,79 @@
-# Documentation map
+# Documentation router
 
-Canonical contract: [`docs/specs/TZ.md`](specs/TZ.md).
+This repository deliberately has **no monolithic `TZ.md`**. Each durable concern has one canonical owner, and agent/bootstrap files route to that owner instead of copying it.
 
-Do not copy toolchain versions or AI Layer procedure into extra files. Stack how/how-not lives in [`docs/engineering/`](engineering/STACK.md). Product invariants stay in the TZ.
+## Choose the smallest relevant source
 
-## Entry
-
-| Document | Audience | Contents |
+| Concern | Canonical source | Open when |
 | --- | --- | --- |
-| [`README.md`](../README.md) | humans | purpose, layer table, verified local tools |
-| [`AGENTS.md`](../AGENTS.md) | agents | pointer to TZ + engineering STACK; AI Layer owns workflow |
-| [`docs/specs/TZ.md`](specs/TZ.md) | humans + agents | product, architecture, modeling, engineering invariants |
-| [`.cursor/rules/`](../.cursor/rules/) | Cursor | short enforceable splits; details in TZ + [`docs/engineering/`](engineering/STACK.md) |
-| [`docs/engineering/STACK.md`](engineering/STACK.md) | agents | C++ / Godot / GDExtension / CMake / Python how and how-not |
+| product goals, playable invariants, player-role philosophy | [`PRODUCT.md`](PRODUCT.md) | gameplay/product work |
+| runtime ownership, dependency direction, protocol/GDExtension seam, AI Layer runtime boundary | [`ARCHITECTURE.md`](ARCHITECTURE.md) | architecture/integration work |
+| determinism, NPC/economy/politics/social/history/magic/save modeling | [`MODELING.md`](MODELING.md) | simulation/model changes |
+| tests, playtest supervisor, evidence, CI/DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
+| current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target |
+| agent context packaging | [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md) | maintaining AGENTS/Cursor/Claude/Gemini/skills |
+| stack-specific implementation | [`engineering/STACK.md`](engineering/STACK.md) | coding/build work |
+| Godot/GDExtension versions | [`engineering/VERSIONS.md`](engineering/VERSIONS.md) | engine/binding/dependency work |
+| consequential rationale | [`decisions/`](decisions/) | when an accepted choice may be affected |
+| serious mechanic model | `models/<mechanic>.md` | once that mechanic has a durable model contract |
+| load-bearing research | `research/` | when historical/scientific evidence needs a durable artifact |
 
-## Architecture
+## Engineering routes
 
-| Document | Status |
+| Area | Guide |
 | --- | --- |
-| [`docs/decisions/0001-cpp-godot-gdextension.md`](decisions/0001-cpp-godot-gdextension.md) | accepted |
-| [`docs/engineering/STACK.md`](engineering/STACK.md) | stack how/how-not for agents (C++, Godot, GDExtension, CMake/Python) |
-| `docs/ARCHITECTURE.md` | planned — write when runtime code exists |
-| `docs/GAME.md` | planned — current playable facts only |
-| `docs/MODELING_POLICY.md` | planned — extract from TZ when a model needs a home |
-| `docs/models/` | planned — one file per serious mechanic |
+| C++23 Simulation Core + protocol | [`engineering/cpp.md`](engineering/cpp.md) |
+| Godot 4 typed GDScript client | [`engineering/godot.md`](engineering/godot.md) |
+| GDExtension adapter | [`engineering/gdextension.md`](engineering/gdextension.md) |
+| CMake / GoogleTest / Python tooling | [`engineering/cmake-python.md`](engineering/cmake-python.md) |
+| primary upstream references | [`engineering/SOURCES.md`](engineering/SOURCES.md) |
 
-## Rules of this tree
+## Entry points for tools and humans
 
-- [`docs/specs/TZ.md`](specs/TZ.md) is the only full product/engineering contract.
-- [`docs/engineering/`](engineering/STACK.md) is implementation architecture (how/how-not). It does not restate toolchain versions or AI Layer procedure.
-- ADRs record irreversible choices; they do not restate the whole TZ.
-- Planned files marked planned above are not present. Do not claim they exist.
-- Old root path `world_sim_greenfield_TZ_v2.md` is a redirect only.
+| File | Purpose |
+| --- | --- |
+| [`README.md`](../README.md) | human project entry |
+| [`AGENTS.md`](../AGENTS.md) | universal short agent bootstrap |
+| [`CLAUDE.md`](../CLAUDE.md) | Claude import shim for `AGENTS.md` |
+| [`GEMINI.md`](../GEMINI.md) | Gemini import shim for `AGENTS.md` |
+| [`.cursor/rules/`](../.cursor/rules/) | path-scoped Cursor reminders only |
+
+Host files do not own product/engineering truth. They point here.
+
+## Authority and conflicts
+
+Different document types answer different questions; avoid pretending one total ordering solves every conflict.
+
+For **implemented behavior**, current source, build configuration, lock files and executable tests are authoritative evidence.
+
+For **intentional architecture decisions**, accepted ADRs explain why a choice exists. If current implementation intentionally changes a consequential accepted decision, update/supersede the ADR rather than silently diverging.
+
+For **required behavior/design not yet implemented**, use the canonical concern owner above.
+
+A stale prose statement is a documentation defect. Do not change working code merely to imitate stale prose without first identifying the intended outcome.
+
+## Documentation rules
+
+- One canonical owner per durable fact.
+- Do not copy exact dependency/tool versions into README, AGENTS or editor rules; route to machine-readable pins / [`engineering/VERSIONS.md`](engineering/VERSIONS.md).
+- Do not copy AI Layer Work/Task/Epic procedure into this repository.
+- ADRs record consequential decisions and rationale; they are not alternate full specs.
+- Engineering guides explain how/how-not for a chosen stack; they do not redefine product goals.
+- Model documents exist only for serious mechanics that need a durable causal contract.
+- Research artifacts should record source quality, uncertainty and the modeling consequence, not become an uncurated link dump.
+- Planned files/directories must not be described as if they already exist.
+- When a mechanically enforceable invariant gains real code/targets, prefer an executable check over additional prose.
+
+## Progressive disclosure for agents
+
+Default route:
+
+```text
+AGENTS.md
+  -> this INDEX
+  -> one canonical concern document
+  -> one relevant engineering/model/ADR source
+  -> current code/tests/build files
+```
+
+Do not preload all documentation “for safety”. Weak models benefit from fewer competing rules; strong models can load deeper context when the task actually requires it.

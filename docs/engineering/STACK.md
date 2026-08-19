@@ -1,54 +1,68 @@
-# Stack architecture for agents
+# Stack architecture for implementers
 
-Product invariants live in [`docs/specs/TZ.md`](../specs/TZ.md). This folder is **how** to write maintainable code on the chosen stack so the first implementation does not bake in failure modes that are expensive to unwind.
+This directory contains **how/how-not** guidance for the selected stack. It does not own product intent, simulation-model policy, verification acceptance or exact active dependency pins.
 
-| Layer | Owns | Guide |
+Canonical cross-cutting owners:
+
+- product/playable invariants: [`../PRODUCT.md`](../PRODUCT.md)
+- runtime dependency direction: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+- simulation/modeling: [`../MODELING.md`](../MODELING.md)
+- verification/playtest: [`../VERIFICATION.md`](../VERIFICATION.md)
+- milestones: [`../ROADMAP.md`](../ROADMAP.md)
+- Godot/GDExtension version policy: [`VERSIONS.md`](VERSIONS.md)
+
+## Routes
+
+| Area | Guide | Owns |
 | --- | --- | --- |
-| C++23 Simulation Core + protocol | world laws, commands, projections | [`cpp.md`](cpp.md) |
-| GDExtension adapter | Godot ↔ protocol translation | [`gdextension.md`](gdextension.md) |
-| Godot 4 GDScript client | scenes, input, camera, UI, audio | [`godot.md`](godot.md) |
-| CMake / CTest / GoogleTest / Python tools | build, native tests, playtest orchestration | [`cmake-python.md`](cmake-python.md) |
-
-Primary citations: [`SOURCES.md`](SOURCES.md). Stack choice: [`docs/decisions/0001-cpp-godot-gdextension.md`](../decisions/0001-cpp-godot-gdextension.md).
-
-## How these docs relate to the TZ
-
-- **TZ** = what must be true (authority, determinism, playable slices).
-- **These files** = how/how-not on C++, Godot, GDExtension, CMake, Python, with real upstream examples.
-- **Cursor rules** = short reminders when matching files are open. Details stay here.
-- **`docs/ARCHITECTURE.md`** remains planned until runtime code exists (dependency graph of real targets). Do not invent that file from this guide.
-
-Do not copy toolchain versions or AI Layer procedure here. Versions stay in TZ §2.
+| C++23 Simulation Core + protocol | [`cpp.md`](cpp.md) | ownership, headers, error model, deterministic coding, native tests |
+| GDExtension adapter | [`gdextension.md`](gdextension.md) | thin Godot ↔ protocol translation, registration, manifest/build seam |
+| Godot 4 client | [`godot.md`](godot.md) | scenes, typed GDScript, input, resources, presentation wiring |
+| CMake / GoogleTest / Python tools | [`cmake-python.md`](cmake-python.md) | build/test/tooling implementation |
+| versions | [`VERSIONS.md`](VERSIONS.md) | Godot/API/godot-cpp version dimensions and upgrade gate |
+| upstream evidence | [`SOURCES.md`](SOURCES.md) | primary sources behind these rules |
 
 ## Non-negotiable dependency direction
 
 ```text
-godot/  ->  adapters/gdextension  ->  protocol  ->  sim
-sim !-> Godot
-protocol !-> Godot
-godot-cpp !-> src/sim
+godot/ -> src/adapters/gdextension -> src/protocol -> src/sim
+
+src/sim      !-> Godot
+src/protocol !-> Godot
+godot-cpp    !-> src/sim or src/protocol
 ```
 
-A folder named `domain/` is not a boundary. Imports and CMake `target_link_libraries` are.
+A folder name is not an architecture boundary. CMake target edges, imports and tests must enforce the direction once runtime code exists.
 
-## What to copy from real projects — and what not to
+## Guidance policy
 
-| Source | Copy | Do not copy |
+These docs encode stack practices only when they serve this repository's chosen boundaries and are supported by upstream/project evidence.
+
+| Source | Adopt | Do not cargo-cult |
 | --- | --- | --- |
-| Godot 4.7 official best practices | scene independence, parent-mediated wiring, autoload restraint, typed GDScript, Resource sharing | putting world truth in nodes |
-| godot-cpp + official template | ClassDB registration, `.gdextension` manifest, pin bindings to engine series | SCons as a second build graph; putting sim laws in GDCLASS nodes |
-| godot-jolt | Godot-free library + thin engine binding | `file(GLOB)` of sources |
-| C++ Core Guidelines | RAII, ownership in signatures, self-contained headers | exceptions as ordinary gameplay results (TZ uses `std::expected`) |
-| CMake docs | target-scoped options, explicit sources, pinned FetchContent | global `include_directories`, floating `main` tags |
-| GoogleTest primer | independent fixtures, `EXPECT_*` vs `ASSERT_*`, `gtest_main` | tests that require Godot to prove a sim rule |
+| Godot official best practices | scene independence, parent-mediated wiring, restrained Autoloads, typed GDScript, Resource semantics, InputMap | world truth in nodes/Autoloads |
+| godot-cpp + official GDExtension examples | ClassDB registration, manifest semantics, API compatibility rules | turning a tutorial `GDCLASS` into the domain model |
+| godot-cpp template | binding/manifest conventions | a second SCons build graph merely because the template uses it |
+| C++ Core Guidelines | RAII, clear ownership, self-contained headers, concrete interfaces | abstract frameworks before a second real implementation |
+| CMake docs | target-scoped configuration, explicit source lists, pinned dependencies | global include/compile settings or source GLOBs |
+| GoogleTest primer | independent fixtures and appropriate EXPECT/ASSERT use | tests requiring Godot to prove native world rules |
+| Python subprocess docs | argv-based bounded process control | shell command strings / process-wide kill shortcuts |
 
-## First code the agents should produce
+## First implementation shape
 
-Milestone 0 in TZ §38, in this shape:
+Milestone 0 in [`../ROADMAP.md`](../ROADMAP.md) should establish only the real dependency spine:
 
-1. `sim_core` static/shared library with no Godot headers.
-2. Native GoogleTest that submits one command and asserts one projection.
-3. Thin GDExtension facade that forwards that command.
-4. Godot scene that reads InputMap and displays the projection.
+1. a Godot-free native `sim_core`/protocol target;
+2. a deterministic native test;
+3. a thin GDExtension facade linking the pinned godot-cpp revision;
+4. a Godot 2D scene that sends one semantic input and renders the returned projection;
+5. a bounded playtest proving the round-trip.
 
-Do not start with ECS, autoload EventBus, SCons, C#, or a second Python simulator.
+Do not start with ECS, an Autoload EventBus/world, C#, a web/WASM client, SCons in parallel with CMake, or a Python simulation.
+
+## Updating this folder
+
+- Prefer primary/upstream documentation; record important sources in [`SOURCES.md`](SOURCES.md).
+- Do not repeat exact dependency SHAs that belong in build/lock files.
+- When a rule can be tested mechanically, make the executable check authoritative and keep prose concise.
+- Do not add host-agent workflow rules here; agent-context design lives in [`../AGENT_CONTEXT.md`](../AGENT_CONTEXT.md) and durable workflow belongs to AI Layer.

@@ -1,81 +1,135 @@
-# Godot 4 client (typed GDScript, 2D)
+# Godot 4 client — typed GDScript, 2D
 
-Contract: TZ §10–11. Engine docs used here are **Godot 4.7** (this repo’s verified editor). Godot owns presentation. It does not own inventory, money, jobs, relationships, or spell/trade outcomes.
+Godot is the real presentation/input/UI client. It does not own authoritative inventory, money, jobs, relationships, ownership, semantic location or spell/trade outcomes.
 
-Canonical sources: [Best practices index](https://docs.godotengine.org/en/stable/tutorials/best_practices/index.html), [Scene organization](https://docs.godotengine.org/en/stable/tutorials/best_practices/scene_organization.html), [Autoloads vs regular nodes](https://docs.godotengine.org/en/stable/tutorials/best_practices/autoloads_versus_regular_nodes.html), [Node alternatives](https://docs.godotengine.org/en/stable/tutorials/best_practices/node_alternatives.html), [Project organization](https://docs.godotengine.org/en/stable/tutorials/best_practices/project_organization.html), [Resources](https://docs.godotengine.org/en/stable/tutorials/scripting/resources.html), [Idle vs physics](https://docs.godotengine.org/en/stable/tutorials/scripting/idle_and_physics_processing.html), [Input events / InputMap](https://docs.godotengine.org/en/stable/tutorials/inputs/inputevent.html), [Static typing](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/static_typing.html).
+Canonical contracts:
 
-## Tree that matches the official “Main / World / GUI” split
+- runtime boundary: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+- product/playable rule: [`../PRODUCT.md`](../PRODUCT.md)
+- Godot/GDExtension version policy: [`VERSIONS.md`](VERSIONS.md)
+- player-facing evidence: [`../VERIFICATION.md`](../VERIFICATION.md)
 
-Godot’s own scene-organization article starts from a `Main` controller, a `World` child, and a `GUI` sibling — then **swap World children** on location change instead of `change_scene_to_file()` deleting the player. Do that here, adapted to a sim client:
+Primary Godot references are tracked in [`SOURCES.md`](SOURCES.md).
+
+## Scene composition
+
+Use a composition root following Godot's scene-organization guidance, adapted to an external authoritative simulation:
 
 ```text
-Main (main.gd)                    # composition root: wires adapter + scenes
-├── World (Node2D)                # presentation of the current place
-│   └── PlaceView / ActorViews    # visuals driven by projections
-├── GUI (Control / CanvasLayer)   # HUD, dialogue, trade — display only
-└── (optional Autoload)           # settings, debug overlay — not the world
+Main                         # composition root / wiring
+├── World (Node2D)           # current-place presentation
+│   └── PlaceView/ActorViews # projection-driven visuals
+└── GUI (Control/CanvasLayer)# HUD/dialogue/trade/presentation
 ```
 
-Parent-child means **lifetime**, not map geometry. Official warning: if rooms are deleted on travel, **do not parent the player to the room** or you invent an undocumented special case. Keep the avatar under World (or a persistent Actors branch) and change place visuals beside it.
+Persistent actors/UI should not be parented to disposable place scenes merely because they are visually located there.
 
-World **data** (village stocks, occupations) lives in C++ / `content/`, not under `godot/`.
+World **data** stays in the native simulation/content side, not in the Godot scene tree.
 
-## How
+## Scene independence and wiring
 
-**Scenes are reusable and environment-agnostic.** Official rule: design scenes with no hard dependencies. Parents inject `@export` node refs, Callables, or connect signals. Children do not `get_node("../../HUD/Gold")`.
+Reusable scenes must not assume a unique parent hierarchy. Parents/composition roots provide dependencies and connect siblings.
 
-**Call down, signal up.** Official: siblings only know their own hierarchy; an **ancestor mediates**. Parents call child methods to start work. Children emit **past-tense** signals (`trade_offered`, `actor_selected`) to respond. Connect in the parent’s `_ready()`, with null-checks on `get_node` in C++ bindings; in GDScript cache `@onready` / `@export` refs.
+Prefer:
 
-**Typed GDScript.** Annotate parameters, returns, and member types. Prefer `PersonId` coming from the adapter over untyped `Dictionary` blobs in UI code. Do not use `Variant` to silence the analyzer.
+- exported/typed node references where appropriate;
+- cached `@onready` references for owned children;
+- parent-mediated signal connections;
+- past-tense semantic signals for child-to-parent notification.
 
-**InputMap actions, not scancodes.** Official InputMap exists so keyboard/gamepad/remap share one code path. Gameplay scripts query `Input.is_action_*("move_east")`. Hardcoded `KEY_W` is a defect.
+Avoid hardcoded cross-scene `get_node("../../...")` paths.
 
-**`_physics_process` vs `_process`.** Official: physics-timestep work (moving a colliding body) in `_physics_process`; frame/visual work in `_process`. **Neither delta is simulation time.** Presentation may interpolate with delta; the core advances only on explicit ticks/commands.
+A useful local direction is “parent calls down, child signals up”; the canonical authority is Godot's scene-organization guidance rather than the slogan itself.
 
-**Resources are shared data containers.** Official: loading the same `.tres` returns the same object. Duplicate (or keep mutable runtime state on the node / in C++) if each actor needs its own numbers. Config stays immutable.
+## Typed GDScript
 
-**Prefer a Resource or RefCounted over a Node** when there is no transform, process, or child to own (official node-alternatives). Do not spawn a Node per inventory slot.
+Type parameters, return values and member state when types are known. Do not fall back to untyped `Variant`/`Dictionary` merely to avoid design decisions.
 
-**Autoloads are process-wide services**, not managers of everyone else’s data. Official audio-manager example: global `Sound.play()` hides the bug source and over-allocates. Prefer scene-local `AudioStreamPlayer`. Allowed autoloads here: debug overlay, settings. Forbidden: a Godot `World` that simulates.
+Boundary DTO representation may initially use Godot-friendly values, but UI code should not preserve arbitrary untyped protocol blobs as live world state.
 
-**Filesystem names:** `snake_case` files/folders; `PascalCase` node names (official project organization). Keep third-party editor addons in `addons/`. Put a `.gdignore` on non-Godot trees that must not be imported (`docs/`, C++ `src/` if the Godot project root were ever the repo root — this repo’s Godot root is `godot/`, which is the correct isolation).
+## InputMap
 
-**Set node properties before `add_child` when spawning at runtime** (official logic preferences), except properties that require being in the tree (global transform).
+Gameplay input is expressed through semantic InputMap actions so keyboard/gamepad/remapping share the same client intent path.
+
+Do not encode gameplay logic around raw keys such as `KEY_W`.
+
+Input creates semantic protocol requests; it does not mutate world state directly.
+
+## Frame and physics processing
+
+Use `_physics_process` for presentation/physics work that requires the physics tick and `_process` for frame-driven presentation.
+
+Neither `delta` is simulation time. Presentation may interpolate with frame time; authoritative advancement follows the native simulation contract in [`../MODELING.md`](../MODELING.md).
+
+## Resources
+
+Godot Resources are shared data containers. Loading the same resource may return the same in-memory object, so do not mutate shared `.tres` assets as per-NPC authoritative runtime state.
+
+Use immutable/shared configuration where suitable; duplicate resources or use presentation/node state when instance-specific presentation mutation is actually required.
+
+Do not mirror the authoritative C++ world into Resources.
+
+## Node alternatives
+
+Use `Resource`, `RefCounted` or plain values instead of a `Node` when the object needs no transform, processing callback or child ownership.
+
+Do not create one Node per inventory slot/value object merely because the client uses Godot.
+
+## Autoload policy
+
+Autoloads are process-wide services, not a default dependency injection container or a second world authority.
+
+Potentially appropriate uses are small genuinely global presentation/developer services such as settings or a debug overlay.
+
+Forbidden patterns include an Autoload `World`, authoritative `GameState`, global inventory/economy dictionaries or a global EventBus that becomes the ownership model for unrelated scenes.
+
+## Files and project layout
+
+Use Godot's project organization conventions: snake_case files/folders and clear PascalCase scene node names.
+
+Third-party editor addons belong in `addons/`. The Godot project root is `godot/`, keeping native source/docs outside import scanning.
+
+## Spawn order
+
+Set runtime node properties before `add_child()` when those properties do not require tree membership. Handle global-transform/tree-dependent values after insertion when necessary.
+
+## Example boundary usage
 
 ```gdscript
-# Good: parent owns wiring; child announces intent; gold comes from a projection.
 func _ready() -> void:
     trade_panel.trade_offered.connect(_on_trade_offered)
 
 func _on_trade_offered(item_id: int, count: int) -> void:
     var result := sim.submit_offer_trade(item_id, count)
     gold_label.text = str(result.projection.player_gold)
-
-# Bad: scene assumes a unique tree; GDScript is money truth.
-func _ready() -> void:
-    get_node("/root/World").gold += 10
 ```
 
-## How not
+Bad:
+
+```gdscript
+func _ready() -> void:
+    get_node("/root/GameState").gold += 10
+```
+
+## Anti-patterns
 
 | Anti-pattern | Why |
 | --- | --- |
-| Autoload EventBus / `GameState` dictionary | Official: global access makes every script a suspect; TZ: second authority |
-| `get_node("../../..")` across scenes | Official “development hell”: scenes cannot be instanced elsewhere |
-| Mutating a shared `.tres` as per-NPC stats | Official: one in-memory Resource; all instances change |
-| C# gameplay because the editor is Mono | TZ §2.5 / ADR 0001: GDScript + C++ only |
-| `_process` as the simulation clock | Frame rate becomes world law |
-| AnimationPlayer callback as the only place a trade resolves | Presentation miss = missing outcome |
-| One mega-scene | Official: split; Main/World/GUI |
-| ECS addon / Godot nodes as the sim | TZ forbids replacing the C++ core |
-| Putting `content/village/` inside `godot/` | Godot import and C++ tests diverge |
+| Autoload world / mutable GameState | creates second authority and global coupling |
+| cross-scene hard NodePaths | scenes cannot be reused independently |
+| shared `.tres` as per-NPC authoritative stats | shared Resource identity leaks state |
+| C# gameplay because editor is Mono | selected project split is GDScript + C++ GDExtension |
+| `_process`/`delta` as simulation clock | frame rate becomes a world law |
+| AnimationPlayer callback as only place an outcome happens | presentation becomes authority |
+| one mega-scene | poor scene independence/ownership |
+| ECS addon/nodes as simulation | duplicates the C++ core |
+| protocol JSON stored as node metadata for live inventory | client cache becomes domain truth |
 
 ## Agent traps
 
-- Treating the Mono editor as permission to add `.cs`.
-- Creating `Autoload World` “for convenience” on the first scene.
-- Using `change_scene_to_file` for every room and losing GUI/player.
-- `preload()` of the whole game in one script (official: unexpected load-time spikes).
-- Groups scanned every frame (`get_nodes_in_group` in `_process`).
-- Storing protocol JSON in node metadata as the live inventory.
-- Connecting signals in the child to a hardcoded parent path.
+- Treating Mono capability as permission to add a C# gameplay layer.
+- Creating `Autoload World` for first-step convenience.
+- Replacing a persistent root scene during every location change and accidentally deleting persistent UI/player presentation.
+- Scanning groups every frame without a measured need.
+- Connecting a reusable child directly to a hardcoded parent path.
+- Updating UI optimistically in a way that invents an authoritative outcome rather than waiting for the returned projection/result.

@@ -1,77 +1,143 @@
 # C++23 Simulation Core and protocol
 
-Contract: TZ §3–9. Folder sketch: TZ §4. This page is implementation architecture, not a second product spec.
+This guide owns C++ implementation practice for the Godot-free simulation/protocol side.
 
-Canonical sources: [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines), [`std::expected`](https://en.cppreference.com/w/cpp/utility/expected), [GoogleTest primer](https://google.github.io/googletest/primer.html). Structural analog: [godot-jolt](https://github.com/godot-jolt/godot-jolt) keeps a Godot-free physics library and a separate binding — same split as `src/sim` vs `src/adapters/gdextension`.
+Canonical contracts:
 
-## Layout that actually enforces direction
+- runtime ownership/dependencies: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+- determinism/protocol/modeling: [`../MODELING.md`](../MODELING.md)
+- verification: [`../VERIFICATION.md`](../VERIFICATION.md)
+- product vertical-slice rule: [`../PRODUCT.md`](../PRODUCT.md)
 
-TZ names `domain / application / content / persistence / random / diagnostics` under `src/sim`. Those are **responsibility names**, not CMake packages.
+Primary references are tracked in [`SOURCES.md`](SOURCES.md): C++ Core Guidelines, `std::expected`, GoogleTest and the Godot-free-core/thin-binding structural precedent.
 
-| Folder | Owns | Must not |
+## Initial physical shape
+
+The target responsibility layout is:
+
+| Area | Owns | Must not own |
 | --- | --- | --- |
-| `src/sim/domain` | types, invariants, state transitions | files, Godot, JSON, clocks, frame delta |
-| `src/sim/application` | command handling, stepping the world | rendering, InputMap |
-| `src/sim/content` | parsed, typed content after load | `nlohmann::json` as the live model |
-| `src/sim/persistence` | save/load mapping | gameplay rules |
-| `src/sim/random` | seeded PRNG **as world state** | `std::random_device`, hidden static RNG |
-| `src/protocol` | intents, results, events, projections, version | Godot types, sprites, cameras |
-| `src/adapters/*` | CLI / GDExtension translation | domain laws |
+| `src/sim/domain` | domain value types, invariants, state transitions | filesystem, Godot, JSON, clocks, frame delta |
+| `src/sim/application` | command handling and explicit simulation advancement | rendering/input |
+| `src/sim/content` | validated typed content | live `nlohmann::json` domain state |
+| `src/sim/persistence` | snapshot/save-load mapping | gameplay laws |
+| `src/sim/random` | explicit seeded PRNG state/helpers | hidden/system RNG |
+| `src/protocol` | intents/commands, results, events, projections, protocol version | Godot types or rendering concepts |
+| `src/adapters/*` | external translation | domain laws |
 
-One CMake library `sim_core` (sim + protocol). Tests and adapters **link** it. Do not `add_subdirectory` a fake “package” per folder until a target actually forbids a dependency.
+These are responsibility names, not a mandate to create one target/package per folder. Start with the smallest target graph that mechanically preserves the dependency boundary.
 
-Headers live next to sources under `src/` (application layout). Do not invent a Pitchfork `include/` install tree until this is a published SDK.
+Headers may live beside implementation under `src/` until there is a real public SDK/install requirement. Do not build an `include/` export structure for aesthetics alone.
 
-## How
+## Ownership and lifetime
 
-**Ownership (Core Guidelines R.1, I.11).** Every resource is a type. Value types by default. `std::unique_ptr` for unique heap ownership. `std::shared_ptr` only with proven shared lifetime. Raw `T*` / `T&` are non-owning views. No owning raw `new`/`delete` in project code.
+Follow RAII and make ownership visible in types.
 
-**Ordinary domain failure is data.** C++23 `std::expected<T, E>` for “trade refused”, “not reachable”, “insufficient funds”. Exceptions are for broken invariants / adapter I/O, and **must not** cross the GDExtension C ABI as a gameplay outcome (TZ §6.2).
+- Value semantics by default.
+- `std::unique_ptr` when unique heap ownership is genuinely required.
+- `std::shared_ptr` only for proven shared lifetime.
+- Raw `T*` / `T&` are non-owning views.
+- Avoid owning raw `new`/`delete` in project code.
 
-**Headers are self-contained (SF.11).** A header compiles alone. No `using namespace` at global scope in a header (SF.7). Include what you use. Forward-declare only when it is a real compile firewall, not cargo-cult Pimpl on every type.
+Do not use Godot allocation APIs for simulation objects.
 
-**Prefer concrete types (TZ §6.5, Core Guidelines I.25).** No abstract base until a second real implementation exists, except the adapter/serialization surface that *is* the variation point.
+## Ordinary domain failure is data
 
-**Determinism is a type-system problem (TZ §7).** Integer/`SimulationTick`/money/counts. `std::unordered_map` is lookup-only; never iterate it to decide an authoritative outcome. One seeded RNG in world state; systems borrow it, they do not construct their own.
+Expected gameplay outcomes such as insufficient funds, unavailable stock, missing permission or unreachable targets should use a typed result channel such as C++23 `std::expected<T, E>`.
 
-**Protocol is a small application contract, not WorldState dumped to the client (TZ §9).** Client sends intents (`OfferTrade`). Core returns `CommandResult` + events + projections. Breaking protocol changes bump the version and native tests together.
-
-**Tests prove rules without Godot.** GoogleTest isolates each test on a fresh fixture. Name suites/tests as valid identifiers **without underscores** in the `TEST()` arguments. Prefer `EXPECT_*` so one test can report several failures; use `ASSERT_*` only when continuing is meaningless (null deref). Link `GTest::gtest_main`. Do not write a custom `main` unless the test binary needs custom init that fixtures cannot express.
+Exceptions may represent exceptional adapter/I/O failures or broken assumptions, but ordinary gameplay results must not be encoded through exceptions and exceptions must not leak across the GDExtension boundary.
 
 ```cpp
-// Good: intent in, expected out, no Godot, no json in the domain.
 std::expected<TradeResult, TradeError>
-execute_trade(World& world, const OfferTrade& cmd);
-
-// Bad: desired state, JSON as model, exception as “not enough gold”.
-void SetMoney(nlohmann::json& world, int gold);
+execute_trade(World& world, const OfferTrade& command);
 ```
 
-## How not
+Avoid two simultaneous ordinary error channels for the same operation.
+
+## Domain types
+
+Use strong types where confusing primitives would create real bugs, for example `Money`, `SimulationTick`, `PersonId`, `HouseholdId`, `PlaceId`, `ItemCount`.
+
+Do not wrap every primitive merely to create ceremony.
+
+## Global state
+
+No mutable global world, service locator, hidden static RNG, mutable runtime registry or initialization-order-dependent singleton.
+
+Read-only compile-time constants are fine.
+
+## Interfaces and abstraction
+
+Prefer concrete types until there is a second real implementation or a boundary is inherently replaceable (for example an external adapter/storage boundary).
+
+Do not create `IWorld`, generic repositories, strategy hierarchies or metaprogramming frameworks in anticipation of unknown future needs.
+
+## Headers
+
+Headers are self-contained, include what they use, and avoid `using namespace` at global scope. Use forward declarations only when they provide a real compile firewall.
+
+## Deterministic coding
+
+The detailed contract is in [`../MODELING.md`](../MODELING.md).
+
+In authoritative code:
+
+- one explicit seeded RNG state;
+- no `std::random_device` or wall-clock gameplay input;
+- no authoritative dependence on `unordered_map` iteration order;
+- no address-based ordering/identity;
+- integer/scaled domain quantities for load-bearing money/time/counts by default;
+- single-threaded initial core; parallelism only after measured need and proof of result stability.
+
+## Protocol coding
+
+The client sends semantic intent; it never sets desired world truth.
+
+Good:
+
+```cpp
+std::expected<TradeResult, TradeError>
+execute_trade(World&, const OfferTrade&);
+```
+
+Bad:
+
+```cpp
+void set_money(World&, int new_money);
+```
+
+Internal `World` object graphs are not protocol DTOs. Keep projections deliberately bounded and purpose-specific.
+
+## Native tests
+
+World rules are proved without Godot. Link GoogleTest's provided test main unless a real custom process-level setup is needed.
+
+Tests are independent and start from explicit state/fixtures. Prefer `EXPECT_*` when later assertions remain meaningful; use `ASSERT_*` to stop before invalid continuation.
+
+Detailed evidence rules live in [`../VERIFICATION.md`](../VERIFICATION.md).
+
+## Warnings and formatting
+
+Project targets should enable a strict warning set appropriate to GCC/Clang, including common correctness/conversion/shadow/format warnings. Keep warnings target-scoped so third-party code does not inherit project `-Werror` policy.
+
+Once available, use one project `clang-format` configuration and targeted `clang-tidy` checks. Do not mass-format unrelated files inside a gameplay change.
+
+Exact tool availability/versions must be proven by the current environment and lock/build files, not this prose.
+
+## Anti-patterns
 
 | Anti-pattern | Why it fails here |
 | --- | --- |
-| `class World` god-object + service locator | Hidden mutable globals; TZ §6.4 forbids them; every system becomes untestable |
-| ECS / job system / multithread sim on day one | TZ §34: no speculative architecture; first sim is single-threaded |
-| `godot.hpp` / `Node` / `delta` in `src/sim` | Second authority; headless tests lie |
-| `nlohmann::json` fields as inventory/money | Schema becomes the domain; upgrades become untyped |
-| `shared_ptr<World>` everywhere | Ownership disappears; cycles; “who steps the world?” |
-| `std::expected` *and* throwing `TradeError` | Two error channels; agents will mix them |
-| Address-ordered sets / pointer identity as IDs | Non-deterministic across allocators |
-| Header-only “framework” of templates | TZ §6.6; compile times and unreadability without a second use case |
-| Pitchfork `include/` + installed export on Milestone 0 | We are not shipping a public C++ SDK yet |
+| god-object `World` + service locator | hidden coupling/state and poor testability |
+| ECS/job system on day one | speculative scale architecture |
+| Godot headers/`Node`/frame `delta` in `src/sim` | breaks headless authority boundary |
+| `nlohmann::json` as live inventory/money/domain model | serialization representation becomes untyped domain truth |
+| `shared_ptr<World>` everywhere | ownership/step authority becomes unclear |
+| exceptions for normal gameplay refusal | two incompatible control/error channels |
+| address/pointer identity as domain ID/order | non-deterministic/lifetime-coupled semantics |
+| template framework before second use | complexity without current payoff |
 
-## Agent traps
-
-- Copying the official godot-cpp **Summator** into `src/sim` so a `GDCLASS` *is* the world.
-- Using `std::chrono::system_clock::now()` or `delta` as simulation time (TZ §8: integer ticks).
-- Iterating `unordered_map` to pick “the first NPC”.
-- Adding a second RNG “just for this NPC”.
-- Creating `IRepository` / `IWorld` with one implementation.
-- Putting save-format code inside `execute_trade`.
-- Testing Godot scenes to prove a C++ rule.
-
-## CMake shape for the library
+## Minimal CMake shape
 
 ```cmake
 add_library(sim_core STATIC)
@@ -81,7 +147,6 @@ target_sources(sim_core PRIVATE
 )
 target_include_directories(sim_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(sim_core PUBLIC cxx_std_23)
-# warnings: TZ §6.7, target-scoped, not inherited by godot-cpp / gtest
 ```
 
-List sources explicitly. See [`cmake-python.md`](cmake-python.md).
+List sources explicitly. Build/tool policy lives in [`cmake-python.md`](cmake-python.md).

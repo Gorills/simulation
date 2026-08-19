@@ -1,24 +1,31 @@
 ---
-description: CMake, GoogleTest, and Python tooling — how and how not
-globs: CMakeLists.txt,CMakePresets.json,cmake/**,tests/**,tools/**/*.py
+description: CMake, native tests and Python developer tooling
+globs: CMakeLists.txt,CMakePresets.json,cmake/**,tests/**,tools/**/*.py,pyproject.toml
 alwaysApply: false
 ---
 
-# Build and tools
+# Build and developer tools
 
-Details: `docs/engineering/cmake-python.md`. Contract: TZ §2.3–2.7.
+Canonical guidance: `docs/engineering/cmake-python.md`. Version policy: `docs/engineering/VERSIONS.md`. Verification/playtest contract: `docs/VERIFICATION.md`.
 
-```cmake
-# BAD
-file(GLOB_RECURSE SRC src/*.cpp)
-include_directories(src)
+CMake:
+- target-scoped settings;
+- explicit project source lists;
+- immutable dependency revisions;
+- keep GoogleTest test-only and godot-cpp GDExtension-only;
+- do not make third-party code inherit project-wide `-Werror` accidentally.
 
-# GOOD
-target_sources(sim_core PRIVATE src/sim/application/step.cpp)
-```
+Python:
+- repository environment and pinned tooling;
+- `pathlib`;
+- explicit argv subprocess calls, cwd/environment and bounded timeout;
+- one Godot playtest supervisor once `tools/play.py` exists;
+- cleanup only processes owned by the current run.
 
-CMake: target-scoped options; explicit sources; pinned FetchContent in `cmake/Dependencies.cmake`; GoogleTest **test-only**; warnings not inherited by third-party.
-
-Python: `.venv` + ruff; `pathlib`; `subprocess.run([argv], timeout=..., cwd=...)`; one `tools/play.py`; never `shell=True` or `pkill godot`.
-
-Don't: fetch deps during `ctest`/`play.py`; custom `gtest` `main` plus `gtest_main`; Playwright.
+Do not:
+- use source GLOBs for project code;
+- add a second SCons graph;
+- use floating dependency branches;
+- fetch dependencies unexpectedly during ordinary tests/playtests;
+- use `shell=True`, `pkill godot` or infinite polling as convenience shortcuts;
+- introduce Playwright/Chromium for the Godot client.
