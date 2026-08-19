@@ -6,8 +6,8 @@ Use this file as the always-on project context. Keep it short. Load deeper docum
 
 1. Inspect the current source, tests, build files, lock files, and git diff that are relevant to the request.
 2. Use [`docs/INDEX.md`](docs/INDEX.md) to select the canonical document for the concern.
-3. Read only the relevant stack guide / model / ADR after that.
-4. Never invent an API, target, path, installed tool, dependency version, or successful verification result.
+3. Read only the relevant stack guide / model / ADR/research source after that.
+4. Never invent an API, target, path, installed tool, dependency version, historical fact, or successful verification result.
 
 Current executable behavior wins over prose. Accepted ADRs record intentional architectural choices. If documentation disagrees with current executable behavior, treat the documentation as stale and correct it in the same bounded change when relevant.
 
@@ -17,6 +17,8 @@ Current executable behavior wins over prose. Accepted ADRs record intentional ar
 - Player-controlled people and NPCs are the same kind of simulated actors; control source must not create a privileged `Player` domain model or bypass world rules.
 - Godot 4 is presentation, input, audio, and UI; it may interpolate or predict presentation, but entity existence/location, inventory, economy, relationships and systemic consequences come from Simulation projections/results.
 - Godot presentation identity/presence is keyed by authoritative `EntityId` through `WorldPresentation`; GDScript must not invent entity IDs or create a parallel world registry.
+- Serious simulation models use a sourced circa-1200 non-magical baseline, record their magic-sensitive assumptions, and choose detail by causal relevance rather than camera distance or maximal micro-simulation.
+- Social/occupational roles emerge from concrete state, rights, capabilities, institutions and history; do not make one `SocialClass`/`PlayerClass` enum the source of world permissions.
 - `src/sim` and `src/protocol` remain Godot-free.
 - The GDExtension adapter is the only Godot ↔ protocol runtime seam.
 - Gameplay work is a small playable vertical capability: rule → contract → experience → proof.
@@ -39,6 +41,7 @@ Current executable behavior wins over prose. Accepted ADRs record intentional ar
 - Product/gameplay intent: [`docs/PRODUCT.md`](docs/PRODUCT.md)
 - Runtime boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Simulation/modeling policy: [`docs/MODELING.md`](docs/MODELING.md)
+- Historical baseline: [`docs/research/high-medieval-baseline-c1200.md`](docs/research/high-medieval-baseline-c1200.md)
 - Tests/playtest/evidence: [`docs/VERIFICATION.md`](docs/VERIFICATION.md)
 - Milestones/current build direction: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - Stack how/how-not: [`docs/engineering/STACK.md`](docs/engineering/STACK.md)
