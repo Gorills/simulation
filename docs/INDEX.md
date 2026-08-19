@@ -23,7 +23,8 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | Area | Guide |
 | --- | --- |
 | C++23 Simulation Core + protocol | [`engineering/cpp.md`](engineering/cpp.md) |
-| Godot 4 typed GDScript client | [`engineering/godot.md`](engineering/godot.md) |
+| Simulation authority ↔ Godot commands/projections/materialization | [`engineering/simulation-godot-boundary.md`](engineering/simulation-godot-boundary.md) |
+| Godot 4 typed GDScript presentation client | [`engineering/godot.md`](engineering/godot.md) |
 | Godot UI design system / responsive layout | [`engineering/ui-design-system.md`](engineering/ui-design-system.md) |
 | GDExtension adapter | [`engineering/gdextension.md`](engineering/gdextension.md) |
 | CMake / GoogleTest / Python tooling | [`engineering/cmake-python.md`](engineering/cmake-python.md) |

@@ -111,7 +111,15 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
     if not debug_path.is_file() or not screenshot_path.is_file():
         raise SystemExit(f"playtest did not produce required artifacts in {path}")
     projection = json.loads(debug_path.read_text(encoding="utf-8"))
-    expected = {"x": 1, "y": 0, "tick": 1, "seed": 1, "protocol_version": 1}
+    expected = {
+        "entity_id": 1,
+        "x": 1,
+        "y": 0,
+        "tick": 0,
+        "revision": 2,
+        "seed": 1,
+        "protocol_version": 2,
+    }
     for key, value in expected.items():
         if projection.get(key) != value:
             raise SystemExit(f"unexpected native projection {key}: expected {value}, got {projection.get(key)}")

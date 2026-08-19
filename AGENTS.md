@@ -14,7 +14,8 @@ Current executable behavior wins over prose. Accepted ADRs record intentional ar
 ## Project invariants
 
 - C++23 Simulation Core is the only authoritative world.
-- Godot 4 is presentation, input, audio, and UI; it is not a second simulation.
+- Player-controlled people and NPCs are the same kind of simulated actors; control source must not create a privileged `Player` domain model or bypass world rules.
+- Godot 4 is presentation, input, audio, and UI; it may interpolate or predict presentation, but entity existence/location, inventory, economy, relationships and systemic consequences come from Simulation projections/results.
 - `src/sim` and `src/protocol` remain Godot-free.
 - The GDExtension adapter is the only Godot ↔ protocol runtime seam.
 - Gameplay work is a small playable vertical capability: rule → contract → experience → proof.

@@ -22,7 +22,9 @@ protected:
     static void _bind_methods();
 
 private:
-    [[nodiscard]] static godot::Dictionary to_dictionary(const protocol::PlayerProjection &projection);
+    [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::BootstrapActorProjection &projection
+    );
 
     protocol::Simulation simulation_;
 };
