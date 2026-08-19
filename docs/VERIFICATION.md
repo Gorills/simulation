@@ -108,7 +108,7 @@ The smoke is boundary/runtime evidence. It does **not** prove subjective control
 
 Metadata import is non-visual CI work and uses Godot headless mode. The repository must not require X11, VSync, a physical GPU or an audio device merely to import project metadata.
 
-The visual screenshot smoke intentionally runs with a virtual display in Linux CI. The smoke runner explicitly selects the project's `gl_compatibility` rendering method, uses the `Dummy` audio driver and disables VSync. This keeps missing ALSA/Pulse devices, Vulkan surface support and virtual-display VSync limitations from masquerading as gameplay failures.
+The visual screenshot smoke intentionally runs with a virtual display in Linux CI. Its renderer comes from the canonical Godot project configuration rather than a second smoke-specific renderer setting. The supervisor uses the `Dummy` audio driver and disables VSync so missing ALSA/Pulse devices and virtual-display VSync limitations do not masquerade as gameplay failures. The headless metadata-import path also avoids requiring a Vulkan/X11 surface merely to import the project.
 
 CI software rendering is compatibility evidence only. A successful llvmpipe/Mesa run does not prove real-GPU performance or driver-specific rendering correctness.
 
