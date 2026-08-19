@@ -435,10 +435,14 @@ theme_type_variation = &"DsCaptionLabel"
 text = "Bootstrap transport probe is retained in smoke evidence, not presented as authoritative spatial truth."
 autowrap_mode = 2
 
-[node name="ControlsHint" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
+[node name="ControlsDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
 layout_mode = 2
 mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
+
+[node name="ControlsHint" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
 text = "WASD / left stick move  ·  mouse / right stick look  ·  Shift / L3 sprint  ·  Esc releases pointer"
 autowrap_mode = 2
 
