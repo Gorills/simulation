@@ -8,7 +8,7 @@ Milestone 0's executable spine is present in source: CMake presets, separated `s
 
 The architecture foundation establishes stable positive `EntityId`, actor parity, protocol-owned human-control binding, separate `SimulationTick` / `WorldRevision`, `ObservedWorldProjection`, and one Godot `WorldPresentation` identity/presence owner. Godot is a presentation replica rather than world authority.
 
-The historical/magic/causal-fidelity foundation, authoritative spatial representation contract, and grounded locomotion acceptance/test-arena contract are accepted. The Godot-free grounded locomotion transition now proves deterministic flat movement, wall blocking/sliding semantics, walkable-versus-too-steep slope classification/traversal, and ordinary 300 mm step-up versus 301 mm blocking-step semantics against neutral Simulation-owned geometry. It is not yet wired into the live controlled-actor protocol/presentation path; ledge support loss, gravity, falling and landing remain pending.
+The historical/magic/causal-fidelity foundation, authoritative spatial representation contract, and grounded locomotion acceptance/test-arena contract are accepted. The Godot-free grounded locomotion transition now proves deterministic flat movement, wall blocking/sliding semantics, walkable-versus-too-steep slope classification/traversal, ordinary 300 mm step-up versus 301 mm blocking-step semantics, and ledge support loss -> gravity-driven fall -> stable lower-plane landing against neutral Simulation-owned geometry. It is not yet wired into the live controlled-actor protocol/presentation path.
 
 The current `CharacterBody3D` motor remains a responsive presentation/prediction shell. It is not authoritative world movement.
 
@@ -125,18 +125,20 @@ These body/timing/speed/slope values are repository migration baselines taken fr
 
 Implemented:
 
-1. ordinary step-up versus blocking-step semantics use an explicit **300 mm** `max_step_up` baseline; the neutral paired fixture proves **300 mm traverses / 301 mm blocks**, preserves tangential movement when the entry axis is blocked, preserves `SpatialEpoch`, and replays deterministically.
+1. ordinary step-up versus blocking-step semantics use an explicit **300 mm** `max_step_up` baseline; the neutral paired fixture proves **300 mm traverses / 301 mm blocks**, preserves tangential movement when the entry axis is blocked, preserves `SpatialEpoch`, and replays deterministically;
+2. ledge support loss, gravity/falling and stable landing use a non-magical **9807 mm/s²** gravity baseline, preserve takeoff planar velocity without inventing air-control semantics, carry fractional vertical integration deterministically, prevent downward support snap/tunneling, clear vertical velocity/remainders on landing, preserve `SpatialEpoch`, and replay deterministically.
 
 Still required before locomotion is authoritative end-to-end:
 
-2. add ledge support loss, gravity/falling and stable landing;
-3. only then expose the shared transition through `World` and semantic controlled-actor movement protocol — never a final-position setter;
+3. expose the shared transition through `World` and semantic controlled-actor movement protocol — never a final-position setter;
 4. produce ordered authoritative movement samples;
 5. buffer/interpolate those samples in Godot and reconcile/remove duplicate local world-law movement;
 6. add local prediction only if real playtest latency requires it;
 7. prove equivalent NPC intent drives the same transition without a player-only world path.
 
 The initial step threshold is a project-owned migration/acceptance value, not an engine default. It is numerically aligned with the existing playable profile's 0.3 m local floor-contact reach while retaining separate step and snap semantics, and it remains subject to later player-facing feel verification.
+
+The gravity baseline is the nearest integer millimeter representation of standard gravity **9.80665 m/s²**. It is a configurable non-magical physical baseline, not a controller-engine default; future magic or world conditions may alter gravity only through explicit authoritative rules.
 
 Do not build the visual first content location before the neutral fixture/solver stages prove the collision representation. Do not turn this bridge into ECS, networking, sharding, a general rigid-body engine or automatic regional simulation LOD work.
 

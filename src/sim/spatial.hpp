@@ -18,6 +18,12 @@ struct MillimetersPerSecond final {
     constexpr bool operator==(const MillimetersPerSecond &) const = default;
 };
 
+struct MillimetersPerSecondSquared final {
+    std::int64_t value{};
+
+    constexpr bool operator==(const MillimetersPerSecondSquared &) const = default;
+};
+
 struct SpatialPosition final {
     Millimeters x{};
     Millimeters y{};

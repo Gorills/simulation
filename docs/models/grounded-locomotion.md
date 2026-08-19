@@ -26,12 +26,14 @@ Implemented in the Godot-free native transition:
 - too-steep slope blocking of the gradient component while valid tangential motion remains;
 - ordinary flat-support step-up at or below the explicit step threshold;
 - blocking-step semantics above the threshold while valid tangential motion remains;
+- ledge support loss without downward snapping;
+- fixed-step gravity/falling with exact integer remainder carry;
+- stable landing on lower walkable support without tunneling;
 - zero-input rest on flat and walkable sloped support without downhill creep;
 - deterministic replay for the implemented fixtures.
 
 Still deliberately pending:
 
-- ledge support loss, gravity, falling and landing;
 - `World` / protocol movement wiring;
 - ordered authoritative movement samples and Godot reconciliation;
 - prediction/navigation and the first content location.
@@ -72,21 +74,28 @@ The first `UprightCapsule` uses the existing project shell values:
 - **60 authoritative steps/second**;
 - **5800 mm/s** full-strength planar move-speed fixture;
 - maximum walkable slope: **1192 mm rise per 1000 mm horizontal run**, an integer approximation of the existing project-owned **50°** Godot locomotion-profile baseline;
-- maximum ordinary step-up: **300 mm**.
+- maximum ordinary step-up: **300 mm**;
+- non-magical downward gravity: **9807 mm/s²**, the nearest integer millimeter representation of standard gravity **9.80665 m/s²**.
 
 The 300 mm step threshold is a project-owned first acceptance baseline. It is numerically aligned with the existing playable profile's **0.3 m** local floor-contact reach so the migration does not introduce an unrelated scale, but step-up and floor snap remain different semantics. It is not copied from an engine default and remains reviewable through real playtest before authoritative locomotion becomes player-facing.
 
-These are repository migration values, not engine defaults and not immutable final feel tuning.
+The gravity baseline is a physical non-magical starting point rather than a Godot/Unreal/Unity controller default. It is configuration, not a universal immutable law: future world conditions or magic may alter it through explicit authoritative rules.
 
-Acceleration/deceleration, sprint, facing/turn response, grounding snap and gravity are not yet authoritative.
+These are repository migration/acceptance values, not immutable final feel tuning.
+
+Acceleration/deceleration, sprint, facing/turn response, grounding snap, jump semantics and airborne steering are not yet authoritative.
 
 ### Input
 
 `PlanarMoveIntent` is signed analog X/Z intent at fixed scale 1000 and must remain inside the unit circle. It is intent only, never displacement.
 
+While grounded, current intent directly defines the existing constant-speed planar fixture. When support is lost, the fall slice preserves takeoff planar velocity and deliberately does not invent airborne steering. A later air-control rule, if wanted, must be explicit rather than silently reusing grounded intent semantics.
+
 ### Integer integration
 
-Authoritative positions and velocities remain integer millimeters / millimeters-per-second. Per-axis integration remainders carry fractional millimeters between ticks rather than truncating them every step.
+Authoritative positions and velocities remain integer millimeters / millimeters-per-second. Per-axis position remainders carry fractional millimeters between ticks rather than truncating them every step.
+
+Airborne gravity additionally carries a separate vertical-velocity remainder so dividing acceleration by the 60 Hz tick rate does not lose fractional millimeters-per-second each tick. Falling uses deterministic semi-implicit fixed-step integration: gravity updates vertical velocity first, then that velocity advances Y for the tick.
 
 Slope support height is derived deterministically from the patch endpoints and planar coordinate. Walkability uses integer rise/run comparison; authoritative code does not call floating-point trigonometry.
 
@@ -120,14 +129,14 @@ While traversing it:
 
 A patch outside the threshold is not ordinary grounded support for ascent.
 
-When a candidate step enters a too-steep patch:
+When a candidate grounded step enters a too-steep patch:
 
 - the movement component along that patch's gradient axis is blocked;
 - its velocity/remainder on that axis are cleared;
 - a valid tangential component is preserved when supported by ordinary ground;
 - the actor is not allowed to stand authoritatively on the too-steep patch through this grounded transition.
 
-Sliding/falling on steep surfaces belongs to the future gravity/fall slice; this stage does not invent it.
+Airborne impact/sliding semantics for an unwalkable steep surface remain deliberately unresolved. The current fall acceptance lands only on walkable support; it does not fake a stable grounded state on a too-steep ramp or invent a generic sliding model before real geometry requires one.
 
 ### Ordinary step-up and blocking step
 
@@ -142,11 +151,28 @@ When a candidate move enters a higher flat patch:
 - valid tangential movement on the lower support remains;
 - the entry axis is derived from actual patch-boundary membership, not from presentation geometry or client collision results.
 
-The paired acceptance fixture is intentionally sharp: **300 mm traverses; 301 mm blocks**. Compound ramp-to-step seams, arbitrary staircases, finite tread depth and step-down/fall behavior are not generalized by this slice. They should be added only when the next real geometry requires them rather than by inventing a generic character-physics framework now.
+The paired acceptance fixture is intentionally sharp: **300 mm traverses; 301 mm blocks**. A downward discontinuity between distinct supports is not a reverse step-up or a floor snap: it becomes support loss and uses the fall/landing transition. Compound ramp-to-step seams, arbitrary staircases and finite tread depth should be added only when real geometry requires them rather than by inventing a generic character-physics framework now.
+
+### Ledge support loss, falling and landing
+
+A grounded actor remains supported when it stays on the same walkable patch or enters equal/higher walkable support allowed by the existing slope/step rules. Entering no support, or a distinct lower walkable patch, is support loss.
+
+On support loss:
+
+- authoritative Y is **not** snapped to a lower patch;
+- grounded support-derived `velocity.y` is not treated as launch inertia; falling starts with zero vertical inertial velocity because no jump mechanic exists yet;
+- gravity is applied during the same fixed tick that loses support;
+- planar takeoff velocity and its integration remainder continue through the airborne phase;
+- later planar intents do not rewrite that velocity while airborne in this slice;
+- ordinary falling preserves the existing `SpatialEpoch`.
+
+While airborne, gravity integrates vertical velocity using the configured positive downward magnitude and its own remainder. A lower walkable support is a landing candidate only when the falling Y path crosses that support from above. The landing clamps Y exactly to support, zeros vertical velocity plus both vertical remainders, and cannot tunnel through the plane even when one fixed-tick displacement would otherwise pass below it.
+
+This slice deliberately does not add jump impulse, coyote time, air acceleration/steering, floor snap, fall damage or steep-surface sliding.
 
 ### Deterministic replay
 
-Native tests require exact equality for repeated flat/wall, slope and step intent streams from identical state/configuration/environment.
+Native tests require exact equality for repeated flat/wall, slope, step and ledge/fall/landing intent streams from identical state/configuration/environment.
 
 ## Neutral acceptance arena
 
@@ -161,7 +187,7 @@ slope lane:
 step lane:
   300 mm traversable step
   301 mm blocking step
-ledge lane (pending):
+ledge lane:
   platform
   drop
   lower landing plane
@@ -181,8 +207,9 @@ Still require reviewed choices backed by the next real mechanic/playtest:
 
 - contact/skin tolerance beyond the exact current boundaries;
 - grounding/snap tolerance;
-- gravity and falling integration;
 - acceleration/deceleration/gait semantics;
+- jump and airborne steering semantics;
+- airborne interaction/sliding on unwalkable steep surfaces;
 - bounded collision-resolution iteration or equivalent rule;
 - production local-geometry indexing/query representation.
 
@@ -227,11 +254,13 @@ The behavior categories are adapted from established controller contracts, not t
 - Unreal Engine `UCharacterMovementComponent`: <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UCharacterMovementComponent>
 - Unity 6 Character Controller: <https://docs.unity3d.com/6000.0/Documentation/Manual/class-CharacterController.html>
 
+The non-magical gravity acceptance baseline uses NIST's standard acceleration of free fall, **9.80665 m/s²**, rounded to the nearest integer project spatial unit as **9807 mm/s²**: <https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors/nist-guide-si-appendix-b9>.
+
 The 50° slope migration baseline and the numerical 0.3 m reference used to select the initial 300 mm step acceptance baseline come from this repository's existing `godot/config/default_locomotion_profile.tres`, not from an engine default. Their semantics remain separate.
 
 ## Next bounded task
 
-Implement **ledge support loss, gravity/falling and stable landing** in the neutral native fixture. Only after the native grounded set is stable should the shared transition enter `World`/protocol and drive ordered Godot presentation samples.
+Expose this stable shared movement transition through `World` and a semantic controlled-actor movement protocol command/result. Do not expose a final-position setter. Ordered authoritative movement samples and Godot reconciliation remain the following slice after the World/protocol transition is proven.
 
 Do not build the first visual content location before the required native collision semantics are proven.
 
