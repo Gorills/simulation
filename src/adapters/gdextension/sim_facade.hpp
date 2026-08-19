@@ -15,8 +15,9 @@ class SimFacade final : public godot::RefCounted {
 public:
     SimFacade();
 
-    [[nodiscard]] godot::Dictionary submit_move(std::int32_t dx, std::int32_t dy);
-    [[nodiscard]] godot::Dictionary debug_projection() const;
+    [[nodiscard]] godot::Dictionary bootstrap_submit_move(std::int32_t dx, std::int32_t dy);
+    [[nodiscard]] godot::Dictionary bootstrap_debug_projection() const;
+    [[nodiscard]] godot::Dictionary observed_world_projection() const;
 
 protected:
     static void _bind_methods();
@@ -24,6 +25,9 @@ protected:
 private:
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::BootstrapActorProjection &projection
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::ObservedWorldProjection &projection
     );
 
     protocol::Simulation simulation_;

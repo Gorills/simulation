@@ -34,6 +34,8 @@ godot-cpp                 independent v10 line, exact immutable revision
 
 Active pins and upgrade evidence live in [`VERSIONS.md`](VERSIONS.md) and machine-readable build/tool files. Never depend on floating `master`, `main` or `latest`.
 
+The application protocol version is owned by `src/protocol/version.hpp`; bootstrap DTOs do not own the shared version number.
+
 ## Class registration
 
 Keep registration centralized and intentionally small. Do not register every domain class with ClassDB for inspector convenience.
@@ -60,14 +62,17 @@ Ordinary gameplay refusal is a typed protocol/domain result. Translate it withou
 
 Purpose-built projections are translated field-for-field into Godot-facing values. Do not add hidden information or reconstruct domain meaning in the adapter.
 
-The current API is intentionally named as bootstrap code behind the existing Godot smoke surface:
+The current Godot-facing API deliberately separates durable read shape from temporary smoke code:
 
-```cpp
-const auto outcome = simulation_.bootstrap_move({.dx = dx, .dy = dy});
-const auto projection = simulation_.bootstrap_controlled_actor_projection();
+```text
+observed_world_projection()     -> production-shaped identity/presence read model
+bootstrap_submit_move(dx, dy)   -> Milestone 0 transport probe only
+bootstrap_debug_projection()    -> Milestone 0 transport/debug probe only
 ```
 
-`BootstrapMoveIntent` / `BootstrapActorProjection` are transport evidence, not templates for production spatial movement.
+`ObservedWorldProjection` currently carries only `controlled_actor_id`, `SimulationTick`, `WorldRevision`, protocol version, and the minimum observed `EntityId` set. It deliberately does **not** export bootstrap grid coordinates.
+
+`BootstrapMoveIntent` / `BootstrapActorProjection` remain transport evidence, not templates for production spatial movement.
 
 When real capabilities arrive, prefer semantic protocol operations such as `buy_item`, `attack`, or a real controlled-actor movement intent over extending the bootstrap DTO.
 
@@ -78,6 +83,8 @@ Unexpected adapter exceptions may be caught at the adapter edge for diagnostics 
 Carry stable Simulation `EntityId` values across the seam for materialized entities.
 
 Do not translate Simulation identity into Godot instance IDs, NodePaths, scene names or unstable array positions. Godot scene-node lifetime is presentation lifetime, not world lifetime.
+
+Godot applies observed identity through `WorldPresentation`; feature scripts must not create their own authoritative-ID registries beside it.
 
 ## Time and revision
 
@@ -111,7 +118,7 @@ When adding a cross-boundary feature:
 1. define/verify the authoritative Simulation operation/state;
 2. expose a semantic protocol intent/result/events/projection;
 3. make the adapter translate only those values;
-4. make Godot render/react to the result;
+4. make Godot render/react to the result through the relevant presentation owner;
 5. prove the native transition and the real Godot round trip.
 
 If step 3 starts deciding what happened, move that decision behind the protocol.

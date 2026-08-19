@@ -1,6 +1,7 @@
 #pragma once
 
 #include "protocol/bootstrap_move.hpp"
+#include "protocol/observed_world.hpp"
 #include "sim/world.hpp"
 
 #include <cstdint>
@@ -13,6 +14,7 @@ public:
 
     [[nodiscard]] BootstrapMoveOutcome bootstrap_move(const BootstrapMoveIntent &intent) noexcept;
     [[nodiscard]] BootstrapActorProjection bootstrap_controlled_actor_projection() const noexcept;
+    [[nodiscard]] ObservedWorldProjection observed_world_projection() const;
 
 private:
     sim::World world_;

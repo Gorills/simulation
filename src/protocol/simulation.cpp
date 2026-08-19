@@ -65,4 +65,21 @@ BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() con
     };
 }
 
+ObservedWorldProjection Simulation::observed_world_projection() const {
+    const auto *actor = world_.actor(controlled_actor_);
+    assert(actor != nullptr);
+
+    ObservedWorldProjection result{
+        .controlled_actor_id = actor == nullptr ? 0U : actor->id.value,
+        .tick = world_.tick().value,
+        .revision = world_.revision().value,
+        .protocol_version = kProtocolVersion,
+    };
+
+    if (actor != nullptr) {
+        result.entities.push_back(ObservedEntityProjection{.entity_id = actor->id.value});
+    }
+    return result;
+}
+
 } // namespace worldsim::protocol

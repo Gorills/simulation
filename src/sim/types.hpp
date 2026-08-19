@@ -5,7 +5,11 @@
 namespace worldsim::sim {
 
 struct EntityId final {
-    std::uint64_t value{};
+    std::int64_t value{};
+
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return value > 0;
+    }
 
     constexpr bool operator==(const EntityId &) const = default;
 };

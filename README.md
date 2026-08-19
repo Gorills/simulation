@@ -30,7 +30,9 @@ Godot samples human input and renders a bounded presentation of that world. It m
 
 The player-controlled person is an ordinary simulated actor. Human input and NPC decisions are different intent sources feeding the same world rules; there is no privileged player domain species.
 
-The native cardinal `BootstrapMoveIntent` path remains only a Milestone 0 protocol/GDExtension transport probe. Production third-person locomotion must migrate to an authoritative actor-location/movement contract and revisioned presentation samples rather than extending the grid probe.
+The first production-shaped read bridge is `ObservedWorldProjection`: it carries authoritative `EntityId` presence plus controlled-actor identity and `SimulationTick`/`WorldRevision`, but deliberately carries no bootstrap grid coordinates. Godot applies it through one `WorldPresentation` owner, which binds scene representations to authoritative IDs and rejects stale revisions. The current minimum observed set contains only the controlled actor until a real spatial/visibility policy exists.
+
+The native cardinal `BootstrapMoveIntent` path remains only a Milestone 0 protocol/GDExtension transport probe. Its GDExtension methods are explicitly named `bootstrap_*`; production third-person locomotion must migrate to an authoritative actor-location/movement contract and revisioned spatial samples rather than extending the grid probe.
 
 See [`docs/decisions/0004-authoritative-world-presentation-boundary.md`](docs/decisions/0004-authoritative-world-presentation-boundary.md).
 
@@ -43,7 +45,7 @@ The reference client is keyboard/mouse and gamepad from the start:
 - Shift / L3 — sprint intent;
 - Escape — release captured mouse; click to recapture.
 
-Control code is split into small responsibilities. Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPersonCameraRig`, the current presentation/prediction movement shell in `ThirdPersonPlayer`, and tuneable presentation feel values in `ControlProfile` / `LocomotionProfile` resources.
+Control code is split into small responsibilities. Input/device translation lives in `PlayerControls`, camera behavior in `ThirdPersonCameraRig`, the current presentation/prediction movement shell in `ThirdPersonPlayer`, authoritative presentation identity in `WorldPresentation` / `EntityBinding`, and tuneable presentation feel values in `ControlProfile` / `LocomotionProfile` resources.
 
 The current playable motor remains useful for feel while authoritative spatial movement is migrated into Simulation. Do not treat its Godot transform as world truth.
 

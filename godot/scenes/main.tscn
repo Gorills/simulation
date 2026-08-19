@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/controls/player_controls.gd" id="2_controls"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://scripts/player/third_person_player.gd" id="4_player"]
 [ext_resource type="Resource" path="res://config/default_locomotion_profile.tres" id="5_locomotion_profile"]
 [ext_resource type="Script" path="res://scripts/controls/third_person_camera_rig.gd" id="6_camera"]
+[ext_resource type="Script" path="res://scripts/presentation/world_presentation.gd" id="7_world_presentation"]
+[ext_resource type="Script" path="res://scripts/presentation/entity_binding.gd" id="8_entity_binding"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape_player"]
 radius = 0.38
@@ -38,23 +40,31 @@ unique_name_in_owner = true
 script = ExtResource("2_controls")
 profile = ExtResource("3_control_profile")
 
-[node name="Player" type="CharacterBody3D" parent="."]
+[node name="WorldPresentation" type="Node3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_world_presentation")
+
+[node name="Player" type="CharacterBody3D" parent="WorldPresentation"]
 unique_name_in_owner = true
 position = Vector3(0, 0.1, 0)
 script = ExtResource("4_player")
 profile = ExtResource("5_locomotion_profile")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+[node name="PlayerEntityBinding" type="Node" parent="WorldPresentation/Player"]
+unique_name_in_owner = true
+script = ExtResource("8_entity_binding")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WorldPresentation/Player"]
 position = Vector3(0, 0.9, 0)
 shape = SubResource("CapsuleShape_player")
 
-[node name="VisualRoot" type="Node3D" parent="Player"]
+[node name="VisualRoot" type="Node3D" parent="WorldPresentation/Player"]
 position = Vector3(0, 0.9, 0)
 
-[node name="Body" type="MeshInstance3D" parent="Player/VisualRoot"]
+[node name="Body" type="MeshInstance3D" parent="WorldPresentation/Player/VisualRoot"]
 mesh = SubResource("CapsuleMesh_player")
 
-[node name="FacingMarker" type="MeshInstance3D" parent="Player/VisualRoot"]
+[node name="FacingMarker" type="MeshInstance3D" parent="WorldPresentation/Player/VisualRoot"]
 position = Vector3(0, 0.25, -0.58)
 mesh = SubResource("BoxMesh_facing")
 
@@ -131,7 +141,7 @@ theme_type_variation = &"DsStack"
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsAccentLabel"
-text = "WORLD SIMULATION / CONTROL FOUNDATION"
+text = "WORLD SIMULATION / PRESENTATION BRIDGE"
 
 [node name="Title" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
 layout_mode = 2
@@ -144,7 +154,7 @@ unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsBodyLabel"
-text = "Initializing controls…"
+text = "Initializing simulation presentation…"
 autowrap_mode = 2
 
 [node name="VerticalSpacer" type="Control" parent="HUD/ScreenMargin/HUDRow/HUDStack"]

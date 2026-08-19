@@ -8,6 +8,7 @@
 namespace worldsim::sim {
 
 enum class WorldError : std::uint8_t {
+    invalid_entity_id,
     duplicate_entity,
     unknown_entity,
 };

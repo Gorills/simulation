@@ -110,20 +110,55 @@ def validate_smoke_artifact(path: Path) -> dict[str, object]:
     screenshot_path = path / "final.png"
     if not debug_path.is_file() or not screenshot_path.is_file():
         raise SystemExit(f"playtest did not produce required artifacts in {path}")
-    projection = json.loads(debug_path.read_text(encoding="utf-8"))
-    expected = {
+
+    evidence = json.loads(debug_path.read_text(encoding="utf-8"))
+    if not isinstance(evidence, dict):
+        raise SystemExit("debug artifact must be a JSON object")
+
+    bootstrap = evidence.get("bootstrap_projection")
+    observed = evidence.get("observed_world_projection")
+    presentation = evidence.get("presentation")
+    if not isinstance(bootstrap, dict) or not isinstance(observed, dict) or not isinstance(presentation, dict):
+        raise SystemExit("debug artifact is missing bootstrap/observed/presentation sections")
+
+    expected_bootstrap = {
         "entity_id": 1,
         "x": 1,
         "y": 0,
         "tick": 0,
         "revision": 2,
         "seed": 1,
-        "protocol_version": 2,
+        "protocol_version": 3,
     }
-    for key, value in expected.items():
-        if projection.get(key) != value:
-            raise SystemExit(f"unexpected native projection {key}: expected {value}, got {projection.get(key)}")
-    return projection
+    for key, value in expected_bootstrap.items():
+        if bootstrap.get(key) != value:
+            raise SystemExit(f"unexpected bootstrap projection {key}: expected {value}, got {bootstrap.get(key)}")
+
+    expected_observed = {
+        "controlled_actor_id": 1,
+        "tick": 0,
+        "revision": 2,
+        "protocol_version": 3,
+    }
+    for key, value in expected_observed.items():
+        if observed.get(key) != value:
+            raise SystemExit(f"unexpected observed-world {key}: expected {value}, got {observed.get(key)}")
+    if observed.get("entities") != [{"entity_id": 1}]:
+        raise SystemExit(f"unexpected observed entities: {observed.get('entities')}")
+
+    expected_presentation = {
+        "controlled_entity_id": 1,
+        "last_tick": 0,
+        "last_revision": 2,
+        "protocol_version": 3,
+        "observed_entity_ids": [1],
+        "bound_entity_ids": [1],
+    }
+    for key, value in expected_presentation.items():
+        if presentation.get(key) != value:
+            raise SystemExit(f"unexpected presentation {key}: expected {value}, got {presentation.get(key)}")
+
+    return evidence
 
 
 def main() -> int:
@@ -179,8 +214,8 @@ def main() -> int:
         run_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         raise SystemExit(f"Godot playtest failed with exit code {return_code}; artifacts: {artifact_dir}")
 
-    projection = validate_smoke_artifact(artifact_dir)
-    metadata.update({"status": "passed", "projection": projection})
+    evidence = validate_smoke_artifact(artifact_dir)
+    metadata.update({"status": "passed", "evidence": evidence})
     run_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     print(f"PLAYTEST PASSED: {artifact_dir}")
     return 0
