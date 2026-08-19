@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <vector>
 
 namespace worldsim::protocol {
 
@@ -14,6 +15,35 @@ struct ControlledActorMoveIntent final {
     std::int32_t z{};
 
     constexpr bool operator==(const ControlledActorMoveIntent &) const = default;
+};
+
+// Post-transition exact state for one actor in an authoritative locomotion batch.
+// Tick/revision live on the batch envelope because every sample in the batch was
+// produced by the same atomic World transition.
+struct AuthoritativeMovementSample final {
+    std::int64_t entity_id{};
+    std::int64_t x_mm{};
+    std::int64_t y_mm{};
+    std::int64_t z_mm{};
+    std::int64_t velocity_x_mm_per_second{};
+    std::int64_t velocity_y_mm_per_second{};
+    std::int64_t velocity_z_mm_per_second{};
+    ProtocolInteger spatial_epoch{};
+
+    constexpr bool operator==(const AuthoritativeMovementSample &) const = default;
+};
+
+// One fixed authoritative locomotion tick. Samples are strictly ordered by
+// ascending EntityId and therefore do not inherit player/NPC intent collection
+// order. Across batches, tick orders locomotion time while revision positions the
+// batch relative to other authoritative World mutations.
+struct AuthoritativeMovementSampleBatch final {
+    ProtocolInteger tick{};
+    ProtocolInteger revision{};
+    std::uint32_t protocol_version{kProtocolVersion};
+    std::vector<AuthoritativeMovementSample> samples{};
+
+    bool operator==(const AuthoritativeMovementSampleBatch &) const = default;
 };
 
 enum class ControlledActorMovementError : std::uint8_t {
@@ -27,6 +57,6 @@ enum class ControlledActorMovementError : std::uint8_t {
 using ControlledActorMoveIntentOutcome =
     std::expected<void, ControlledActorMovementError>;
 using ControlledActorLocomotionTickOutcome =
-    std::expected<ControlledActorSpatialProjection, ControlledActorMovementError>;
+    std::expected<AuthoritativeMovementSampleBatch, ControlledActorMovementError>;
 
 } // namespace worldsim::protocol

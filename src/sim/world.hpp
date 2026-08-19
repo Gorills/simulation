@@ -131,6 +131,27 @@ struct ActorGroundedMoveIntent final {
     constexpr bool operator==(const ActorGroundedMoveIntent &) const = default;
 };
 
+// One post-transition authoritative sample produced by a successful locomotion
+// batch. Samples are presentation-neutral Core values and never contain protocol
+// or Godot types.
+struct GroundedLocomotionSample final {
+    EntityId actor{};
+    SpatialState spatial{};
+
+    constexpr bool operator==(const GroundedLocomotionSample &) const = default;
+};
+
+// One successful fixed locomotion transition produces exactly one temporal batch.
+// Every sample shares this post-transition tick/revision. Samples are sorted by
+// ascending EntityId so presentation order is independent of intent-source order.
+struct GroundedLocomotionTickResult final {
+    SimulationTick tick{};
+    WorldRevision revision{};
+    std::vector<GroundedLocomotionSample> samples{};
+
+    bool operator==(const GroundedLocomotionTickResult &) const = default;
+};
+
 inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 2;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
@@ -165,8 +186,10 @@ public:
     // Applies one fixed authoritative locomotion tick atomically to the supplied
     // actor intents. One batch advances SimulationTick/WorldRevision once
     // regardless of actor count, so human and NPC intents share the same world
-    // transition rather than advancing time through player-only calls.
-    [[nodiscard]] std::expected<void, GroundedLocomotionTickError>
+    // transition rather than advancing time through player-only calls. On
+    // success the returned samples are post-transition and canonically ordered
+    // by EntityId.
+    [[nodiscard]] std::expected<GroundedLocomotionTickResult, GroundedLocomotionTickError>
     advance_grounded_locomotion_tick(
         const GroundedLocomotionContext &context,
         std::span<const ActorGroundedMoveIntent> intents
