@@ -146,13 +146,13 @@ theme_type_variation = &"DsStack"
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsAccentLabel"
-text = "WORLD SIMULATION / READ-ONLY HUD"
+text = "UI_DEBUG_EYEBROW"
 
 [node name="Title" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/Header"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsSectionTitleLabel"
-text = "Runtime diagnostics"
+text = "UI_DEBUG_TITLE"
 
 [node name="HeaderDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
 layout_mode = 2
@@ -172,7 +172,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsCaptionLabel"
-text = "FPS"
+text = "UI_DEBUG_FPS"
 
 [node name="DebugFps" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/FpsMetric"]
 unique_name_in_owner = true
@@ -190,7 +190,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsCaptionLabel"
-text = "PROCESS"
+text = "UI_DEBUG_PROCESS"
 
 [node name="DebugProcess" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/ProcessMetric"]
 unique_name_in_owner = true
@@ -208,7 +208,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsCaptionLabel"
-text = "PHYSICS"
+text = "UI_DEBUG_PHYSICS"
 
 [node name="DebugPhysics" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/PhysicsMetric"]
 unique_name_in_owner = true
@@ -226,7 +226,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsCaptionLabel"
-text = "INPUT"
+text = "UI_DEBUG_INPUT"
 
 [node name="DebugInput" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/InputMetric"]
 unique_name_in_owner = true
@@ -244,7 +244,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsAccentLabel"
-text = "AUTHORITY"
+text = "UI_DEBUG_AUTHORITY"
 
 [node name="AuthorityGrid" type="GridContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
 layout_mode = 2
@@ -257,7 +257,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Controlled entity"
+text = "UI_DEBUG_ENTITY"
 
 [node name="DebugEntity" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
 unique_name_in_owner = true
@@ -273,7 +273,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Simulation tick"
+text = "UI_DEBUG_TICK"
 
 [node name="DebugTick" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
 unique_name_in_owner = true
@@ -289,7 +289,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "World revision"
+text = "UI_DEBUG_REVISION"
 
 [node name="DebugRevision" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
 unique_name_in_owner = true
@@ -305,7 +305,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Protocol"
+text = "UI_DEBUG_PROTOCOL"
 
 [node name="DebugProtocol" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
 unique_name_in_owner = true
@@ -321,7 +321,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "World seed"
+text = "UI_DEBUG_SEED"
 
 [node name="DebugSeed" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
 unique_name_in_owner = true
@@ -337,7 +337,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Scenario"
+text = "UI_DEBUG_SCENARIO"
 
 [node name="DebugScenario" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
 unique_name_in_owner = true
@@ -345,7 +345,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsBodyLabel"
-text = "interactive"
+text = "—"
 horizontal_alignment = 2
 
 [node name="SpatialDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
@@ -356,7 +356,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsAccentLabel"
-text = "SPATIAL"
+text = "UI_DEBUG_SPATIAL"
 
 [node name="SpatialGrid" type="GridContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
 layout_mode = 2
@@ -369,7 +369,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Authoritative position"
+text = "UI_DEBUG_AUTHORITATIVE_POSITION"
 
 [node name="DebugAuthorityPosition" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
 unique_name_in_owner = true
@@ -385,7 +385,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Spatial epoch"
+text = "UI_DEBUG_EPOCH"
 
 [node name="DebugEpoch" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
 unique_name_in_owner = true
@@ -401,7 +401,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Presentation position"
+text = "UI_DEBUG_PRESENTATION_POSITION"
 
 [node name="DebugPresentationPosition" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
 unique_name_in_owner = true
@@ -417,7 +417,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsMutedLabel"
-text = "Presentation delta"
+text = "UI_DEBUG_PRESENTATION_DELTA"
 
 [node name="DebugDivergence" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
 unique_name_in_owner = true
@@ -432,7 +432,7 @@ horizontal_alignment = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsCaptionLabel"
-text = "Bootstrap transport probe is retained in smoke evidence, not presented as authoritative spatial truth."
+text = "UI_DEBUG_TRANSPORT_NOTE"
 autowrap_mode = 2
 
 [node name="ControlsDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
@@ -443,7 +443,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsCaptionLabel"
-text = "WASD / left stick move  ·  mouse / right stick look  ·  Shift / L3 sprint  ·  Esc releases pointer"
+text = "UI_DEBUG_CONTROLS_HINT"
 autowrap_mode = 2
 
 [node name="VerticalSpacer" type="Control" parent="HUD/ScreenMargin/HUDRow/HUDStack"]

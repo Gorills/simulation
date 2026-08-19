@@ -1,0 +1,80 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: world-simulation\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "UI_DEBUG_EYEBROW"
+msgstr "СИМУЛЯЦИЯ МИРА / HUD ТОЛЬКО ДЛЯ ЧТЕНИЯ"
+
+msgid "UI_DEBUG_TITLE"
+msgstr "Диагностика выполнения"
+
+msgid "UI_DEBUG_FPS"
+msgstr "FPS"
+
+msgid "UI_DEBUG_PROCESS"
+msgstr "ПРОЦЕСС"
+
+msgid "UI_DEBUG_PHYSICS"
+msgstr "ФИЗИКА"
+
+msgid "UI_DEBUG_INPUT"
+msgstr "ВВОД"
+
+msgid "UI_DEBUG_AUTHORITY"
+msgstr "АВТОРИТЕТНОЕ СОСТОЯНИЕ"
+
+msgid "UI_DEBUG_ENTITY"
+msgstr "Управляемая сущность"
+
+msgid "UI_DEBUG_TICK"
+msgstr "Тик симуляции"
+
+msgid "UI_DEBUG_REVISION"
+msgstr "Ревизия мира"
+
+msgid "UI_DEBUG_PROTOCOL"
+msgstr "Протокол"
+
+msgid "UI_DEBUG_SEED"
+msgstr "Сид мира"
+
+msgid "UI_DEBUG_SCENARIO"
+msgstr "Сценарий"
+
+msgid "UI_DEBUG_SPATIAL"
+msgstr "ПРОСТРАНСТВО"
+
+msgid "UI_DEBUG_AUTHORITATIVE_POSITION"
+msgstr "Позиция симуляции"
+
+msgid "UI_DEBUG_EPOCH"
+msgstr "Пространственная эпоха"
+
+msgid "UI_DEBUG_PRESENTATION_POSITION"
+msgstr "Позиция отображения"
+
+msgid "UI_DEBUG_PRESENTATION_DELTA"
+msgstr "Расхождение отображения"
+
+msgid "UI_DEBUG_TRANSPORT_NOTE"
+msgstr "Bootstrap-зонд сохраняется только в smoke evidence и не считается авторитетным пространственным состоянием."
+
+msgid "UI_DEBUG_CONTROLS_HINT"
+msgstr "WASD / левый стик — движение  ·  мышь / правый стик — обзор  ·  Shift / L3 — бег  ·  Esc — освободить курсор"
+
+msgid "UI_INPUT_KEYBOARD_MOUSE"
+msgstr "Клавиатура / мышь"
+
+msgid "UI_INPUT_GAMEPAD"
+msgstr "Геймпад"
+
+msgid "UI_SCENARIO_INTERACTIVE"
+msgstr "Интерактивный"
+
+msgid "UI_SCENARIO_SMOKE"
+msgstr "Smoke-тест"

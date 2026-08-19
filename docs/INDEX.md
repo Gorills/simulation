@@ -17,6 +17,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | protocol/Godot integer range and unsigned Core counter conversion | [`decisions/0007-protocol-integer-range.md`](decisions/0007-protocol-integer-range.md) | exporting tick/revision/seed/epoch or adding protocol integer fields |
 | Core snapshot/restore and deterministic continuation | [`decisions/0008-core-snapshot-restore.md`](decisions/0008-core-snapshot-restore.md) | adding authoritative Core state or persistence/replay work |
 | grounded locomotion behavior + neutral acceptance arena | [`models/grounded-locomotion.md`](models/grounded-locomotion.md) | movement solver, collision, slope/step/grounding or first test-arena work |
+| runtime UI localization, supported locales, translation keys/plurals | [`engineering/localization.md`](engineering/localization.md) | adding/changing player-visible text, locale selection or localization verification |
 | tests, playtest supervisor, evidence, local DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
 | current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target |
 | agent context packaging | [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md) | maintaining AGENTS/Cursor/Claude/Gemini/skills |
@@ -34,6 +35,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | Simulation authority ↔ Godot commands/projections/materialization | [`engineering/simulation-godot-boundary.md`](engineering/simulation-godot-boundary.md) |
 | Godot 4 typed GDScript presentation client | [`engineering/godot.md`](engineering/godot.md) |
 | Godot UI design system / responsive layout | [`engineering/ui-design-system.md`](engineering/ui-design-system.md) |
+| Godot runtime localization / ru-en catalogs / locale policy | [`engineering/localization.md`](engineering/localization.md) |
 | GDExtension adapter | [`engineering/gdextension.md`](engineering/gdextension.md) |
 | CMake / GoogleTest / Python tooling | [`engineering/cmake-python.md`](engineering/cmake-python.md) |
 | primary upstream references | [`engineering/SOURCES.md`](engineering/SOURCES.md) |

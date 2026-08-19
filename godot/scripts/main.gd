@@ -52,6 +52,7 @@ func _ready() -> void:
     camera_rig.configure(controls, player)
     player.configure(controls, camera_rig.get_camera())
     controls.input_device_changed.connect(_on_input_device_changed)
+    Localization.locale_changed.connect(_on_locale_changed)
     controls.capture_pointer()
 
     _set_bootstrap_projection(sim.bootstrap_debug_projection())
@@ -81,6 +82,10 @@ func _on_input_device_changed(_device: int) -> void:
     _refresh_debug_hud()
 
 
+func _on_locale_changed(_locale: String) -> void:
+    _refresh_debug_hud()
+
+
 func _set_bootstrap_projection(projection: Dictionary) -> void:
     _bootstrap_projection = projection
 
@@ -95,14 +100,14 @@ func _refresh_debug_hud() -> void:
     debug_fps.text = "%d" % fps
     debug_process.text = "%.2f ms" % process_ms
     debug_physics.text = "%.2f ms" % physics_ms
-    debug_input.text = controls.active_device_name()
+    debug_input.text = _active_input_device_text()
 
     debug_entity.text = "#%d" % world_presentation.controlled_entity_id()
     debug_tick.text = str(world_presentation.last_tick())
     debug_revision.text = str(world_presentation.last_revision())
     debug_protocol.text = str(world_presentation.protocol_version())
     debug_seed.text = str(int(_bootstrap_projection.get("seed", 0)))
-    debug_scenario.text = _scenario_name
+    debug_scenario.text = _scenario_text()
 
     debug_authority_position.text = "(%.2f, %.2f, %.2f) m" % [
         authoritative_position.x,
@@ -116,6 +121,22 @@ func _refresh_debug_hud() -> void:
         presentation_position.z,
     ]
     debug_divergence.text = "%.2f m" % presentation_position.distance_to(authoritative_position)
+
+
+func _active_input_device_text() -> String:
+    match controls.active_device():
+        PlayerControls.InputDevice.GAMEPAD:
+            return tr(&"UI_INPUT_GAMEPAD")
+        _:
+            return tr(&"UI_INPUT_KEYBOARD_MOUSE")
+
+
+func _scenario_text() -> String:
+    match _scenario_name:
+        "smoke":
+            return tr(&"UI_SCENARIO_SMOKE")
+        _:
+            return tr(&"UI_SCENARIO_INTERACTIVE")
 
 
 func _run_smoke(artifact_dir: String) -> void:
@@ -170,6 +191,12 @@ func _write_debug_artifact(artifact_dir: String) -> bool:
         "observed_world_projection": _observed_world_projection,
         "controlled_actor_spatial_projection": spatial_evidence,
         "presentation": world_presentation.debug_snapshot(),
+        "localization": {
+            "locale": Localization.current_locale(),
+            "supported_locales": Array(Localization.supported_locales()),
+            "hud_title": tr(&"UI_DEBUG_TITLE"),
+            "controls_hint": tr(&"UI_DEBUG_CONTROLS_HINT"),
+        },
     }
     file.store_string(JSON.stringify(evidence, "  "))
     return true

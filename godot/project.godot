@@ -8,6 +8,9 @@ config/name="World Simulation"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7")
 
+[autoload]
+Localization="*res://scripts/localization/localization.gd"
+
 [debug]
 gdscript/warnings/untyped_declaration=1
 
@@ -81,6 +84,13 @@ pointer_release={
 
 [input_devices]
 joypads/ignore_joypad_on_unfocused_application=true
+
+[internationalization]
+locale/fallback="ru"
+locale/translations=PackedStringArray("res://localization/ru.po", "res://localization/en.po")
+pseudolocalization/expansion_ratio=0.3
+pseudolocalization/replace_with_accents=true
+pseudolocalization/skip_placeholders=true
 
 [physics]
 common/physics_ticks_per_second=60

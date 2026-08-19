@@ -1,0 +1,80 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: world-simulation\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "UI_DEBUG_EYEBROW"
+msgstr "WORLD SIMULATION / READ-ONLY HUD"
+
+msgid "UI_DEBUG_TITLE"
+msgstr "Runtime diagnostics"
+
+msgid "UI_DEBUG_FPS"
+msgstr "FPS"
+
+msgid "UI_DEBUG_PROCESS"
+msgstr "PROCESS"
+
+msgid "UI_DEBUG_PHYSICS"
+msgstr "PHYSICS"
+
+msgid "UI_DEBUG_INPUT"
+msgstr "INPUT"
+
+msgid "UI_DEBUG_AUTHORITY"
+msgstr "AUTHORITY"
+
+msgid "UI_DEBUG_ENTITY"
+msgstr "Controlled entity"
+
+msgid "UI_DEBUG_TICK"
+msgstr "Simulation tick"
+
+msgid "UI_DEBUG_REVISION"
+msgstr "World revision"
+
+msgid "UI_DEBUG_PROTOCOL"
+msgstr "Protocol"
+
+msgid "UI_DEBUG_SEED"
+msgstr "World seed"
+
+msgid "UI_DEBUG_SCENARIO"
+msgstr "Scenario"
+
+msgid "UI_DEBUG_SPATIAL"
+msgstr "SPATIAL"
+
+msgid "UI_DEBUG_AUTHORITATIVE_POSITION"
+msgstr "Authoritative position"
+
+msgid "UI_DEBUG_EPOCH"
+msgstr "Spatial epoch"
+
+msgid "UI_DEBUG_PRESENTATION_POSITION"
+msgstr "Presentation position"
+
+msgid "UI_DEBUG_PRESENTATION_DELTA"
+msgstr "Presentation delta"
+
+msgid "UI_DEBUG_TRANSPORT_NOTE"
+msgstr "Bootstrap transport probe is retained in smoke evidence, not presented as authoritative spatial truth."
+
+msgid "UI_DEBUG_CONTROLS_HINT"
+msgstr "WASD / left stick move  ·  mouse / right stick look  ·  Shift / L3 sprint  ·  Esc releases pointer"
+
+msgid "UI_INPUT_KEYBOARD_MOUSE"
+msgstr "Keyboard / mouse"
+
+msgid "UI_INPUT_GAMEPAD"
+msgstr "Gamepad"
+
+msgid "UI_SCENARIO_INTERACTIVE"
+msgstr "Interactive"
+
+msgid "UI_SCENARIO_SMOKE"
+msgstr "Smoke test"
