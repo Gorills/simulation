@@ -8,6 +8,7 @@ The repository must work well with both weak and strong models:
 
 - a weak model receives a small set of unambiguous invariants and a deterministic route to the next source;
 - a strong model can progressively load deeper product, architecture, modeling, engineering, research and ADR context without receiving unrelated material every turn;
+- every coding model evaluates whether a requested change is coherent **before** production implementation instead of assuming the user supplied the correct dependency order;
 - no host-specific instruction file becomes an independent source of product truth;
 - AI Layer remains an external zero-footprint control plane.
 
@@ -15,13 +16,14 @@ The repository must work well with both weak and strong models:
 
 | Layer | Location | Loaded when | Owns |
 | --- | --- | --- | --- |
-| universal bootstrap | `AGENTS.md` | project/session startup where supported | short invariants, source routing, AI Layer boundary |
+| universal bootstrap | `AGENTS.md` | project/session startup where supported | short invariants, change-admission route, source routing, AI Layer boundary |
+| change admission | `docs/CHANGE_ADMISSION.md` | before production implementation | readiness/dependency/conflict judgment; no task state |
 | host compatibility shims | `CLAUDE.md`, `GEMINI.md` | relevant host startup | import the universal bootstrap; no duplicated rules |
 | path-scoped editor hints | `.cursor/rules/*.mdc` | matching files | short reminders + canonical doc pointer |
 | canonical project docs | `docs/*.md`, `docs/engineering/*`, ADRs | on demand | product/architecture/modeling/verification/stack facts |
 | mechanic contracts | `docs/models/*` | when the mechanic is affected | serious implemented/modeling subsystem contract |
 | repeatable workflows | AI Layer project skills / host-native skills | when relevant | procedural skill instructions |
-| hard enforcement | build, tests, linters, architecture gates, CI | execution | mechanically provable invariants |
+| hard enforcement | build, tests, linters, architecture gates, bounded local playtests | execution | mechanically provable invariants |
 
 Do not copy the same explanation across context layers. A short bootstrap/rule may repeat a high-cost invariant, but the canonical explanation still has one owner.
 
@@ -40,7 +42,20 @@ Therefore:
 
 > Always-on context routes; it does not try to teach the whole project.
 
-Do not put the full C++ style guide, Godot practices, roadmap, research corpus or playtest manual in `AGENTS.md`.
+Do not put the full C++ style guide, Godot practices, roadmap, research corpus, change-admission examples or playtest manual in `AGENTS.md`.
+
+## Change admission is repository policy, not workflow state
+
+A coding model must not assume that a user request names the correct implementation order. The repository therefore owns one cross-host admission policy in [`CHANGE_ADMISSION.md`](CHANGE_ADMISSION.md).
+
+That policy belongs here because it protects repository correctness:
+
+- accepted architecture and model boundaries must not be bypassed by an eager implementation;
+- missing load-bearing prerequisites must not be replaced by hardcoded fake state;
+- a user may reprioritize product outcomes, but reprioritization does not erase dependencies;
+- weak and strong models should reach the same basic verdict from the same repository facts.
+
+This does **not** make the repository a workflow engine. Change admission stores no current task, queue, continuation state, Work/Epic lifecycle or project database. AI Layer may own which request is active and its durable workflow; the repository only answers whether implementing that request against the current codebase is coherent now.
 
 ## Cross-host compatibility
 
@@ -88,7 +103,7 @@ Likely project skills once executable workflows exist:
 - simulation determinism investigation;
 - mechanic/model research with source-quality checks.
 
-A skill points back to repository-owned executable commands and canonical docs. It does not redefine product invariants or invent its own Work/Task lifecycle.
+A skill points back to repository-owned executable commands and canonical docs. It does not redefine product invariants, change-admission verdicts, or invent its own Work/Task lifecycle.
 
 ## When prose is not enough
 
@@ -99,9 +114,9 @@ Agent instructions are guidance, not enforcement. When a rule is mechanically te
 - deterministic behavior → native deterministic tests;
 - one supported playtest entry → executable supervisor/tooling;
 - dependency versions → lock/build files;
-- required verification → local/CI gate.
+- required verification → repository-owned local verification gate.
 
-Keep prose as a concise rationale and route to the executable check.
+Change admission itself is partly judgment and cannot be reduced to a linter: whether a requested capability is premature depends on product/model/architecture context. Mechanically testable consequences of an accepted decision should still be encoded in code/build/tests rather than repeated as prose.
 
 ## Rule maintenance checklist
 
@@ -110,7 +125,7 @@ Before adding or expanding an agent rule:
 1. Is the fact already owned by a canonical document or executable file?
 2. Must every task know it? If not, scope it.
 3. Is it a repeatable procedure? If yes, prefer a skill.
-4. Can it be enforced mechanically? If yes, add a gate rather than relying on prose.
+4. Can it be enforced mechanically? If yes, add a local gate rather than relying on prose.
 5. Does it duplicate AI Layer workflow/state? If yes, do not add it.
 6. Does it name a version/API/tool that can drift? Route to the lock/version owner.
 7. Is it specific and testable enough that two agents should interpret it the same way?

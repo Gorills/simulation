@@ -5,11 +5,12 @@ Use this file as the always-on project context. Keep it short. Load deeper docum
 ## Before changing anything
 
 1. Inspect the current source, tests, build files, lock files, and git diff that are relevant to the request.
-2. Use [`docs/INDEX.md`](docs/INDEX.md) to select the canonical document for the concern.
-3. Read only the relevant stack guide / model / ADR/research source after that.
-4. Never invent an API, target, path, installed tool, dependency version, historical fact, or successful verification result.
+2. Apply [`docs/CHANGE_ADMISSION.md`](docs/CHANGE_ADMISSION.md) before implementation. Treat the request as a desired outcome, not guaranteed implementation order; verify that load-bearing prerequisites and current architecture/model contracts make the change coherent now.
+3. Use [`docs/INDEX.md`](docs/INDEX.md) to select the canonical document for the concern.
+4. Read only the relevant stack guide / model / ADR/research source after that.
+5. Never invent an API, target, path, installed tool, dependency version, historical fact, or successful verification result.
 
-Current executable behavior wins over prose. Accepted ADRs record intentional architectural choices. If documentation disagrees with current executable behavior, treat the documentation as stale and correct it in the same bounded change when relevant.
+If admission is `PREMATURE`, `CONFLICT`, or `RESEARCH REQUIRED`, stop before production implementation and explain the concrete blocker plus the smallest correct enabling step. Current executable behavior wins over prose. Accepted ADRs record intentional architectural choices. If documentation disagrees with current executable behavior, treat the documentation as stale and correct it in the same bounded change when relevant.
 
 ## Project invariants
 
@@ -22,6 +23,7 @@ Current executable behavior wins over prose. Accepted ADRs record intentional ar
 - `src/sim` and `src/protocol` remain Godot-free.
 - The GDExtension adapter is the only Godot ↔ protocol runtime seam.
 - Gameplay work is a small playable vertical capability: rule → contract → experience → proof.
+- A user request does not waive missing prerequisites or project invariants. Do not fake a downstream capability with hardcoded stand-ins, wrong-layer state, player-only shortcuts, or temporary APIs likely to become accidental contracts.
 - Verification is local-only. Do not add project CI services, committed CI workflow files, or CI configuration; use the repository bootstrap, CMake/CTest presets, and bounded Godot playtests on the developer machine.
 - Do not restore the deleted Fenster / TypeScript / WASM / Playwright architecture.
 - Do not add speculative frameworks, abstractions, or subsystems without a current demonstrated need.
@@ -38,6 +40,7 @@ Current executable behavior wins over prose. Accepted ADRs record intentional ar
 
 ## Context routing
 
+- Change readiness / dependency admission: [`docs/CHANGE_ADMISSION.md`](docs/CHANGE_ADMISSION.md)
 - Product/gameplay intent: [`docs/PRODUCT.md`](docs/PRODUCT.md)
 - Runtime boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Simulation/modeling policy: [`docs/MODELING.md`](docs/MODELING.md)
