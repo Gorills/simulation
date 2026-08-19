@@ -59,6 +59,18 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
     return std::nullopt;
 }
 
+[[nodiscard]] LivingNeedStatus living_need_status(
+    const sim::NpcRestNeedDecision &decision
+) noexcept {
+    if (decision.satisfied) {
+        return LivingNeedStatus::satisfied;
+    }
+    if (decision.blocked_by_other_actor) {
+        return LivingNeedStatus::blocked;
+    }
+    return LivingNeedStatus::traveling;
+}
+
 [[nodiscard]] sim::WorldSeed checked_world_seed(const ProtocolInteger seed) {
     if (seed < 0) {
         throw std::invalid_argument("protocol seed must be non-negative");
@@ -297,6 +309,22 @@ ControlledActorSpatialProjection Simulation::controlled_actor_spatial_projection
         .velocity_y_mm_per_second = spatial->velocity.y.value,
         .velocity_z_mm_per_second = spatial->velocity.z.value,
         .spatial_epoch = checked_protocol_integer(spatial->epoch.value),
+        .tick = checked_protocol_integer(world_.tick().value),
+        .revision = checked_protocol_integer(world_.revision().value),
+        .protocol_version = kProtocolVersion,
+    };
+}
+
+LivingNeedProjection Simulation::living_need_projection() const {
+    const auto decision = sim::decide_npc_rest_need(world_, living_need_npc_);
+    assert(decision.has_value());
+    if (!decision.has_value()) {
+        return {};
+    }
+
+    return LivingNeedProjection{
+        .entity_id = living_need_npc_.value,
+        .status = living_need_status(*decision),
         .tick = checked_protocol_integer(world_.tick().value),
         .revision = checked_protocol_integer(world_.revision().value),
         .protocol_version = kProtocolVersion,
