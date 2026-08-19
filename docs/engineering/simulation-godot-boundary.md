@@ -23,44 +23,24 @@ Godot may make presentation smoother. It may not invent world truth.
 
 Identify, in order:
 
-1. the authoritative entities/facts involved;
-2. the semantic action or read the client actually needs;
-3. the Simulation rule that decides the result;
-4. the smallest protocol input/result/projection shape;
-5. the Godot presentation/interaction that consumes that shape;
-6. the executable native and Godot evidence required.
+1. authoritative entities/facts involved;
+2. semantic action or read the client actually needs;
+3. Simulation rule that decides the result;
+4. smallest protocol input/result/projection shape;
+5. Godot presentation/interaction that consumes that shape;
+6. executable native and Godot evidence required.
 
-If step 3 is missing, do not fake it in GDScript to unblock the UI. Add the minimum real world rule first or classify the feature as premature under [`../CHANGE_ADMISSION.md`](../CHANGE_ADMISSION.md).
+If step 3 is missing, do not fake it in GDScript to unblock UI. Add the minimum real world rule first or classify the feature as premature under [`../CHANGE_ADMISSION.md`](../CHANGE_ADMISSION.md).
 
 ## Write path: intent into world change
 
 A Godot feature that wants to change the world submits semantic intent through protocol/GDExtension.
 
-Good shapes describe an attempt or goal, for example:
+Good shapes describe attempts/goals, such as `BuyItem`, `OfferTrade`, `Attack`, `Travel`, `GiveGift` or `Move(direction, pace)`. Bad shapes directly assign authoritative state such as `SetMoney`, `SetRelationship`, `SetPosition`, `SetVelocity` or `SetTransform`.
 
-```text
-BuyItem
-OfferTrade
-Attack
-Travel
-GiveGift
-Move(direction, pace)
-```
+The client supplies only information it legitimately controls. Simulation revalidates current state, prerequisites, permissions, reachability and applicable laws before committing the result.
 
-Bad shapes directly assign authoritative state:
-
-```text
-SetMoney
-SetInventory
-SetRelationship
-SetPosition
-SetVelocity
-SetTransform
-```
-
-The client supplies only information it legitimately controls. Simulation revalidates current state, prerequisites, permissions, reachability and other applicable rules before committing the result.
-
-The exact current command/DTO/function names are source-owned. Do not copy the full public method list into this guide.
+Exact current command/DTO/function names are source-owned. Do not copy the full public method list into this guide.
 
 ## Actor parity and decision sources
 
@@ -72,41 +52,33 @@ NPC policy ---------------------+-> structured intent/goal -> Simulation validat
 future external policy/LLM -----+
 ```
 
-Do not add `is_player` branches to movement, economy, relationships, institutions, inventory, ownership, damage or another systemic rule merely because the source of intent differs.
+Do not add `is_player` branches to movement, economy, relationships, institutions, inventory, ownership, damage or another systemic rule merely because the source differs.
 
-A future external/LLM policy belongs above this same boundary. It proposes allowlisted high-level structured input from bounded actor-visible context; it does not mutate world fields or drive per-frame locomotion. See ADR 0009.
+A future external/LLM policy proposes allowlisted high-level structured input from bounded actor-visible context; it does not mutate world fields or drive per-frame locomotion. See ADR 0009.
 
 ## Read path: purpose-built projections
 
 Godot reads purpose-built projections/read models, not domain objects or mutable `WorldState`.
 
-A projection should answer one presentation question with only the information the client is allowed to know. Examples include observed identity/presence, controlled exact-spatial state, shop offers, inventory presentation, relationship presentation or institution state when those mechanics actually exist.
-
-Do not introduce one universal projection containing every person, secret, inventory, market and subsystem field.
+A projection answers one presentation question with only information the client is allowed to know. Do not introduce one universal projection containing every person, secret, inventory, market and subsystem field.
 
 Adapters translate representation only; they do not infer hidden domain meaning that the protocol did not provide.
 
 ## Transition-result path
 
-Some authoritative transitions need an ordered result stream rather than repeated polling of a read projection. Continuous movement is the current example.
-
-The durable rule is:
+Some authoritative transitions need ordered result data rather than repeated polling. Continuous movement is the current example.
 
 ```text
 semantic intent(s)
   -> one authoritative transition
-  -> ordered result data carrying enough identity/order/continuity information
+  -> ordered result data with identity/order/continuity
   -> adapter conversion
   -> presentation validation/reconciliation
 ```
 
-Result order/identity must be explicit enough that presentation can reject stale, duplicate or malformed data before applying it.
+Result order/identity must let presentation reject stale, duplicate or malformed data before application. Do not invent an extra sequence counter preemptively. Before another production system independently advances simulation time, re-admit the ordering model under ADR 0009.
 
-Do not invent an extra global sequence counter preemptively. Before another production system advances simulation time independently of the current movement stream, re-admit the ordering model under ADR 0009.
-
-Exact result field names and current ordering assertions live in protocol/Godot source and tests.
-
-## Exact spatial state and materialization
+## Exact spatial state, observation and materialization
 
 Keep these concepts independent:
 
@@ -119,9 +91,21 @@ Godot materialization
 frustum/occlusion
 ```
 
-Godot materialization never creates world existence. Removing a scene representation never deletes the simulated entity.
+Godot materialization never creates world existence. Removing a scene representation never deletes the simulated entity or stops its authoritative causal work.
 
-When exact geometry matters, Simulation owns the authoritative spatial outcome. When it does not, an entity may continue causally without a microscopic pose. Do not manufacture exact coordinates for distant actors merely so every entity fits one presentation representation.
+An **observed non-controlled actor may intentionally have no Godot binding/node**. When an ordered authoritative movement result contains a sample for that actor:
+
+- validate the sample shape, identity/order/protocol and observed membership normally;
+- do not require a presentation root merely to accept the authoritative transition;
+- skip only the transform/presentation write while no node exists;
+- keep controlled-actor presentation requirements intact for the current local client;
+- continue rejecting samples for entities outside the observed set.
+
+When presentation policy wants the actor back, apply a fresh observed-world projection to create a new hidden shell. The next authoritative sample supplies its current exact pose/velocity/continuity state and reveals the shell. Do not resurrect the old scene transform as world truth.
+
+This separation is currently exercised by the bounded living-need `offscreen` scenario. It proves presentation-node absence is not a causal prerequisite; it does **not** introduce a scheduler, regional LOD, semantic travel model or time acceleration.
+
+When exact geometry matters, Simulation owns the authoritative spatial outcome. When it does not, an entity may continue causally without a microscopic pose. Do not manufacture coordinates for distant actors merely so every entity fits one presentation representation.
 
 The current bounded solver is an authority proof, not a commitment to a project-authored general physics/navigation engine. A future Godot-free dependency can sit behind the Simulation boundary when a concrete requirement justifies it.
 
@@ -145,7 +129,7 @@ Not allowed:
 - ownership/damage decisions;
 - using scene transforms as world truth.
 
-The adapter should remain small enough that a code review can distinguish translation from gameplay policy immediately.
+The adapter should remain small enough that review can distinguish translation from gameplay policy immediately.
 
 ## Godot presentation rule
 
@@ -165,28 +149,16 @@ External/network/LLM calls must never block a fixed authoritative Simulation ste
 
 If a future transport decouples result arrival from local Godot physics timing, re-admit buffering/interpolation based on measured transport behavior rather than treating the current in-process schedule as networking architecture.
 
-## Trading example
-
-```text
-Godot requests BuyItem
-  -> protocol validates request shape/controller binding
-  -> Simulation validates merchant/stock/funds/access and commits transaction
-  -> result/events/projections cross adapter
-  -> Godot updates inventory/shop presentation and feedback
-```
-
-The UI cannot create an item by mutating a local array. An NPC buyer uses the same transaction rule when equivalent prerequisites hold.
-
 ## Offscreen interaction example
 
 ```text
-Simulation state says two actors can participate in an implemented causal event
-  -> Simulation resolves authoritative consequence
-  -> state/events change without any required Godot node
-  -> later observation/materialization renders the resulting state
+Simulation state says an implemented causal action/need continues
+  -> Simulation commits authoritative state/result
+  -> no Godot node is required for the non-controlled actor
+  -> later observation/materialization renders current authoritative state
 ```
 
-Camera absence is not world absence.
+Camera/node absence is not world absence.
 
 ## Extension checklist
 
@@ -198,28 +170,15 @@ For a feature crossing the boundary, answer:
 4. What result/error/event/projection is required?
 5. Which fields are actually observable by the client?
 6. Which parts are presentation-only?
-7. Can an NPC/human-controlled actor use the same world capability when prerequisites match?
+7. Can NPC/human-controlled actors use the same world capability when prerequisites match?
 8. What deterministic native test proves the transition?
-9. What bounded Godot smoke/playtest proves presentation of the result?
-10. Does the change duplicate a current schema/status/test fact that belongs in source, `ROADMAP.md` or `VERIFICATION.md` instead?
+9. What bounded Godot scenario proves presentation of the result?
+10. Does the change duplicate a current schema/status/test fact owned elsewhere?
 
-If the answer begins with “Godot sets the world state”, stop and move the decision behind protocol.
+If the answer begins with “Godot sets the world state”, move the decision behind protocol.
 
 ## Do not prebuild
 
-Without a concrete blocked capability, do not introduce:
-
-- generic ECS;
-- networking/server infrastructure;
-- full event sourcing;
-- regional runtime LOD/sharding;
-- multithread world jobs;
-- universal projection/event bus;
-- universal entity-scene factory;
-- production navigation/physics dependency;
-- generic movement modifier/effect stacks;
-- generic NPC planner/brain abstraction;
-- LLM provider/prompt/memory framework;
-- prediction/rollback architecture.
+Without a concrete blocked capability, do not introduce generic ECS, networking/server infrastructure, full event sourcing, regional runtime LOD/sharding, multithread world jobs, universal projection/event buses, universal entity-scene factories, production navigation/physics dependencies, generic modifier stacks, generic NPC brain abstractions, LLM provider/prompt/memory frameworks or prediction/rollback architecture.
 
 Use the first real requirement to admit the smallest durable addition.
