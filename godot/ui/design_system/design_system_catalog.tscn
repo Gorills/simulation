@@ -1,0 +1,235 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/design_system/design_system_catalog.gd" id="1_catalog"]
+
+[node name="DesignSystemCatalog" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_type_variation = &"DsCanvasPanel"
+script = ExtResource("1_catalog")
+
+[node name="ScreenMargin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_type_variation = &"DsScreenMargin"
+
+[node name="Page" type="VBoxContainer" parent="ScreenMargin"]
+layout_mode = 2
+theme_type_variation = &"DsStackLarge"
+
+[node name="Header" type="VBoxContainer" parent="ScreenMargin/Page"]
+layout_mode = 2
+theme_type_variation = &"DsStack"
+
+[node name="Eyebrow" type="Label" parent="ScreenMargin/Page/Header"]
+layout_mode = 2
+theme_type_variation = &"DsAccentLabel"
+text = "OBSIDIAN FRONTIER / UI FOUNDATION"
+
+[node name="Title" type="Label" parent="ScreenMargin/Page/Header"]
+layout_mode = 2
+theme_type_variation = &"DsDisplayLabel"
+text = "One visual language."
+
+[node name="Summary" type="Label" parent="ScreenMargin/Page/Header"]
+layout_mode = 2
+theme_type_variation = &"DsBodyLabel"
+text = "Dark fantasy atmosphere with quieter surfaces, stronger hierarchy and input states that remain obvious on mouse, keyboard and gamepad."
+autowrap_mode = 2
+
+[node name="HeaderDivider" type="HSeparator" parent="ScreenMargin/Page"]
+layout_mode = 2
+
+[node name="Columns" type="HBoxContainer" parent="ScreenMargin/Page"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"DsRow"
+
+[node name="ActionsColumn" type="VBoxContainer" parent="ScreenMargin/Page/Columns"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.9
+theme_type_variation = &"DsStack"
+
+[node name="ActionsPanel" type="PanelContainer" parent="ScreenMargin/Page/Columns/ActionsColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"DsRaisedPanel"
+
+[node name="Actions" type="VBoxContainer" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel"]
+layout_mode = 2
+theme_type_variation = &"DsStack"
+
+[node name="ActionsTitle" type="Label" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions"]
+layout_mode = 2
+theme_type_variation = &"DsSectionTitleLabel"
+text = "Interaction states"
+
+[node name="ActionsCopy" type="Label" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions"]
+layout_mode = 2
+theme_type_variation = &"DsBodyLabel"
+text = "Focus is deliberately stronger than hover. Gold means selection or commitment; teal is informational, not a competing primary action."
+autowrap_mode = 2
+
+[node name="ActionButtons" type="VBoxContainer" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions"]
+layout_mode = 2
+theme_type_variation = &"DsStack"
+
+[node name="PrimaryAction" type="Button" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions/ActionButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DsPrimaryButton"
+text = "Continue journey"
+
+[node name="SecondaryAction" type="Button" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions/ActionButtons"]
+layout_mode = 2
+theme_type_variation = &"DsSecondaryButton"
+text = "Open inventory"
+
+[node name="GhostAction" type="Button" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions/ActionButtons"]
+layout_mode = 2
+theme_type_variation = &"DsGhostButton"
+text = "Inspect details"
+
+[node name="DangerAction" type="Button" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions/ActionButtons"]
+layout_mode = 2
+theme_type_variation = &"DsDangerButton"
+text = "Abandon changes"
+
+[node name="DisabledAction" type="Button" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions/ActionButtons"]
+layout_mode = 2
+disabled = true
+text = "Unavailable action"
+
+[node name="ActionsHint" type="Label" parent="ScreenMargin/Page/Columns/ActionsColumn/ActionsPanel/Actions"]
+layout_mode = 2
+theme_type_variation = &"DsMutedLabel"
+text = "D-pad / arrows navigate · Enter / A confirms · focus must never disappear"
+autowrap_mode = 2
+
+[node name="InformationColumn" type="VBoxContainer" parent="ScreenMargin/Page/Columns"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.1
+theme_type_variation = &"DsStack"
+
+[node name="StatusPanel" type="PanelContainer" parent="ScreenMargin/Page/Columns/InformationColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"DsSurfacePanel"
+
+[node name="Status" type="VBoxContainer" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel"]
+layout_mode = 2
+theme_type_variation = &"DsStack"
+
+[node name="StatusTitle" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status"]
+layout_mode = 2
+theme_type_variation = &"DsSectionTitleLabel"
+text = "Semantic information"
+
+[node name="StatusCopy" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status"]
+layout_mode = 2
+theme_type_variation = &"DsBodyLabel"
+text = "The palette communicates hierarchy first. Status colors are reserved for meaning and are always paired with text or shape."
+autowrap_mode = 2
+
+[node name="VitalStack" type="VBoxContainer" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status"]
+layout_mode = 2
+theme_type_variation = &"DsStack"
+
+[node name="HealthRow" type="HBoxContainer" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack"]
+layout_mode = 2
+
+[node name="HealthLabel" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack/HealthRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"DsBodyLabel"
+text = "Health"
+
+[node name="HealthValue" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack/HealthRow"]
+layout_mode = 2
+theme_type_variation = &"DsDangerLabel"
+text = "824 / 1000"
+
+[node name="HealthBar" type="ProgressBar" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+theme_type_variation = &"DsProgressHealth"
+value = 82.4
+show_percentage = false
+
+[node name="ResolveRow" type="HBoxContainer" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack"]
+layout_mode = 2
+
+[node name="ResolveLabel" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack/ResolveRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"DsBodyLabel"
+text = "Resolve"
+
+[node name="ResolveValue" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack/ResolveRow"]
+layout_mode = 2
+theme_type_variation = &"DsInfoLabel"
+text = "68%"
+
+[node name="ResolveBar" type="ProgressBar" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+theme_type_variation = &"DsProgressTeal"
+value = 68.0
+show_percentage = false
+
+[node name="ProgressRow" type="HBoxContainer" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack"]
+layout_mode = 2
+
+[node name="ProgressLabel" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack/ProgressRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"DsBodyLabel"
+text = "Journey progress"
+
+[node name="ProgressValue" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack/ProgressRow"]
+layout_mode = 2
+theme_type_variation = &"DsAccentLabel"
+text = "41%"
+
+[node name="ProgressBar" type="ProgressBar" parent="ScreenMargin/Page/Columns/InformationColumn/StatusPanel/Status/VitalStack"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+theme_type_variation = &"DsProgressGold"
+value = 41.0
+show_percentage = false
+
+[node name="InsetPanel" type="PanelContainer" parent="ScreenMargin/Page/Columns/InformationColumn"]
+layout_mode = 2
+theme_type_variation = &"DsInsetPanel"
+
+[node name="InsetCopy" type="VBoxContainer" parent="ScreenMargin/Page/Columns/InformationColumn/InsetPanel"]
+layout_mode = 2
+theme_type_variation = &"DsStack"
+
+[node name="InsetEyebrow" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/InsetPanel/InsetCopy"]
+layout_mode = 2
+theme_type_variation = &"DsAccentLabel"
+text = "VISUAL DIRECTION"
+
+[node name="InsetTitle" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/InsetPanel/InsetCopy"]
+layout_mode = 2
+theme_type_variation = &"DsScreenTitleLabel"
+text = "Atmosphere without chrome overload"
+
+[node name="InsetBody" type="Label" parent="ScreenMargin/Page/Columns/InformationColumn/InsetPanel/InsetCopy"]
+layout_mode = 2
+theme_type_variation = &"DsBodyLabel"
+text = "Major surfaces define structure. Minor groups rely on spacing and typography instead of another border. This keeps the dark-fantasy identity while making dense RPG screens easier to scan."
+autowrap_mode = 2
+
+[node name="FooterDivider" type="HSeparator" parent="ScreenMargin/Page"]
+layout_mode = 2
+
+[node name="Footer" type="Label" parent="ScreenMargin/Page"]
+layout_mode = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Logical base: 1920×1080 · canvas_items + expand · container-driven layout · project-wide Theme"
