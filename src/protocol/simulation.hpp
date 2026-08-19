@@ -2,6 +2,7 @@
 
 #include "protocol/bootstrap_move.hpp"
 #include "protocol/integer.hpp"
+#include "protocol/living_need.hpp"
 #include "protocol/movement.hpp"
 #include "protocol/observed_world.hpp"
 #include "protocol/spatial.hpp"
@@ -21,6 +22,7 @@ public:
     [[nodiscard]] BootstrapActorProjection bootstrap_controlled_actor_projection() const;
     [[nodiscard]] ObservedWorldProjection observed_world_projection() const;
     [[nodiscard]] ControlledActorSpatialProjection controlled_actor_spatial_projection() const;
+    [[nodiscard]] LivingNeedProjection living_need_projection() const;
 
 private:
     sim::World world_;

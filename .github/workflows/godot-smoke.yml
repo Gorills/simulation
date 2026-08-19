@@ -82,6 +82,10 @@ jobs:
         env:
           WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
         run: xvfb-run -a python tools/dev.py play --scenario offscreen --locale ru
+      - name: Verify rest interference loop
+        env:
+          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
+        run: xvfb-run -a python tools/dev.py play --scenario rest_interference --locale ru
       - name: Upload Godot smoke evidence
         if: always()
         uses: actions/upload-artifact@v7

@@ -19,6 +19,7 @@ public:
     [[nodiscard]] godot::Dictionary bootstrap_debug_projection() const;
     [[nodiscard]] godot::Dictionary observed_world_projection() const;
     [[nodiscard]] godot::Dictionary controlled_actor_spatial_projection() const;
+    [[nodiscard]] godot::Dictionary living_need_projection() const;
     [[nodiscard]] godot::Dictionary controlled_actor_submit_move_intent(
         std::int32_t x,
         std::int32_t z,
@@ -38,6 +39,9 @@ private:
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::ControlledActorSpatialProjection &projection
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::LivingNeedProjection &projection
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::AuthoritativeMovementSampleBatch &batch

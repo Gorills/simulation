@@ -52,6 +52,28 @@ TEST(SimulationProtocol, ObservedWorldStartsWithControlledActorAndLivingNeedNpc)
     EXPECT_EQ(projection.entities[1].entity_id, 2);
 }
 
+TEST(SimulationProtocol, LivingNeedProjectionStartsTravelingAndTracksWorldTime) {
+    worldsim::protocol::Simulation simulation{42};
+
+    const auto initial = simulation.living_need_projection();
+    EXPECT_EQ(initial.entity_id, 2);
+    EXPECT_EQ(initial.status, worldsim::protocol::LivingNeedStatus::traveling);
+    EXPECT_EQ(initial.tick, 0);
+    EXPECT_EQ(initial.revision, 2);
+    EXPECT_EQ(initial.protocol_version, worldsim::protocol::kProtocolVersion);
+
+    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
+    const auto advanced = simulation.advance_locomotion_tick();
+    ASSERT_TRUE(advanced.has_value());
+
+    const auto after_tick = simulation.living_need_projection();
+    EXPECT_EQ(after_tick.entity_id, 2);
+    EXPECT_EQ(after_tick.status, worldsim::protocol::LivingNeedStatus::traveling);
+    EXPECT_EQ(after_tick.tick, advanced->tick);
+    EXPECT_EQ(after_tick.revision, advanced->revision);
+    EXPECT_EQ(after_tick.protocol_version, worldsim::protocol::kProtocolVersion);
+}
+
 TEST(SimulationProtocol, ControlledActorStartsWithAuthoritativeSpatialState) {
     worldsim::protocol::Simulation simulation{42};
 

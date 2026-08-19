@@ -46,6 +46,18 @@ msgstr "Сид мира"
 msgid "UI_DEBUG_SCENARIO"
 msgstr "Сценарий"
 
+msgid "UI_DEBUG_LIVING_NEED"
+msgstr "Потребность NPC в отдыхе"
+
+msgid "UI_NEED_TRAVELING"
+msgstr "Идёт к месту отдыха"
+
+msgid "UI_NEED_BLOCKED"
+msgstr "Место отдыха занято"
+
+msgid "UI_NEED_SATISFIED"
+msgstr "Место отдыха доступно"
+
 msgid "UI_DEBUG_SPATIAL"
 msgstr "ПРОСТРАНСТВО"
 
@@ -78,3 +90,6 @@ msgstr "Интерактивный"
 
 msgid "UI_SCENARIO_SMOKE"
 msgstr "Smoke-тест"
+
+msgid "UI_SCENARIO_REST_INTERFERENCE"
+msgstr "Вмешательство в отдых"

@@ -28,6 +28,7 @@ python tools/dev.py check --preset dev
 python tools/dev.py play --scenario smoke --locale ru
 python tools/dev.py play --scenario smoke --locale en
 python tools/dev.py play --scenario offscreen --locale ru
+python tools/dev.py play --scenario rest_interference --locale ru
 ```
 
 Use only the subset required by the change, but do not claim a gate that did not run.
@@ -37,6 +38,7 @@ Use only the subset required by the change, but do not claim a gate that did not
 - `dev` additionally builds the GDExtension development graph.
 - `play --scenario smoke` launches the real Godot project and validates the ordinary boundary/screenshot evidence.
 - `play --scenario offscreen` proves an observed living-need NPC can lose its Godot node, continue receiving authoritative movement while absent, and rematerialize from fresh observation plus a later authoritative sample.
+- `play --scenario rest_interference` proves the real client observes the first need as `traveling`, creates a `blocked` outcome through ordinary controlled locomotion, renders localized blocked feedback, then removes the obstruction through the same movement path and observes later `satisfied` feedback.
 
 The exact Godot/tool versions are owned by lock/configuration files and [`engineering/VERSIONS.md`](engineering/VERSIONS.md), not duplicated here.
 
@@ -63,6 +65,8 @@ The target graph should make ownership visible:
 - protocol tests exercise boundary validation/orchestration and authoritative results;
 - architecture checks mechanically reject Godot leakage into Core/protocol;
 - mechanic-specific detailed assertions live next to the mechanic tests rather than in this document.
+
+For the first Living Need, native evidence owns the actual satisfaction/blocking world-law assertions. Protocol evidence additionally proves the purpose-built `LivingNeedProjection` is derived from the authoritative NPC and tracks current tick/revision without becoming mutable need state.
 
 Use behavior-oriented test names. Prefer direct domain values/state over mock-heavy tests when practical.
 
@@ -91,6 +95,8 @@ Each run writes under:
   debug.json
 ```
 
+Individual scenarios may add bounded named screenshots such as `blocked.png` when a transient visible state is itself acceptance evidence.
+
 ### Baseline smoke
 
 The `smoke` scenario validates authoritative identity/presence, controlled exact-spatial state, one current authoritative movement transition, presentation binding/reconciliation, duplicate/stale transition rejection, active locale probes and a rendered screenshot.
@@ -114,6 +120,36 @@ It must prove on one bounded run that:
 
 This proves **Godot-node absence does not stop the already implemented RestNeed causal path**. It does not prove regional scheduling, semantic travel, reduced-fidelity world simulation or time acceleration.
 
+### Rest interference/help
+
+The `rest_interference` scenario is the Milestone 1 player-exposure proof.
+
+It must use the ordinary controlled movement boundary — no scenario-only world setter — and prove:
+
+- the purpose-built need projection begins `traveling`;
+- the controlled actor enters the NPC's assigned rest tolerance through authoritative locomotion;
+- Core later derives `blocked` while the NPC is at its rest location and the controlled actor occupies it;
+- the blocked projection carries current identity/tick/revision/version context;
+- Godot renders localized blocked feedback and captures `blocked.png`;
+- the controlled actor then leaves through the same authoritative movement path;
+- a later need projection becomes `satisfied`;
+- the final localized HUD shows the satisfied outcome;
+- the final need projection, authoritative movement batch and presentation tick/revision align.
+
+The scripted controller is acceptance automation over the real client boundary. It does not claim subjective keyboard/gamepad feel and does not introduce a second gameplay command.
+
+### Milestone 1 acceptance gate
+
+Milestone 1 may be marked accepted only when the exact candidate revision has green evidence for:
+
+- native/sanitizer verification including RestNeed blocking/shared-movement behavior;
+- protocol projection/build verification;
+- RU + EN baseline Godot smoke;
+- bounded offscreen continuation;
+- bounded RU rest-interference/help with localized blocked/satisfied feedback and rendered artifacts.
+
+If the candidate fails the interference scenario, M1 remains in progress. Do not weaken the scenario merely to make the milestone green.
+
 ## Godot process/environment policy
 
 Metadata import must remain non-interactive and bounded. The ordinary/default path uses Godot headless mode. On the current Linux CI runner, pinned Godot 4.7.1 aborts during this project's `--headless --import`; the persistent smoke lane therefore performs that import under the same Xvfb display already required for screenshot evidence.
@@ -128,7 +164,7 @@ Unexpected engine `ERROR` lines should still be investigated; the pass/fail cont
 
 ## Godot smoke CI lane
 
-The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs the RU and EN baseline smoke scenarios, runs the bounded RU offscreen continuation scenario, and uploads `.cache/play` evidence even on failure.
+The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs RU and EN baseline smoke, runs the bounded RU offscreen continuation scenario, runs the bounded RU rest-interference/help scenario, and uploads `.cache/play` evidence even on failure.
 
 Documentation-only changes are excluded. The lane remains deliberately bounded: no narrow-layout matrix, interactive input-feel automation, performance thresholds or cross-platform GPU matrix without a demonstrated need.
 
