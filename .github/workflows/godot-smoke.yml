@@ -71,8 +71,12 @@ jobs:
       - name: Build development graph
         run: python tools/dev.py check --preset dev
       - name: Verify Russian Godot smoke
+        env:
+          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
         run: xvfb-run -a python tools/dev.py play --scenario smoke --locale ru
       - name: Verify English Godot smoke
+        env:
+          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
         run: xvfb-run -a python tools/dev.py play --scenario smoke --locale en
       - name: Upload Godot smoke evidence
         if: always()
