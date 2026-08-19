@@ -45,6 +45,20 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
     return x * x + z * z <= scale * scale;
 }
 
+[[nodiscard]] std::optional<sim::LocomotionPace> simulation_pace(
+    const ControlledActorLocomotionPace pace
+) noexcept {
+    switch (pace) {
+    case ControlledActorLocomotionPace::walk:
+        return sim::LocomotionPace::walk;
+    case ControlledActorLocomotionPace::run:
+        return sim::LocomotionPace::run;
+    case ControlledActorLocomotionPace::sprint:
+        return sim::LocomotionPace::sprint;
+    }
+    return std::nullopt;
+}
+
 [[nodiscard]] sim::WorldSeed checked_world_seed(const ProtocolInteger seed) {
     if (seed < 0) {
         throw std::invalid_argument("protocol seed must be non-negative");
@@ -69,8 +83,11 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
         return ControlledActorMovementError::controlled_actor_missing;
     case sim::GroundedLocomotionTickError::missing_spatial_state:
         return ControlledActorMovementError::controlled_actor_spatial_state_missing;
+    case sim::GroundedLocomotionTickError::invalid_pace:
+        return ControlledActorMovementError::invalid_pace;
     case sim::GroundedLocomotionTickError::invalid_context:
     case sim::GroundedLocomotionTickError::duplicate_actor_intent:
+    case sim::GroundedLocomotionTickError::invalid_locomotion_capability:
     case sim::GroundedLocomotionTickError::invalid_continuation_state:
     case sim::GroundedLocomotionTickError::incompatible_tick_rate:
     case sim::GroundedLocomotionTickError::invalid_intent:
@@ -163,6 +180,9 @@ ControlledActorMoveIntentOutcome Simulation::submit_controlled_actor_move_intent
     if (!is_valid_move_intent(intent)) {
         return std::unexpected(ControlledActorMovementError::invalid_intent);
     }
+    if (!is_valid_controlled_actor_locomotion_pace(intent.pace)) {
+        return std::unexpected(ControlledActorMovementError::invalid_pace);
+    }
     controlled_move_intent_ = intent;
     return {};
 }
@@ -173,6 +193,11 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
         world_.revision().value >= kMaxProtocolInteger
     ) {
         return std::unexpected(ControlledActorMovementError::protocol_integer_exhausted);
+    }
+
+    const auto controlled_pace = simulation_pace(controlled_move_intent_.pace);
+    if (!controlled_pace.has_value()) {
+        return std::unexpected(ControlledActorMovementError::invalid_pace);
     }
 
     const auto npc_decision = sim::decide_npc_rest_need(world_, living_need_npc_);
@@ -187,6 +212,7 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
                 .x = controlled_move_intent_.x,
                 .z = controlled_move_intent_.z,
             },
+            .pace = *controlled_pace,
         },
         npc_decision->movement,
     };

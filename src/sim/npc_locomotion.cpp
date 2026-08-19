@@ -82,6 +82,7 @@ decide_npc_local_move_toward_waypoint(
     return ActorGroundedMoveIntent{
         .actor = waypoint.actor,
         .move = move,
+        .pace = waypoint.pace,
     };
 }
 

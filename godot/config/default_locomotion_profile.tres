@@ -4,13 +4,4 @@
 
 [resource]
 script = ExtResource("1_profile")
-move_speed = 5.8
-sprint_speed = 8.2
-acceleration = 18.0
-deceleration = 24.0
-direction_change_acceleration = 24.0
 turn_response = 14.0
-sprint_minimum_input = 0.65
-floor_snap_length = 0.3
-floor_max_angle_degrees = 50.0
-constant_speed_on_slopes = true

@@ -36,16 +36,16 @@ TEST(WorldLocomotion, DifferentActorsAdvanceThroughOneSharedWorldTick) {
         worldsim::sim::ActorSpawnState{.spatial = spatial_at(0, 0, 1'000)}
     ).has_value());
 
-    // Deliberately reverse source order. Samples must be canonical by EntityId,
-    // not inherit collection order from future player/NPC intent producers.
     const std::array intents{
         worldsim::sim::ActorGroundedMoveIntent{
             .actor = worldsim::sim::EntityId{2},
             .move = {.x = 0, .z = 1000},
+            .pace = worldsim::sim::LocomotionPace::walk,
         },
         worldsim::sim::ActorGroundedMoveIntent{
             .actor = worldsim::sim::EntityId{1},
             .move = {.x = 1000, .z = 0},
+            .pace = worldsim::sim::LocomotionPace::walk,
         },
     };
     const auto advanced = world.advance_grounded_locomotion_tick(context, intents);
@@ -56,10 +56,12 @@ TEST(WorldLocomotion, DifferentActorsAdvanceThroughOneSharedWorldTick) {
     EXPECT_EQ(advanced->revision, (worldsim::sim::WorldRevision{3}));
     EXPECT_EQ(advanced->samples[0].actor, (worldsim::sim::EntityId{1}));
     EXPECT_EQ(advanced->samples[1].actor, (worldsim::sim::EntityId{2}));
-    EXPECT_EQ(advanced->samples[0].spatial.position.x.value, 96);
+    EXPECT_EQ(advanced->samples[0].spatial.position.x.value, 1);
     EXPECT_EQ(advanced->samples[0].spatial.position.z.value, 0);
     EXPECT_EQ(advanced->samples[1].spatial.position.x.value, 0);
-    EXPECT_EQ(advanced->samples[1].spatial.position.z.value, 1'096);
+    EXPECT_EQ(advanced->samples[1].spatial.position.z.value, 1'001);
+    EXPECT_EQ(advanced->samples[0].spatial.velocity.x.value, 100);
+    EXPECT_EQ(advanced->samples[1].spatial.velocity.z.value, 100);
 
     const auto first = world.actor_spatial_state(worldsim::sim::EntityId{1});
     const auto second = world.actor_spatial_state(worldsim::sim::EntityId{2});
@@ -101,6 +103,29 @@ TEST(WorldLocomotion, InvalidBatchIsRejectedWithoutPartialMutationOrTimeAdvance)
 
     ASSERT_FALSE(advanced.has_value());
     EXPECT_EQ(advanced.error(), worldsim::sim::GroundedLocomotionTickError::invalid_intent);
+    EXPECT_EQ(world.snapshot(), before);
+}
+
+TEST(WorldLocomotion, InvalidPaceIsRejectedWithoutMutationOrTimeAdvance) {
+    auto context = worldsim::sim::make_flat_locomotion_acceptance_context();
+    worldsim::sim::World world{worldsim::sim::WorldSeed{220}};
+    ASSERT_TRUE(world.spawn_actor(
+        worldsim::sim::EntityId{1},
+        worldsim::sim::ActorSpawnState{.spatial = spatial_at()}
+    ).has_value());
+    const auto before = world.snapshot();
+
+    const std::array intents{
+        worldsim::sim::ActorGroundedMoveIntent{
+            .actor = worldsim::sim::EntityId{1},
+            .move = {.x = 1000, .z = 0},
+            .pace = static_cast<worldsim::sim::LocomotionPace>(99),
+        },
+    };
+    const auto advanced = world.advance_grounded_locomotion_tick(context, intents);
+
+    ASSERT_FALSE(advanced.has_value());
+    EXPECT_EQ(advanced.error(), worldsim::sim::GroundedLocomotionTickError::invalid_pace);
     EXPECT_EQ(world.snapshot(), before);
 }
 
@@ -148,6 +173,7 @@ TEST(WorldLocomotion, FixedStepContinuationSurvivesSnapshotRestore) {
         worldsim::sim::ActorGroundedMoveIntent{
             .actor = actor,
             .move = {.x = 1000, .z = 0},
+            .pace = worldsim::sim::LocomotionPace::walk,
         },
     };
     ASSERT_TRUE(uninterrupted.advance_grounded_locomotion_tick(context, intent).has_value());
@@ -157,6 +183,7 @@ TEST(WorldLocomotion, FixedStepContinuationSurvivesSnapshotRestore) {
     ASSERT_EQ(saved.actors.size(), 1U);
     EXPECT_EQ(saved.actors.front().grounded_locomotion.ticks_per_second, 60U);
     EXPECT_EQ(saved.actors.front().grounded_locomotion.remainder.x, 40);
+    EXPECT_EQ(saved.actors.front().grounded_locomotion.remainder.velocity_x, 0);
 
     worldsim::sim::World restored{worldsim::sim::WorldSeed{999}};
     ASSERT_TRUE(restored.restore(saved).has_value());
@@ -170,7 +197,8 @@ TEST(WorldLocomotion, FixedStepContinuationSurvivesSnapshotRestore) {
     EXPECT_EQ(restored.snapshot(), uninterrupted.snapshot());
     const auto spatial = restored.actor_spatial_state(actor);
     ASSERT_TRUE(spatial.has_value());
-    EXPECT_EQ(spatial->position.x.value, 193);
+    EXPECT_EQ(spatial->position.x.value, 5);
+    EXPECT_EQ(spatial->velocity.x.value, 200);
 }
 
 TEST(WorldLocomotion, RestoreRejectsMalformedContinuationWithoutMutatingTarget) {
@@ -183,7 +211,7 @@ TEST(WorldLocomotion, RestoreRejectsMalformedContinuationWithoutMutatingTarget) 
     auto malformed = source.snapshot();
     ASSERT_EQ(malformed.actors.size(), 1U);
     malformed.actors.front().grounded_locomotion.ticks_per_second = 60;
-    malformed.actors.front().grounded_locomotion.remainder.x = 60;
+    malformed.actors.front().grounded_locomotion.remainder.velocity_x = 60;
 
     worldsim::sim::World target{worldsim::sim::WorldSeed{26}};
     ASSERT_TRUE(target.spawn_actor(worldsim::sim::EntityId{9}).has_value());

@@ -152,6 +152,85 @@ struct SurfaceSample final {
     return true;
 }
 
+// Grounded planar response is deliberately simple and deterministic. The solver
+// approaches each resolved target component independently. Increasing magnitude
+// in the same direction uses acceleration; reducing magnitude uses braking; a
+// reversal must brake to zero before a later tick accelerates in the opposite
+// direction. This is an acceptance movement law, not a biomechanics model.
+[[nodiscard]] bool approach_velocity_component(
+    const std::int64_t current,
+    const std::int64_t target,
+    const std::int64_t acceleration,
+    const std::int64_t braking,
+    const std::int64_t old_remainder,
+    const std::uint32_t ticks_per_second,
+    std::int64_t &out,
+    std::int64_t &new_remainder
+) noexcept {
+    if (current == target) {
+        out = current;
+        new_remainder = 0;
+        return true;
+    }
+
+    const bool reversing = current != 0 && target != 0 && ((current < 0) != (target < 0));
+    std::int64_t goal = target;
+    std::int64_t rate{};
+    if (reversing) {
+        goal = 0;
+        rate = braking;
+    } else {
+        bool speeding_up{};
+        if (current == 0) {
+            speeding_up = target != 0;
+        } else if (target == 0) {
+            speeding_up = false;
+        } else if (current > 0) {
+            speeding_up = target > current;
+        } else {
+            speeding_up = target < current;
+        }
+        rate = speeding_up ? acceleration : braking;
+    }
+
+    if (rate == 0) {
+        out = current;
+        new_remainder = 0;
+        return true;
+    }
+
+    const std::int64_t signed_rate = goal > current ? rate : -rate;
+    std::int64_t delta_velocity{};
+    std::int64_t remainder{};
+    if (!integrate_acceleration(
+            signed_rate,
+            old_remainder,
+            ticks_per_second,
+            delta_velocity,
+            remainder
+        )) {
+        return false;
+    }
+
+    std::int64_t candidate{};
+    if (!checked_add(current, delta_velocity, candidate)) {
+        return false;
+    }
+
+    if (
+        (goal > current && candidate >= goal) ||
+        (goal < current && candidate <= goal)
+    ) {
+        out = goal;
+        new_remainder = 0;
+        return true;
+    }
+
+    out = candidate;
+    new_remainder = remainder;
+    return true;
+}
+
 [[nodiscard]] bool patch_height_at(
     const GroundPatch &patch,
     const Millimeters x,
@@ -288,10 +367,12 @@ void block_axis(
         next.spatial.position.x = state.spatial.position.x;
         next.spatial.velocity.x = MillimetersPerSecond{0};
         next.remainder.x = 0;
+        next.remainder.velocity_x = 0;
     } else {
         next.spatial.position.z = state.spatial.position.z;
         next.spatial.velocity.z = MillimetersPerSecond{0};
         next.remainder.z = 0;
+        next.remainder.velocity_z = 0;
     }
 }
 
@@ -448,6 +529,8 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
         state.remainder.x <= -tick_rate || state.remainder.x >= tick_rate ||
         state.remainder.y <= -tick_rate || state.remainder.y >= tick_rate ||
         state.remainder.z <= -tick_rate || state.remainder.z >= tick_rate ||
+        state.remainder.velocity_x <= -tick_rate || state.remainder.velocity_x >= tick_rate ||
+        state.remainder.velocity_z <= -tick_rate || state.remainder.velocity_z >= tick_rate ||
         state.remainder.vertical_velocity <= -tick_rate ||
         state.remainder.vertical_velocity >= tick_rate
     ) {
@@ -475,10 +558,34 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
 
     std::int64_t velocity_x{};
     std::int64_t velocity_z{};
+    std::int64_t velocity_remainder_x = state.remainder.velocity_x;
+    std::int64_t velocity_remainder_z = state.remainder.velocity_z;
     if (grounded) {
+        std::int64_t target_velocity_x{};
+        std::int64_t target_velocity_z{};
         if (
-            !checked_scale_intent(config.move_speed.value, intent.x, velocity_x) ||
-            !checked_scale_intent(config.move_speed.value, intent.z, velocity_z)
+            !checked_scale_intent(config.move_speed.value, intent.x, target_velocity_x) ||
+            !checked_scale_intent(config.move_speed.value, intent.z, target_velocity_z) ||
+            !approach_velocity_component(
+                state.spatial.velocity.x.value,
+                target_velocity_x,
+                config.acceleration.value,
+                config.braking.value,
+                state.remainder.velocity_x,
+                config.ticks_per_second,
+                velocity_x,
+                velocity_remainder_x
+            ) ||
+            !approach_velocity_component(
+                state.spatial.velocity.z.value,
+                target_velocity_z,
+                config.acceleration.value,
+                config.braking.value,
+                state.remainder.velocity_z,
+                config.ticks_per_second,
+                velocity_z,
+                velocity_remainder_z
+            )
         ) {
             return std::unexpected(GroundedStepError::arithmetic_overflow);
         }
@@ -507,6 +614,8 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
     }
     next.remainder.x = remainder_x;
     next.remainder.z = remainder_z;
+    next.remainder.velocity_x = velocity_remainder_x;
+    next.remainder.velocity_z = velocity_remainder_z;
     next.spatial.velocity.x = MillimetersPerSecond{velocity_x};
     next.spatial.velocity.z = MillimetersPerSecond{velocity_z};
 
@@ -542,9 +651,11 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
                 if (barrier.normal_axis == PlanarAxis::x) {
                     next.spatial.velocity.x.value = 0;
                     next.remainder.x = 0;
+                    next.remainder.velocity_x = 0;
                 } else {
                     next.spatial.velocity.z.value = 0;
                     next.remainder.z = 0;
+                    next.remainder.velocity_z = 0;
                 }
             }
         } else {
@@ -557,9 +668,11 @@ std::expected<GroundedStepState, GroundedStepError> step_grounded(
                 if (barrier.normal_axis == PlanarAxis::x) {
                     next.spatial.velocity.x.value = 0;
                     next.remainder.x = 0;
+                    next.remainder.velocity_x = 0;
                 } else {
                     next.spatial.velocity.z.value = 0;
                     next.remainder.z = 0;
+                    next.remainder.velocity_z = 0;
                 }
             }
         }

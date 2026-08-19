@@ -36,6 +36,7 @@ TEST(NpcLocomotionDecision, ProducesDeterministicLocalIntentTowardWaypoint) {
         .x = worldsim::sim::Millimeters{1'000},
         .z = worldsim::sim::Millimeters{-1'000},
         .axis_arrival_tolerance = worldsim::sim::Millimeters{50},
+        .pace = worldsim::sim::LocomotionPace::walk,
     };
 
     const auto first = worldsim::sim::decide_npc_local_move_toward_waypoint(world, diagonal);
@@ -46,6 +47,7 @@ TEST(NpcLocomotionDecision, ProducesDeterministicLocalIntentTowardWaypoint) {
     EXPECT_EQ(*first, *second);
     EXPECT_EQ(first->actor, npc);
     EXPECT_EQ(first->move, (worldsim::sim::PlanarMoveIntent{.x = 707, .z = -707}));
+    EXPECT_EQ(first->pace, worldsim::sim::LocomotionPace::walk);
     EXPECT_TRUE(first->move.is_valid());
     EXPECT_EQ(world.tick(), (worldsim::sim::SimulationTick{0}));
     EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{1}));
@@ -66,11 +68,13 @@ TEST(NpcLocomotionDecision, StopsInsideCallerSuppliedArrivalTolerance) {
             .x = worldsim::sim::Millimeters{1'075},
             .z = worldsim::sim::Millimeters{-1'925},
             .axis_arrival_tolerance = worldsim::sim::Millimeters{75},
+            .pace = worldsim::sim::LocomotionPace::run,
         }
     );
 
     ASSERT_TRUE(decided.has_value());
     EXPECT_EQ(decided->move, (worldsim::sim::PlanarMoveIntent{}));
+    EXPECT_EQ(decided->pace, worldsim::sim::LocomotionPace::run);
 }
 
 TEST(NpcLocomotionDecision, RejectsInvalidOrUnavailableActorStateWithoutMutation) {
@@ -87,6 +91,16 @@ TEST(NpcLocomotionDecision, RejectsInvalidOrUnavailableActorStateWithoutMutation
     );
     ASSERT_FALSE(invalid.has_value());
     EXPECT_EQ(invalid.error(), worldsim::sim::NpcLocomotionDecisionError::invalid_waypoint);
+
+    const auto invalid_pace = worldsim::sim::decide_npc_local_move_toward_waypoint(
+        world,
+        worldsim::sim::NpcLocalWaypoint{
+            .actor = worldsim::sim::EntityId{2},
+            .pace = static_cast<worldsim::sim::LocomotionPace>(99),
+        }
+    );
+    ASSERT_FALSE(invalid_pace.has_value());
+    EXPECT_EQ(invalid_pace.error(), worldsim::sim::NpcLocomotionDecisionError::invalid_waypoint);
 
     const auto missing_spatial = worldsim::sim::decide_npc_local_move_toward_waypoint(
         world,
@@ -132,18 +146,19 @@ TEST(NpcLocomotionDecision, EquivalentHumanAndNpcIntentUseTheSameWorldTransition
             .actor = npc,
             .x = worldsim::sim::Millimeters{2'000},
             .z = worldsim::sim::Millimeters{1'000},
+            .pace = worldsim::sim::LocomotionPace::walk,
         }
     );
     ASSERT_TRUE(npc_decision.has_value());
     ASSERT_EQ(npc_decision->move, (worldsim::sim::PlanarMoveIntent{.x = 1000, .z = 0}));
+    ASSERT_EQ(npc_decision->pace, worldsim::sim::LocomotionPace::walk);
 
-    // Deliberately place the NPC-produced intent first. World still owns one
-    // actor-generic transition and canonical EntityId-ordered samples.
     const std::array intents{
         *npc_decision,
         worldsim::sim::ActorGroundedMoveIntent{
             .actor = human,
             .move = {.x = 1000, .z = 0},
+            .pace = worldsim::sim::LocomotionPace::walk,
         },
     };
     const auto advanced = world.advance_grounded_locomotion_tick(context, intents);
@@ -154,10 +169,11 @@ TEST(NpcLocomotionDecision, EquivalentHumanAndNpcIntentUseTheSameWorldTransition
     EXPECT_EQ(advanced->revision, (worldsim::sim::WorldRevision{3}));
     EXPECT_EQ(advanced->samples[0].actor, human);
     EXPECT_EQ(advanced->samples[1].actor, npc);
-    EXPECT_EQ(advanced->samples[0].spatial.position.x.value, 96);
-    EXPECT_EQ(advanced->samples[1].spatial.position.x.value, 96);
+    EXPECT_EQ(advanced->samples[0].spatial.position.x.value, 1);
+    EXPECT_EQ(advanced->samples[1].spatial.position.x.value, 1);
     EXPECT_EQ(advanced->samples[0].spatial.position.z.value, 0);
     EXPECT_EQ(advanced->samples[1].spatial.position.z.value, 1'000);
+    EXPECT_EQ(advanced->samples[0].spatial.velocity.x.value, 100);
     EXPECT_EQ(
         advanced->samples[0].spatial.velocity.x,
         advanced->samples[1].spatial.velocity.x

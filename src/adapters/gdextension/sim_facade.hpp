@@ -21,7 +21,8 @@ public:
     [[nodiscard]] godot::Dictionary controlled_actor_spatial_projection() const;
     [[nodiscard]] godot::Dictionary controlled_actor_submit_move_intent(
         std::int32_t x,
-        std::int32_t z
+        std::int32_t z,
+        std::int32_t pace
     );
     [[nodiscard]] godot::Dictionary advance_locomotion_tick();
 

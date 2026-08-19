@@ -6,10 +6,7 @@
 
 namespace {
 
-[[nodiscard]] worldsim::sim::SpatialState spatial_at(
-    const std::int64_t x,
-    const std::int64_t z
-) {
+[[nodiscard]] worldsim::sim::SpatialState spatial_at(const std::int64_t x, const std::int64_t z) {
     return worldsim::sim::SpatialState{
         .position = {
             .x = worldsim::sim::Millimeters{x},
@@ -46,10 +43,8 @@ TEST(LivingNeed, RestNeedProducesNpcTravelIntentFromAuthoritativeState) {
     ASSERT_TRUE(decision.has_value());
     EXPECT_FALSE(decision->satisfied);
     EXPECT_EQ(decision->movement.actor, npc);
-    EXPECT_EQ(
-        decision->movement.move,
-        (worldsim::sim::PlanarMoveIntent{.x = -1000, .z = 0})
-    );
+    EXPECT_EQ(decision->movement.move, (worldsim::sim::PlanarMoveIntent{.x = -1000, .z = 0}));
+    EXPECT_EQ(decision->movement.pace, worldsim::sim::LocomotionPace::walk);
     EXPECT_EQ(world.snapshot(), before);
 }
 
@@ -70,6 +65,7 @@ TEST(LivingNeed, RestNeedIsSatisfiedByAuthoritativePositionInsideTolerance) {
     EXPECT_TRUE(decision->satisfied);
     EXPECT_EQ(decision->movement.actor, npc);
     EXPECT_EQ(decision->movement.move, (worldsim::sim::PlanarMoveIntent{}));
+    EXPECT_EQ(decision->movement.pace, worldsim::sim::LocomotionPace::walk);
 }
 
 TEST(LivingNeed, RestNeedSurvivesSnapshotRestoreAsCausalActorState) {
@@ -84,7 +80,7 @@ TEST(LivingNeed, RestNeedSurvivesSnapshotRestoreAsCausalActorState) {
     ).has_value());
 
     const auto snapshot = source.snapshot();
-    EXPECT_EQ(snapshot.schema_version, 3U);
+    EXPECT_EQ(snapshot.schema_version, worldsim::sim::kWorldSnapshotSchemaVersion);
 
     worldsim::sim::World restored{worldsim::sim::WorldSeed{99}};
     ASSERT_TRUE(restored.restore(snapshot).has_value());
@@ -122,10 +118,10 @@ TEST(LivingNeed, InvalidRestNeedIsRejectedWithoutMutatingWorldOrRestoreTarget) {
             .rest_need = rest_need(),
         }
     ).has_value());
-    auto malformed = source.snapshot();
-    malformed.actors.front().rest_need->axis_arrival_tolerance = worldsim::sim::Millimeters{-1};
+    auto invalid_snapshot = source.snapshot();
+    invalid_snapshot.actors.front().rest_need->axis_arrival_tolerance = worldsim::sim::Millimeters{-1};
 
-    const auto restored = world.restore(malformed);
+    const auto restored = world.restore(invalid_snapshot);
     ASSERT_FALSE(restored.has_value());
     EXPECT_EQ(restored.error(), worldsim::sim::WorldSnapshotError::invalid_rest_need_state);
     EXPECT_EQ(world.snapshot(), before);

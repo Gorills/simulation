@@ -11,6 +11,11 @@ namespace worldsim::sim {
 inline constexpr std::int32_t kIntentScale = 1000;
 inline constexpr std::uint32_t kSlopeRunScale = 1000;
 inline constexpr MillimetersPerSecondSquared kNonMagicalGravityBaseline{9807};
+// Direct solver acceptance fixtures historically reached the 5.8 m/s migration
+// cap in one 60 Hz step. Keep that neutral response as the aggregate default so
+// geometry tests stay geometry tests. Production World always overwrites these
+// two values from authoritative actor capability before invoking the solver.
+inline constexpr MillimetersPerSecondSquared kDirectSolverInstantPlanarResponse{348'000};
 
 enum class PlanarAxis : std::uint8_t {
     x,
@@ -32,9 +37,6 @@ struct MillimeterRange final {
     constexpr bool operator==(const MillimeterRange &) const = default;
 };
 
-// A bounded support patch whose height changes linearly along one planar axis.
-// Flat ground is represented by equal endpoint heights. Non-flat patches are
-// classified against GroundedStepConfig's project-owned slope threshold.
 struct GroundPatch final {
     MillimeterRange x{};
     MillimeterRange z{};
@@ -61,9 +63,6 @@ struct GroundPatch final {
     constexpr bool operator==(const GroundPatch &) const = default;
 };
 
-// Two-sided, axis-aligned vertical blocker. For the current acceptance arena a
-// blocker spans its full lane, so finite wall-end/corner behavior is deliberately
-// deferred until a real location requires it.
 struct VerticalBarrier final {
     PlanarAxis normal_axis{PlanarAxis::x};
     Millimeters coordinate{};
@@ -94,23 +93,24 @@ struct UprightCapsule final {
     constexpr bool operator==(const UprightCapsule &) const = default;
 };
 
+// Fully resolved inputs for one actor's grounded step. `move_speed`,
+// `acceleration` and `braking` are not universal world constants: the World
+// layer resolves them from authoritative actor capability + requested pace before
+// invoking this solver. Direct native fixture tests may provide them explicitly.
 struct GroundedStepConfig final {
     std::uint32_t ticks_per_second{};
     MillimetersPerSecond move_speed{};
-    // Maximum absolute rise allowed for each 1000 mm of horizontal run.
-    // 1192 approximates the existing project-owned 50 degree presentation
-    // baseline without floating-point/trigonometry in authoritative code.
+    MillimetersPerSecondSquared acceleration{kDirectSolverInstantPlanarResponse};
+    MillimetersPerSecondSquared braking{kDirectSolverInstantPlanarResponse};
     std::uint32_t max_slope_rise_per_1000_run{};
-    // Maximum positive support discontinuity that ordinary grounded movement
-    // may step up in one transition. This is independent from grounding snap.
     Millimeters max_step_up{};
-    // Positive downward acceleration magnitude. The current playable baseline
-    // rounds standard gravity to integer millimeters per second squared.
     MillimetersPerSecondSquared gravity{kNonMagicalGravityBaseline};
 
     [[nodiscard]] constexpr bool is_valid() const noexcept {
         return ticks_per_second > 0
             && move_speed.value >= 0
+            && acceleration.value >= 0
+            && braking.value >= 0
             && max_slope_rise_per_1000_run > 0
             && max_step_up.value >= 0
             && gravity.value >= 0;
@@ -119,9 +119,6 @@ struct GroundedStepConfig final {
     constexpr bool operator==(const GroundedStepConfig &) const = default;
 };
 
-// Signed analog intent in [-1000, 1000] per axis. The vector magnitude may not
-// exceed 1000, so protocol/input code can preserve analog strength without
-// handing the solver a client-authored displacement.
 struct PlanarMoveIntent final {
     std::int32_t x{};
     std::int32_t z{};
@@ -138,13 +135,12 @@ struct PlanarMoveIntent final {
     constexpr bool operator==(const PlanarMoveIntent &) const = default;
 };
 
-// Position remainders retain fractional millimeters for each axis. The vertical
-// velocity remainder separately retains fractional mm/s while gravity is
-// integrated at the fixed authoritative tick rate.
 struct GroundedIntegrationRemainder final {
     std::int64_t x{};
     std::int64_t y{};
     std::int64_t z{};
+    std::int64_t velocity_x{};
+    std::int64_t velocity_z{};
     std::int64_t vertical_velocity{};
 
     constexpr bool operator==(const GroundedIntegrationRemainder &) const = default;
@@ -167,9 +163,6 @@ enum class GroundedStepError : std::uint8_t {
     arithmetic_overflow,
 };
 
-// The historical name reflects the grounded-locomotion subsystem. The transition
-// now also owns unsupported airborne state caused by walking off support, applying
-// gravity until it lands on walkable support again.
 [[nodiscard]] std::expected<GroundedStepState, GroundedStepError> step_grounded(
     const GroundedEnvironment &environment,
     const UprightCapsule &body,

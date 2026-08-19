@@ -77,9 +77,13 @@ The current domain tests prove, among other locomotion/state contracts:
 - equal initial state/action sequences remain deterministic;
 - shared grounded-locomotion batches are atomic and actor-count independent for time advancement;
 - authoritative movement samples are returned in canonical ascending `EntityId` order even when intent collection order is reversed;
-- fixed-step continuation survives snapshot/restore deterministically;
-- first `RestNeedState` is validated/persisted and its causal decision is deterministic/read-only;
-- rest-need satisfaction follows authoritative position/tolerance rather than a presentation or duplicate completion flag.
+- grounded acceleration, braking and reversal are deterministic and do not require client-authored velocity;
+- one actor capability resolves different `walk/run/sprint` paces through the same World rule;
+- different actor capabilities resolve the same semantic pace to different authoritative movement limits;
+- invalid pace/capability fails without partial world mutation;
+- fixed-step position/planar-velocity/vertical continuation survives snapshot/restore deterministically;
+- `ActorLocomotionCapability` and `RestNeedState` are validated/persisted causal actor state;
+- first rest-need decision is deterministic/read-only, chooses semantic walk pace, and satisfaction follows authoritative position/tolerance rather than presentation or a duplicate completion flag.
 
 The current protocol tests prove:
 
@@ -87,11 +91,13 @@ The current protocol tests prove:
 - the controlled actor starts with exact authoritative spatial state at the origin, zero velocity and epoch 1;
 - bootstrap grid movement advances world revision but does **not** alter production `SpatialState`;
 - malformed bootstrap input is rejected without mutating observed authoritative state;
-- movement intent submission alone does not mutate authoritative world state;
+- movement direction/pace submission alone does not mutate authoritative world state;
+- invalid pace does not replace the last accepted controller intent;
 - a fixed locomotion tick returns a post-transition `AuthoritativeMovementSampleBatch`;
 - repeated movement batches increase tick/revision deterministically;
 - every current application locomotion batch carries canonical samples for both controlled actor and living-need NPC;
-- the living-need NPC travels toward the assigned rest point and emits zero movement after authoritative position enters its tolerance.
+- the controlled actor's `run` pace accelerates toward its current actor-specific limit rather than instantly becoming 5.8 m/s;
+- the living-need NPC selects `walk`, accelerates/brakes through the same World resolver/solver, and settles inside its assigned rest tolerance.
 
 CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces the Godot-free dependency boundary.
 
@@ -160,14 +166,13 @@ Before accepting a material control/presentation change, use the pinned Godot ru
 - mouse look direction is correct, captured motion is stable across the supported window/stretch setup, and Escape/click pointer lifecycle works;
 - left-stick movement has a circular deadzone, reaches the full analog range and does not drift at rest;
 - right-stick look has no drift at rest, reaches useful angular speed at full deflection and has the expected vertical direction;
-- authoritative movement visibly follows Simulation samples and does not continue through a local `move_and_slide()`/Godot-gravity path;
+- ordinary controlled movement chooses semantic `run`, and the existing sprint action chooses semantic `sprint` rather than multiplying a Godot-local speed;
+- authoritative acceleration/braking visibly follows Simulation samples and movement does not continue through a local `move_and_slide()`/Godot-gravity path;
 - presentation turning remains responsive without changing the authoritative physics-root position;
 - `SpringArm3D` pulls the camera inward against nearby presentation geometry and excludes the player presentation collider;
 - same-epoch movement does not introduce obvious visual jitter or camera stepping.
 
-Sprint/acceleration/deceleration were part of the former local presentation motor. They are **not current locomotion capabilities** after the authority migration and must not be advertised or treated as verified until equivalent semantics exist in Simulation.
-
-These checks validate presentation feel. Authoritative movement itself is proved separately by semantic movement intent driving the Godot-free Simulation transition and the resulting ordered samples driving the Godot presentation.
+These checks validate presentation feel. Native/protocol tests prove the current numeric movement law. **Whether the selected 1.0 / 3.0 / 5.8 m/s feel baselines and acceleration/braking feel natural in the actual camera/scene remains empirical and requires interactive playtesting.** Automated smoke must not be reported as proof of subjective movement feel.
 
 ## Godot playtest supervisor
 
@@ -225,33 +230,33 @@ For the `smoke` scenario, `debug.json` is a boundary-evidence object with six lo
 
 ```text
 bootstrap_projection:
-  entity_id=1, x=1, y=0, tick=0, revision=3, seed=1, protocol_version=5
+  entity_id=1, x=1, y=0, tick=0, revision=3, seed=1, protocol_version=6
 
 observed_world_projection:
-  controlled_actor_id=1, tick=1, revision=4, protocol_version=5
+  controlled_actor_id=1, tick=1, revision=4, protocol_version=6
   entities=[{entity_id=1},{entity_id=2}]
 
 controlled_actor_spatial_projection:
   entity_id=1
-  position_m=[0.096,0,0]
-  velocity_mps=[5.8,0,0]
+  position_m=[0.001,0,0]
+  velocity_mps=[0.1,0,0]
   spatial_epoch=1
-  tick=1, revision=4, protocol_version=5
+  tick=1, revision=4, protocol_version=6
 
 movement_stream:
   duplicate_batch_rejected=true
   batch:
-    tick=1, revision=4, protocol_version=5
+    tick=1, revision=4, protocol_version=6
     samples=[
-      {entity_id=1, position_m=[0.096,0,0], velocity_mps=[5.8,0,0], spatial_epoch=1},
-      {entity_id=2, position_m=[2.904,0,-3.0], velocity_mps=[-5.8,0,0], spatial_epoch=1}
+      {entity_id=1, position_m=[0.001,0,0], velocity_mps=[0.1,0,0], spatial_epoch=1},
+      {entity_id=2, position_m=[2.999,0,-3.0], velocity_mps=[-0.1,0,0], spatial_epoch=1}
     ]
 
 presentation:
   controlled_entity_id=1
   last_tick=1
   last_revision=4
-  protocol_version=5
+  protocol_version=6
   observed_entity_ids=[1,2]
   bound_entity_ids=[1,2]
   visible_bound_entity_ids=[1,2]
@@ -259,8 +264,8 @@ presentation:
   controlled_spatial_epoch=1
   controlled_spatial_tick=1
   controlled_spatial_revision=4
-  controlled_authoritative_position_m=[0.096,0,0]
-  controlled_authoritative_velocity_mps=[5.8,0,0]
+  controlled_authoritative_position_m=[0.001,0,0]
+  controlled_authoritative_velocity_mps=[0.1,0,0]
   movement_batches_applied=1
 
 localization:
@@ -272,11 +277,11 @@ localization:
 
 The localization section proves the active presentation locale and selected translated runtime strings. Simulation/protocol evidence remains language-independent.
 
-The controlled actor spawn creates revision 1 and the living-need NPC spawn creates revision 2. `WorldPresentation` binds/materializes observed identity while only the controlled actor receives the initial spatial read; the NPC shell remains hidden. The bootstrap step creates revision 3 but mutates only the old grid probe. The smoke scenario then submits semantic +X controlled movement while Core derives the NPC rest-task intent and advances one shared locomotion tick, producing tick 1 / revision 4: the controlled actor moves to 96 mm and the NPC moves from x=3000 mm to x=2904 mm toward its authoritative rest point. The first NPC sample makes its presentation shell visible.
+The controlled actor spawn creates revision 1 and the living-need NPC spawn creates revision 2. `WorldPresentation` binds/materializes observed identity while only the controlled actor receives the initial spatial read; the NPC shell remains hidden. The bootstrap step creates revision 3 but mutates only the old grid probe. The smoke scenario then submits semantic +X **run** intent for the controlled actor while Core derives the NPC's **walk** rest-task intent and advances one shared locomotion tick, producing tick 1 / revision 4. Both actors begin from rest, so the shared default 6000 mm/s² acceleration changes their first X velocity by 100 mm/s; integer position integration produces a 1 mm first-tick displacement. The first NPC sample makes its presentation shell visible.
 
 The same returned movement batch is submitted to `WorldPresentation` a second time only as a rejection probe. It must be rejected before presentation mutation because its tick/revision are duplicate/stale. This is boundary evidence, not a second authoritative Simulation transition.
 
-This sequence proves both that bootstrap coordinates cannot become production location and that production location now reaches Godot through the semantic movement/sample contract.
+This sequence proves bootstrap separation plus the semantic direction/pace -> authoritative capability resolution -> sample boundary. It does **not** prove subjective run/walk feel; longer deterministic native/protocol tests prove numeric acceleration/speed/braking, while interactive playtest evaluates feel.
 
 Successful artifacts may be retained on a bounded rolling basis; failure artifacts should remain available for diagnosis until explicit cleanup.
 

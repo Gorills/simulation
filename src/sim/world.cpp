@@ -32,6 +32,41 @@ struct PendingGroundedMove final {
     return GroundedLocomotionTickError::arithmetic_overflow;
 }
 
+// This is the single actor-state -> solver-limits seam. Today it resolves only
+// the actor's stored base locomotion capability plus semantic pace. When a real
+// mechanic later introduces wounds, carried load, progression or a concrete
+// magical effect, its authoritative state belongs here rather than in input,
+// Godot, an NPC-only multiplier, or a duplicate movement solver.
+[[nodiscard]] std::expected<GroundedStepConfig, GroundedLocomotionTickError>
+resolve_grounded_step_config(
+    const GroundedStepConfig &world_config,
+    const ActorState &actor,
+    const LocomotionPace pace
+) noexcept {
+    if (!actor.locomotion_capability.is_valid()) {
+        return std::unexpected(GroundedLocomotionTickError::invalid_locomotion_capability);
+    }
+    if (!is_valid_locomotion_pace(pace)) {
+        return std::unexpected(GroundedLocomotionTickError::invalid_pace);
+    }
+
+    GroundedStepConfig resolved = world_config;
+    switch (pace) {
+    case LocomotionPace::walk:
+        resolved.move_speed = actor.locomotion_capability.walk_speed;
+        break;
+    case LocomotionPace::run:
+        resolved.move_speed = actor.locomotion_capability.run_speed;
+        break;
+    case LocomotionPace::sprint:
+        resolved.move_speed = actor.locomotion_capability.sprint_speed;
+        break;
+    }
+    resolved.acceleration = actor.locomotion_capability.acceleration;
+    resolved.braking = actor.locomotion_capability.braking;
+    return resolved;
+}
+
 } // namespace
 
 World::World(const WorldSeed seed) noexcept : seed_(seed) {}
@@ -45,6 +80,9 @@ std::expected<void, WorldError> World::spawn_actor(
     }
     if (initial.spatial.has_value() && !initial.spatial->is_valid()) {
         return std::unexpected(WorldError::invalid_spatial_state);
+    }
+    if (!initial.locomotion_capability.is_valid()) {
+        return std::unexpected(WorldError::invalid_locomotion_capability);
     }
     if (initial.rest_need.has_value() && !initial.rest_need->is_valid()) {
         return std::unexpected(WorldError::invalid_rest_need_state);
@@ -60,6 +98,7 @@ std::expected<void, WorldError> World::spawn_actor(
             .id = id,
             .bootstrap_position = initial.bootstrap_position,
             .spatial = initial.spatial,
+            .locomotion_capability = initial.locomotion_capability,
             .rest_need = initial.rest_need,
         });
     } catch (...) {
@@ -122,6 +161,9 @@ World::advance_grounded_locomotion_tick(
         if (!intent.move.is_valid()) {
             return std::unexpected(GroundedLocomotionTickError::invalid_intent);
         }
+        if (!is_valid_locomotion_pace(intent.pace)) {
+            return std::unexpected(GroundedLocomotionTickError::invalid_pace);
+        }
 
         const auto index = actor_index(intent.actor);
         if (!index.has_value()) {
@@ -137,6 +179,9 @@ World::advance_grounded_locomotion_tick(
         if (!actor.spatial.has_value()) {
             return std::unexpected(GroundedLocomotionTickError::missing_spatial_state);
         }
+        if (!actor.locomotion_capability.is_valid()) {
+            return std::unexpected(GroundedLocomotionTickError::invalid_locomotion_capability);
+        }
         if (!actor.grounded_locomotion.is_valid()) {
             return std::unexpected(GroundedLocomotionTickError::invalid_continuation_state);
         }
@@ -144,10 +189,18 @@ World::advance_grounded_locomotion_tick(
             return std::unexpected(GroundedLocomotionTickError::incompatible_tick_rate);
         }
 
+        const auto resolved_config = resolve_grounded_step_config(context.config, actor, intent.pace);
+        if (!resolved_config.has_value()) {
+            return std::unexpected(resolved_config.error());
+        }
+        if (!resolved_config->is_valid()) {
+            return std::unexpected(GroundedLocomotionTickError::invalid_context);
+        }
+
         const auto step = step_grounded(
             context.environment,
             context.body,
-            context.config,
+            *resolved_config,
             GroundedStepState{
                 .spatial = *actor.spatial,
                 .remainder = actor.grounded_locomotion.remainder,
@@ -233,6 +286,9 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         if (actor.spatial.has_value() && !actor.spatial->is_valid()) {
             return std::unexpected(WorldSnapshotError::invalid_spatial_state);
         }
+        if (!actor.locomotion_capability.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_locomotion_capability);
+        }
         if (actor.rest_need.has_value() && !actor.rest_need->is_valid()) {
             return std::unexpected(WorldSnapshotError::invalid_rest_need_state);
         }
@@ -276,6 +332,14 @@ std::optional<SpatialState> World::actor_spatial_state(const EntityId id) const 
         return std::nullopt;
     }
     return actors_[*index].spatial;
+}
+
+std::optional<ActorLocomotionCapability> World::actor_locomotion_capability(const EntityId id) const noexcept {
+    const auto index = actor_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
+    }
+    return actors_[*index].locomotion_capability;
 }
 
 std::optional<RestNeedState> World::actor_rest_need(const EntityId id) const noexcept {

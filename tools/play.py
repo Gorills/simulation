@@ -134,7 +134,7 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "tick": 0,
         "revision": 3,
         "seed": 1,
-        "protocol_version": 5,
+        "protocol_version": 6,
     }
     for key, value in expected_bootstrap.items():
         if bootstrap.get(key) != value:
@@ -144,7 +144,7 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "controlled_actor_id": 1,
         "tick": 1,
         "revision": 4,
-        "protocol_version": 5,
+        "protocol_version": 6,
     }
     for key, value in expected_observed.items():
         if observed.get(key) != value:
@@ -157,20 +157,20 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "spatial_epoch": 1,
         "tick": 1,
         "revision": 4,
-        "protocol_version": 5,
+        "protocol_version": 6,
     }
     for key, value in expected_spatial_scalars.items():
         if spatial.get(key) != value:
             raise SystemExit(f"unexpected controlled spatial {key}: expected {value}, got {spatial.get(key)}")
-    require_close_vector(spatial.get("position_m"), [0.096, 0.0, 0.0], "controlled spatial position")
-    require_close_vector(spatial.get("velocity_mps"), [5.8, 0.0, 0.0], "controlled spatial velocity")
+    require_close_vector(spatial.get("position_m"), [0.001, 0.0, 0.0], "controlled spatial position")
+    require_close_vector(spatial.get("velocity_mps"), [0.1, 0.0, 0.0], "controlled spatial velocity")
 
     if movement_stream.get("duplicate_batch_rejected") is not True:
         raise SystemExit("WorldPresentation did not prove duplicate movement-batch rejection")
     batch = movement_stream.get("batch")
     if not isinstance(batch, dict):
         raise SystemExit("movement stream is missing its authoritative batch")
-    expected_batch_header = {"tick": 1, "revision": 4, "protocol_version": 5}
+    expected_batch_header = {"tick": 1, "revision": 4, "protocol_version": 6}
     for key, value in expected_batch_header.items():
         if batch.get(key) != value:
             raise SystemExit(f"unexpected movement batch {key}: expected {value}, got {batch.get(key)}")
@@ -188,12 +188,12 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         raise SystemExit(f"unexpected controlled movement sample identity/epoch: {controlled_sample}")
     require_close_vector(
         controlled_sample.get("position_m"),
-        [0.096, 0.0, 0.0],
+        [0.001, 0.0, 0.0],
         "controlled movement sample position",
     )
     require_close_vector(
         controlled_sample.get("velocity_mps"),
-        [5.8, 0.0, 0.0],
+        [0.1, 0.0, 0.0],
         "controlled movement sample velocity",
     )
 
@@ -202,12 +202,12 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         raise SystemExit(f"unexpected NPC movement sample identity/epoch: {npc_sample}")
     require_close_vector(
         npc_sample.get("position_m"),
-        [2.904, 0.0, -3.0],
+        [2.999, 0.0, -3.0],
         "living-need NPC movement sample position",
     )
     require_close_vector(
         npc_sample.get("velocity_mps"),
-        [-5.8, 0.0, 0.0],
+        [-0.1, 0.0, 0.0],
         "living-need NPC movement sample velocity",
     )
 
@@ -215,7 +215,7 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "controlled_entity_id": 1,
         "last_tick": 1,
         "last_revision": 4,
-        "protocol_version": 5,
+        "protocol_version": 6,
         "observed_entity_ids": [1, 2],
         "bound_entity_ids": [1, 2],
         "visible_bound_entity_ids": [1, 2],
@@ -230,23 +230,23 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
             raise SystemExit(f"unexpected presentation {key}: expected {value}, got {presentation.get(key)}")
     require_close_vector(
         presentation.get("controlled_authoritative_position_m"),
-        [0.096, 0.0, 0.0],
+        [0.001, 0.0, 0.0],
         "presentation authoritative position",
     )
     require_close_vector(
         presentation.get("controlled_authoritative_velocity_mps"),
-        [5.8, 0.0, 0.0],
+        [0.1, 0.0, 0.0],
         "presentation authoritative velocity",
     )
 
     expected_localized_text = {
         "ru": {
             "hud_title": "Диагностика выполнения",
-            "controls_hint": "WASD / левый стик — движение  ·  мышь / правый стик — обзор  ·  Esc — освободить курсор",
+            "controls_hint": "WASD / стик — движение  ·  Shift — спринт  ·  мышь / правый стик — обзор  ·  Esc — курсор",
         },
         "en": {
             "hud_title": "Runtime diagnostics",
-            "controls_hint": "WASD / left stick move  ·  mouse / right stick look  ·  Esc releases pointer",
+            "controls_hint": "WASD / stick move  ·  Shift sprint  ·  mouse / right stick look  ·  Esc releases pointer",
         },
     }
     if localization.get("locale") != expected_locale:
