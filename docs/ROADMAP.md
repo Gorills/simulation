@@ -8,13 +8,14 @@ For detail, route to [`INDEX.md`](INDEX.md). Current source/tests remain authori
 
 The playable/native spine, authoritative world/presentation boundary, historical/causal-fidelity foundation, exact-spatial contract and first grounded locomotion bridge are accepted.
 
-**Milestone 1 — Living Need is in progress.** One authoritative NPC need now produces a causal local task, enters the same actor-generic movement rules as human control, and is presented in Godot only from authoritative observation/transition data. The locomotion capability correction is also integrated: semantic pace is intent while numeric capability remains authoritative actor state.
+**Milestone 1 — Living Need is in progress.** One authoritative NPC need now produces a causal local task, enters the same actor-generic movement rules as human control, and is presented in Godot only from authoritative observation/transition data. The locomotion capability correction is integrated: semantic pace is intent while numeric capability remains authoritative actor state.
+
+The first shared player interference condition is also implemented: RestNeed satisfaction is blocked when another exact-spatial actor occupies the assigned rest tolerance, and ordinary shared locomotion can create or remove that obstruction. No player-only interaction command or generic reservation framework is involved.
 
 The remaining Milestone 1 sequence is intentionally short:
 
-1. add the minimum shared authoritative condition/action through which the controlled actor can help or obstruct the NPC need outcome;
-2. prove the NPC continues the causal need/task when its Godot representation is absent;
-3. run one bounded real playtest of that interference/help loop and fix defects exposed by the playtest.
+1. prove the NPC continues the causal need/task when its Godot representation is absent;
+2. run one bounded real playtest of the interference/help loop and fix defects exposed by the playtest.
 
 Do not insert a generic AI/planner, production navigation framework, universal scheduler/event bus, ECS, stat/effect framework or speculative spatial engine ahead of those steps.
 
@@ -60,18 +61,19 @@ The accepted bridge proves the authority seam; it is not a commitment to build a
 
 Goal: prove that an NPC acts because of authoritative world state and that the player can change the outcome through the same causal world rather than a player-only shortcut.
 
-Implemented slice:
+Implemented slices:
 
 - one identity-resolved NPC has an authoritative rest need;
 - Core derives a concrete local task from that need;
 - the task produces ordinary semantic movement intent rather than directly mutating position;
 - NPC and human-controlled intents enter the same authoritative movement rules;
 - Godot observes/materializes the NPC from authoritative identity and movement data;
-- need/capability/continuation state that affects future behavior is preserved by current Core snapshot truth.
+- need/capability/continuation state that affects future behavior is preserved by current Core snapshot truth;
+- another exact-spatial actor inside the assigned rest tolerance blocks need satisfaction as a derived world condition;
+- the controlled actor can therefore obstruct by occupying the place or help by leaving it through ordinary authoritative locomotion, without a special player-only mutation path.
 
 Still required:
 
-- one minimum shared player help/interference world action or condition;
 - offscreen continuation with no Godot node required for the causal behavior;
 - bounded real playtest of the complete loop.
 
