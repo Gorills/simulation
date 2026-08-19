@@ -4,6 +4,7 @@
 #include "sim/types.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <optional>
 #include <unordered_map>
@@ -16,6 +17,13 @@ enum class WorldError : std::uint8_t {
     invalid_spatial_state,
     duplicate_entity,
     unknown_entity,
+};
+
+enum class WorldSnapshotError : std::uint8_t {
+    unsupported_schema_version,
+    invalid_entity_id,
+    invalid_spatial_state,
+    duplicate_entity,
 };
 
 struct ActorSpawnState final {
@@ -31,6 +39,21 @@ struct ActorState final {
     std::optional<SpatialState> spatial{};
 
     constexpr bool operator==(const ActorState &) const = default;
+};
+
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 1;
+
+// Core-owned in-memory persistence contract. Serialization format, content and
+// protocol envelope versions belong to a later persistence layer; this value
+// snapshot contains only authoritative World state in deterministic actor order.
+struct WorldSnapshot final {
+    std::uint32_t schema_version{kWorldSnapshotSchemaVersion};
+    WorldSeed seed{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+    std::vector<ActorState> actors{};
+
+    bool operator==(const WorldSnapshot &) const = default;
 };
 
 class World final {
@@ -50,6 +73,11 @@ public:
     ) noexcept;
 
     void advance_one_tick() noexcept;
+
+    // Snapshot/restore is intentionally value-based. Derived runtime indexes are
+    // rebuilt on restore and never persisted as authoritative state.
+    [[nodiscard]] WorldSnapshot snapshot() const;
+    [[nodiscard]] std::expected<void, WorldSnapshotError> restore(const WorldSnapshot &snapshot);
 
     // EntityId is the durable external reference. Queries return values rather
     // than addresses into World storage so later actor growth cannot invalidate
