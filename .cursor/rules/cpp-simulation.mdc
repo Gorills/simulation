@@ -1,0 +1,24 @@
+---
+description: C++23 Simulation Core and protocol — how and how not
+globs: src/sim/**,src/protocol/**,tests/**/*.cpp
+alwaysApply: false
+---
+
+# C++ Simulation Core
+
+Details: `docs/engineering/cpp.md`. Contract: TZ §5–9.
+
+`src/sim` is the only world. It builds and tests with **no Godot headers**. Clients send intents, never desired state.
+
+```cpp
+// BAD
+void SetGold(World&, int);
+#include <godot_cpp/godot.hpp>
+
+// GOOD
+std::expected<TradeResult, TradeError> execute_trade(World&, const OfferTrade&);
+```
+
+Do: RAII; `std::expected` for ordinary failure; seeded RNG as world state; integer ticks/money; `unordered_map` lookup-only; concrete types until a second implementation exists.
+
+Don't: god-object `World` + service locator; ECS/job system on day one; `nlohmann::json` as domain; `shared_ptr` everywhere; exceptions as “not enough gold”; `std::random_device` / wall clock as gameplay.

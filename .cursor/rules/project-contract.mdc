@@ -1,0 +1,22 @@
+---
+description: C++/Godot stack, playable slices, and AI Layer boundary
+alwaysApply: true
+---
+
+# Project contract
+
+Canonical spec: `docs/specs/TZ.md`. Map: `docs/INDEX.md`. Architecture choice: `docs/decisions/0001-cpp-godot-gdextension.md`. Stack how/how-not: `docs/engineering/STACK.md`.
+
+AI Layer owns Work/Task/Epic lifecycle and continuation. This repo must not add a second `продолжай`/STOP/Task protocol or copy AI Layer tool procedure into docs/rules.
+
+Engineering invariants:
+
+- `main` stays playable inside the same bounded change.
+- One C++ Simulation Core is the only world authority.
+- Godot is presentation. GDScript/nodes must not become inventory, money, or outcome truth.
+- Simulation Core must not include Godot headers or depend on frame delta / input / scenes.
+- Talk to the core through `src/protocol`. The only Godot seam is `src/adapters/gdextension`.
+- Develop vertical slices (rule → protocol → Godot affordance → test → playtest), not subsystem tunnels.
+- Playtest Godot only through `python tools/play.py --scenario <name>` once that tool exists. Never `pkill godot`.
+- Do not use TypeScript, WASM/Emscripten, Playwright, Chromium, C#, or Fenster as project stack.
+- Do not claim cmake/ninja/clang exist until re-checked. Install them as an explicit bootstrap step.

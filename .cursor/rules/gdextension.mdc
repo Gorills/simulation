@@ -1,0 +1,21 @@
+---
+description: GDExtension adapter is the only Godot ↔ sim seam
+globs: src/adapters/**,godot/**/*.gdextension
+alwaysApply: false
+---
+
+# GDExtension adapter
+
+Details: `docs/engineering/gdextension.md`. Contract: TZ §10.
+
+Thin facade: GDScript → protocol → `sim_core`. Pin godot-cpp to **4.7.x**. Build with **this repo’s CMake**, not a second SCons graph.
+
+```cpp
+// BAD — GDCLASS is the world
+void WorldNode::set_gold(int g) { gold = g; }
+
+// GOOD — translate only
+Dictionary SimFacade::submit_move(int32_t dx, int32_t dy);
+```
+
+Don't: export `World*`; put trade/spell laws in the adapter; throw gameplay results across the C ABI; register every domain type in ClassDB; include godot-cpp from `src/sim`.

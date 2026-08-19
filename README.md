@@ -1,43 +1,32 @@
-# simulation
+# World Simulation
 
-Greenfield systemic RPG / world-simulation project.
+Playable systemic RPG: one C++23 Simulation Core, one Godot 4 client.
 
-**Current stage:** repository/toolchain/graphical-platform foundation only. Gameplay has not started yet.
+- Contract: [`docs/specs/TZ.md`](docs/specs/TZ.md)
+- Docs map: [`docs/INDEX.md`](docs/INDEX.md)
+- Stack how/how-not: [`docs/engineering/STACK.md`](docs/engineering/STACK.md)
+- Stack decision: [`docs/decisions/0001-cpp-godot-gdextension.md`](docs/decisions/0001-cpp-godot-gdextension.md)
+- Agent pointer: [`AGENTS.md`](AGENTS.md)
 
-The required development loop is native and network-free. The repository vendors the small window/framebuffer dependency needed by the graphical stack, so a normal build does not fetch packages or SDKs.
+## Stack
 
-## Foundation quick start
+| Layer | Owns | Must not own |
+| --- | --- | --- |
+| `src/sim` C++23 | world laws, state, outcomes | Godot, input, frames, UI |
+| `src/protocol` | commands, results, events, projections | rendering |
+| `src/adapters/gdextension` | Godot ↔ protocol translation | domain rules |
+| `godot/` | scenes, input, camera, UI, audio | inventory/money/world truth |
 
-On the verified Linux agent host:
+Details: [TZ §3–5](docs/specs/TZ.md#3-архитектура-верхнего-уровня), [ADR 0001](docs/decisions/0001-cpp-godot-gdextension.md), [engineering how/how-not](docs/engineering/STACK.md).
 
-```bash
-python tools/dev.py doctor
-python tools/dev.py verify
-```
+## Local tools (checked 2026-08-19)
 
-For a faster non-graphical edit loop:
+Present: g++ 13.3.0 (C++23 `std::expected`), Python 3.12.3, Godot 4.7.1.stable.mono, gdb.
 
-```bash
-python tools/dev.py check
-```
+Missing until bootstrap: cmake, ninja. Do not claim they are installed.
 
-To run only the real headless graphical stack verification:
+The installed Godot binary is the Mono editor. This project still uses **GDScript + C++ GDExtension**, not C#. Toolchain policy: [TZ §2](docs/specs/TZ.md#2-проверенный-локальный-toolchain-и-выбранный-стек).
 
-```bash
-python tools/dev.py graphics-check
-```
+## First spine
 
-A successful graphical check opens a real native X11 window inside Xvfb, injects a real `D` key event, verifies framebuffer state, captures the actual window and writes `final.png` under `.cache/graphics-check/<run-id>/`.
-
-There is intentionally **no game executable and no gameplay runner yet**. The platform smoke executable exists only to prove the graphical stack before gameplay work begins.
-
-## Repository navigation
-
-- [`AGENTS.md`](AGENTS.md) — mandatory agent entry point and hard guardrails.
-- [`docs/INDEX.md`](docs/INDEX.md) — canonical documentation index.
-- [`docs/engineering/AGENT_RUNBOOK.md`](docs/engineering/AGENT_RUNBOOK.md) — exact agent setup/run/verification procedure and failure triage.
-- [`docs/engineering/DEVELOPMENT_RULES.md`](docs/engineering/DEVELOPMENT_RULES.md) — canonical stack and engineering rules.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — implemented foundation architecture and verification lifecycle.
-- [`docs/specs/PROJECT_SPEC.md`](docs/specs/PROJECT_SPEC.md) — temporary condensed product specification and roadmap.
-
-The repository intentionally has **no CI**. Development evidence comes from explicit local commands.
+Do not restore deleted Fenster/TypeScript/WASM work. Next implementation step is [Milestone 0](docs/specs/TZ.md#38-roadmap-слои-развиваются-одновременно): native `sim_core` + Godot 2D client + one authoritative move command.

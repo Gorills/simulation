@@ -1,0 +1,24 @@
+---
+description: CMake, GoogleTest, and Python tooling — how and how not
+globs: CMakeLists.txt,CMakePresets.json,cmake/**,tests/**,tools/**/*.py
+alwaysApply: false
+---
+
+# Build and tools
+
+Details: `docs/engineering/cmake-python.md`. Contract: TZ §2.3–2.7.
+
+```cmake
+# BAD
+file(GLOB_RECURSE SRC src/*.cpp)
+include_directories(src)
+
+# GOOD
+target_sources(sim_core PRIVATE src/sim/application/step.cpp)
+```
+
+CMake: target-scoped options; explicit sources; pinned FetchContent in `cmake/Dependencies.cmake`; GoogleTest **test-only**; warnings not inherited by third-party.
+
+Python: `.venv` + ruff; `pathlib`; `subprocess.run([argv], timeout=..., cwd=...)`; one `tools/play.py`; never `shell=True` or `pkill godot`.
+
+Don't: fetch deps during `ctest`/`play.py`; custom `gtest` `main` plus `gtest_main`; Playwright.

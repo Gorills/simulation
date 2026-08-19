@@ -1,19 +1,25 @@
-# CMake / native builds
+# Build
 build/
 cmake-build-*/
-CMakeUserPresets.json
-compile_commands.json
-
-# Python tooling caches
+out/
+.cache/
 .venv/
 __pycache__/
-*.py[cod]
+*.pyc
 
-# Playtest/runtime artifacts
-.cache/
-test-results/
+# CMake local
+CMakeUserPresets.json
 
-# Editors / OS
-.DS_Store
+# Godot
+godot/.godot/
+godot/.import/
+*.translation
+
+# IDE
+.vscode/*
+!.vscode/settings.json
 .idea/
-.vscode/
+
+# OS
+.DS_Store
+*~

@@ -1,0 +1,25 @@
+---
+description: Godot 4 presentation client — how and how not
+globs: godot/**
+alwaysApply: false
+---
+
+# Godot client
+
+Details: `docs/engineering/godot.md`. Contract: TZ §10–11.
+
+Typed GDScript, 2D. Godot displays projections; it does not own inventory, money, or outcomes. Mono editor ≠ C#.
+
+```gdscript
+# BAD
+get_node("../../HUD/Gold").text = str(gold)
+GameState.gold += 10
+
+# GOOD
+trade_panel.trade_offered.connect(_on_trade_offered)
+gold_label.text = str(projection.player_gold)
+```
+
+Do: Main / World / GUI; parent injects deps; call down, signal up; InputMap; `_physics_process` for physics, `_process` for frames; duplicate Resources for per-entity runtime state.
+
+Don't: Autoload world/EventBus; hard NodePaths across scenes; mutate shared `.tres`; use frame `delta` as sim time; parent the player to a disposable room; AnimationPlayer as the only outcome path.
