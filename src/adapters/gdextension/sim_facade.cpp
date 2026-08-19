@@ -45,6 +45,18 @@ constexpr double kMillimetersPerMeter = 1000.0;
     return godot::String("unknown_movement_error");
 }
 
+[[nodiscard]] godot::String living_need_status_name(const protocol::LivingNeedStatus status) {
+    switch (status) {
+    case protocol::LivingNeedStatus::traveling:
+        return godot::String("traveling");
+    case protocol::LivingNeedStatus::blocked:
+        return godot::String("blocked");
+    case protocol::LivingNeedStatus::satisfied:
+        return godot::String("satisfied");
+    }
+    return godot::String("unknown");
+}
+
 [[nodiscard]] std::optional<protocol::ControlledActorLocomotionPace> movement_pace(
     const std::int32_t value
 ) noexcept {
@@ -104,6 +116,10 @@ void SimFacade::_bind_methods() {
         &SimFacade::controlled_actor_spatial_projection
     );
     godot::ClassDB::bind_method(
+        godot::D_METHOD("living_need_projection"),
+        &SimFacade::living_need_projection
+    );
+    godot::ClassDB::bind_method(
         godot::D_METHOD("controlled_actor_submit_move_intent", "x", "z", "pace"),
         &SimFacade::controlled_actor_submit_move_intent
     );
@@ -153,6 +169,14 @@ godot::Dictionary SimFacade::observed_world_projection() const {
 godot::Dictionary SimFacade::controlled_actor_spatial_projection() const {
     try {
         return to_dictionary(simulation_.controlled_actor_spatial_projection());
+    } catch (const std::overflow_error &) {
+        return protocol_integer_error_dictionary();
+    }
+}
+
+godot::Dictionary SimFacade::living_need_projection() const {
+    try {
+        return to_dictionary(simulation_.living_need_projection());
     } catch (const std::overflow_error &) {
         return protocol_integer_error_dictionary();
     }
@@ -247,6 +271,16 @@ godot::Dictionary SimFacade::to_dictionary(
         projection.velocity_z_mm_per_second
     );
     result["spatial_epoch"] = projection.spatial_epoch;
+    result["tick"] = projection.tick;
+    result["revision"] = projection.revision;
+    result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
+    return result;
+}
+
+godot::Dictionary SimFacade::to_dictionary(const protocol::LivingNeedProjection &projection) {
+    godot::Dictionary result;
+    result["entity_id"] = projection.entity_id;
+    result["status"] = living_need_status_name(projection.status);
     result["tick"] = projection.tick;
     result["revision"] = projection.revision;
     result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
