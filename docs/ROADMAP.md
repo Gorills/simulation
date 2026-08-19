@@ -8,16 +8,20 @@ For detail, route to [`INDEX.md`](INDEX.md). Current source/tests remain authori
 
 The playable/native spine, authoritative world/presentation boundary, historical/causal-fidelity foundation, exact-spatial contract and first grounded locomotion bridge are accepted.
 
-**Milestone 1 — Living Need is in progress.** One authoritative NPC need now produces a causal local task, enters the same actor-generic movement rules as human control, and is presented in Godot only from authoritative observation/transition data. The locomotion capability correction is integrated: semantic pace is intent while numeric capability remains authoritative actor state.
+**Milestone 1 — Living Need is in progress.** One authoritative NPC need produces a causal local task, enters the same actor-generic movement rules as human control, and remains Simulation-owned independently of Godot node lifetime. Semantic pace is intent while numeric locomotion capability remains authoritative actor state.
 
-The first shared player interference condition is also implemented: RestNeed satisfaction is blocked when another exact-spatial actor occupies the assigned rest tolerance, and ordinary shared locomotion can create or remove that obstruction. No player-only interaction command or generic reservation framework is involved.
+Implemented M1 causal slices now include:
 
-The remaining Milestone 1 sequence is intentionally short:
+- shared player interference: another exact-spatial actor can occupy the assigned rest tolerance and block satisfaction; ordinary shared locomotion can create/remove that obstruction;
+- offscreen continuation: the living-need NPC continues authoritative movement while its Godot presentation node is absent, then rematerializes from fresh observation plus a later authoritative sample.
 
-1. prove the NPC continues the causal need/task when its Godot representation is absent;
-2. run one bounded real playtest of the interference/help loop and fix defects exposed by the playtest.
+The remaining Milestone 1 sequence is now one player-exposure slice:
 
-Do not insert a generic AI/planner, production navigation framework, universal scheduler/event bus, ECS, stat/effect framework or speculative spatial engine ahead of those steps.
+1. expose the derived need outcome through a purpose-built read-only client status;
+2. run a bounded real-client interference/help scenario proving the controlled actor can cause `blocked`, leave through ordinary authoritative movement, and produce `satisfied`;
+3. fix only defects exposed by that bounded scenario, then accept M1 if its capability contract is met.
+
+Do not insert a generic AI/planner, production navigation framework, universal scheduler/event bus, ECS, stat/effect framework or speculative spatial engine ahead of this slice.
 
 ## Milestone rule
 
@@ -67,15 +71,16 @@ Implemented slices:
 - Core derives a concrete local task from that need;
 - the task produces ordinary semantic movement intent rather than directly mutating position;
 - NPC and human-controlled intents enter the same authoritative movement rules;
-- Godot observes/materializes the NPC from authoritative identity and movement data;
-- need/capability/continuation state that affects future behavior is preserved by current Core snapshot truth;
+- need/capability/continuation state that affects future behavior is preserved by Core snapshot truth;
 - another exact-spatial actor inside the assigned rest tolerance blocks need satisfaction as a derived world condition;
-- the controlled actor can therefore obstruct by occupying the place or help by leaving it through ordinary authoritative locomotion, without a special player-only mutation path.
+- the controlled actor can obstruct by occupying the place or help by leaving through ordinary authoritative locomotion, without a special player-only mutation path;
+- the NPC continues the same authoritative need/travel path while its Godot representation is absent;
+- observation and materialization are separate: a fresh observed projection can rematerialize a hidden shell, and a later authoritative sample supplies the current pose.
 
 Still required:
 
-- offscreen continuation with no Godot node required for the causal behavior;
-- bounded real playtest of the complete loop.
+- purpose-built read-only client feedback for the current need outcome;
+- bounded real-client proof of the complete interference/help loop.
 
 Mechanic semantics: [`models/living-need.md`](models/living-need.md).
 
