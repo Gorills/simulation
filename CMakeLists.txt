@@ -42,6 +42,7 @@ target_sources(
         FILE_SET HEADERS
         BASE_DIRS src
         FILES
+            src/sim/spatial.hpp
             src/sim/types.hpp
             src/sim/world.hpp
 )
@@ -62,6 +63,7 @@ target_sources(
             src/protocol/version.hpp
             src/protocol/bootstrap_move.hpp
             src/protocol/observed_world.hpp
+            src/protocol/spatial.hpp
             src/protocol/simulation.hpp
 )
 target_compile_features(sim_protocol PUBLIC cxx_std_23)

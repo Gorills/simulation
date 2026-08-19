@@ -28,8 +28,8 @@ python tools/dev.py play --scenario smoke
 
 - `native` configures/builds/tests the Godot-free native graph.
 - `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
-- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates the expected native bootstrap projection, observed-world identity projection, Godot presentation binding, and screenshot artifact.
-- the third-person control foundation additionally requires real local keyboard/mouse and gamepad playtesting; the native grid probe is not evidence of locomotion feel or of the final authoritative spatial model.
+- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed identity, authoritative controlled-actor spatial state, presentation initialization and screenshot evidence.
+- the third-person control foundation additionally requires real local keyboard/mouse and gamepad playtesting; static authoritative spawn evidence is not proof that continuous locomotion is authoritative yet.
 
 The existence of these commands is not evidence that all of them have run in a particular environment.
 
@@ -59,21 +59,24 @@ Native rule tests must not require Godot. Core tests use real value objects/stat
 The native test graph mirrors production ownership:
 
 - `sim_core_tests` links only `sim_core` + `GTest::gtest_main` and exercises domain state/transitions directly;
-- `protocol_tests` links `sim_protocol` + `GTest::gtest_main` and exercises validation plus the command-to-domain-to-projection behavior.
+- `protocol_tests` links `sim_protocol` + `GTest::gtest_main` and exercises validation plus command-to-domain-to-projection behavior.
 
 The current domain tests prove:
 
 - different actor `EntityId`s use the same authoritative bootstrap actor operation;
 - actor actions change `WorldRevision` without pretending that `SimulationTick` advanced;
 - explicit simulation-time advancement changes tick/revision separately;
-- duplicate/unknown identities fail without mutation;
+- duplicate/unknown/invalid identities fail without mutation;
+- exact `SpatialState` can exist for one actor while another authoritative actor has no exact spatial pose;
+- invalid `SpatialEpoch` is rejected without mutating the world;
 - equal initial state/action sequences remain deterministic.
 
 The current protocol tests prove:
 
 - the minimum `ObservedWorldProjection` contains only the externally controlled actor identity and current tick/revision;
-- the bootstrap action advances the revision seen by both the bootstrap result and observed-world projection;
-- malformed bootstrap input is rejected without mutating the observed-world projection.
+- the controlled actor starts with exact authoritative spatial state at the origin, zero velocity and epoch 1;
+- bootstrap grid movement advances world revision but does **not** alter production `SpatialState`;
+- malformed bootstrap input is rejected without mutating observed authoritative state.
 
 CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces repository-level architecture policy.
 
@@ -119,8 +122,8 @@ The development client should expose a read-only debug surface sufficient to exp
 
 - ready/build/protocol identifiers;
 - controlled actor `EntityId`;
-- presentation position separately from authoritative semantic/spatial location;
-- `SimulationTick` and `WorldRevision` separately;
+- presentation position separately from authoritative spatial/semantic location;
+- `SimulationTick`, `WorldRevision` and spatial continuity epoch separately;
 - nearby/materialized actor IDs and relevant observation state;
 - last authoritative events;
 - seed and scenario;
@@ -129,7 +132,7 @@ The development client should expose a read-only debug surface sufficient to exp
 
 The debug surface must not expose authoritative mutation methods. Scenario setup belongs to explicit initialization before the world starts, not debugger cheats.
 
-Milestone 0 starts this surface with the current local third-person presentation position, `SimFacade.bootstrap_debug_projection()`, `SimFacade.observed_world_projection()`, and the read-only `WorldPresentation` identity/tick/revision/protocol snapshot. These remain deliberately different concepts until the production authoritative spatial bridge replaces the bootstrap grid probe.
+Milestone 0 now exposes the local third-person presentation position, `SimFacade.bootstrap_debug_projection()`, `SimFacade.observed_world_projection()`, `SimFacade.controlled_actor_spatial_projection()`, and the read-only `WorldPresentation` identity/spatial initialization snapshot. The bootstrap grid and production spatial sample remain deliberately separate.
 
 ## Third-person control verification
 
@@ -146,7 +149,7 @@ Before accepting a material control/presentation change, use the pinned Godot ru
 - `SpringArm3D` pulls the camera inward against nearby geometry and excludes the player presentation collider;
 - walking across floor/slope contacts does not introduce obvious visual jitter or camera stepping.
 
-These checks validate presentation feel. They do **not** prove authoritative world location. Once Simulation-driven spatial samples exist, add verification for input -> Simulation actor intent -> authoritative movement -> Godot interpolation/reconciliation.
+These checks validate presentation feel. They do **not** prove authoritative continuous world movement. That proof begins only when semantic movement intent drives a Godot-free Simulation movement/collision transition and Godot renders resulting samples.
 
 Tune presentation values through `ControlProfile` / `LocomotionProfile` first. Change presentation algorithms only when playtest evidence shows that tuning cannot solve the problem.
 
@@ -201,28 +204,39 @@ Each run writes under:
   debug.json
 ```
 
-For the `smoke` scenario, `debug.json` is a boundary-evidence object with three sections:
+For the `smoke` scenario, `debug.json` is a boundary-evidence object with four sections:
 
 ```text
 bootstrap_projection:
-  entity_id=1, x=1, y=0, tick=0, revision=2, seed=1, protocol_version=3
+  entity_id=1, x=1, y=0, tick=0, revision=2, seed=1, protocol_version=4
 
 observed_world_projection:
-  controlled_actor_id=1, tick=0, revision=2, protocol_version=3
+  controlled_actor_id=1, tick=0, revision=2, protocol_version=4
   entities=[{entity_id=1}]
+
+controlled_actor_spatial_projection:
+  entity_id=1
+  position_m=[0,0,0]
+  velocity_mps=[0,0,0]
+  spatial_epoch=1
+  tick=0, revision=2, protocol_version=4
 
 presentation:
   controlled_entity_id=1
   last_tick=0
   last_revision=2
-  protocol_version=3
+  protocol_version=4
   observed_entity_ids=[1]
   bound_entity_ids=[1]
+  controlled_spatial_initialized=true
+  controlled_spatial_epoch=1
+  controlled_spatial_tick=0
+  controlled_spatial_revision=1
 ```
 
-The initial actor spawn creates revision 1; the bootstrap step creates revision 2. `tick=0` is deliberate: an immediate action must not pretend Simulation time advanced.
+The initial actor spawn creates revision 1. `WorldPresentation` binds identity and performs initial placement from the revision-1 spatial projection, then calls `reset_physics_interpolation()`. The bootstrap step creates revision 2 but mutates only the old grid probe; a fresh production spatial projection therefore still reports origin/zero velocity/epoch 1 at revision 2.
 
-The Godot scene initializes `WorldPresentation` from `SimFacade.observed_world_projection()`, then the smoke probe calls `SimFacade.bootstrap_submit_move(1, 0)`, reads a fresh observed-world projection, and reapplies it. The artifact proves that authoritative identity/tick/revision/protocol metadata reached the presentation owner; it still does **not** make the `CharacterBody3D` transform authoritative from the grid-step result.
+This difference is intentional evidence that bootstrap grid coordinates cannot become authoritative third-person position by accident.
 
 Successful artifacts may be retained on a bounded rolling basis; failure artifacts should remain available for diagnosis until explicit cleanup.
 
@@ -241,7 +255,7 @@ build affected target
 
 ```text
 native rule/protocol tests
--> identity/tick/revision/projection assertions
+-> identity/tick/revision/epoch/projection assertions
 -> adapter build
 -> Godot load
 -> command/result/projection round-trip

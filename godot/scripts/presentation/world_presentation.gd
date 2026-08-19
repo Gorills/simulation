@@ -7,6 +7,10 @@ var _controlled_entity_id: int = 0
 var _last_tick: int = -1
 var _last_revision: int = -1
 var _protocol_version: int = 0
+var _controlled_spatial_initialized: bool = false
+var _controlled_spatial_epoch: int = 0
+var _controlled_spatial_tick: int = -1
+var _controlled_spatial_revision: int = -1
 
 
 func apply_observed_world_projection(
@@ -84,6 +88,62 @@ func apply_observed_world_projection(
     return true
 
 
+# Initial placement only. Continuous authoritative movement must buffer ordered
+# Simulation samples and interpolate/reconcile them; repeatedly calling this
+# function would turn every update into a teleport.
+func initialize_controlled_spatial_presentation(
+    projection: Dictionary,
+    controlled_binding: EntityBinding
+) -> bool:
+    if controlled_binding == null or not controlled_binding.is_bound():
+        push_error("controlled spatial initialization requires a bound EntityBinding")
+        return false
+
+    var entity_id := _read_positive_int(projection, "entity_id")
+    var spatial_epoch := _read_positive_int(projection, "spatial_epoch")
+    var tick := _read_nonnegative_int(projection, "tick")
+    var revision := _read_nonnegative_int(projection, "revision")
+    var protocol_version := _read_positive_int(projection, "protocol_version")
+    var position_value = projection.get("position_m", null)
+    var velocity_value = projection.get("velocity_mps", null)
+
+    if (
+        entity_id <= 0
+        or spatial_epoch <= 0
+        or tick < 0
+        or revision < 0
+        or protocol_version <= 0
+        or typeof(position_value) != TYPE_VECTOR3
+        or typeof(velocity_value) != TYPE_VECTOR3
+    ):
+        push_error("WorldPresentation received an invalid controlled spatial projection")
+        return false
+    if entity_id != controlled_binding.entity_id() or entity_id != _controlled_entity_id:
+        push_error("controlled spatial projection EntityId does not match the bound presentation")
+        return false
+    if protocol_version != _protocol_version:
+        push_error("controlled spatial projection protocol version does not match observed world")
+        return false
+    if tick != _last_tick or revision != _last_revision:
+        push_error("controlled spatial projection is not from the applied observed-world revision")
+        return false
+
+    var presentation_root := controlled_binding.get_parent() as Node3D
+    if presentation_root == null or not is_ancestor_of(presentation_root):
+        push_error("controlled spatial presentation root must live under WorldPresentation")
+        return false
+
+    var position: Vector3 = position_value
+    presentation_root.global_position = position
+    presentation_root.reset_physics_interpolation()
+
+    _controlled_spatial_initialized = true
+    _controlled_spatial_epoch = spatial_epoch
+    _controlled_spatial_tick = tick
+    _controlled_spatial_revision = revision
+    return true
+
+
 func controlled_entity_id() -> int:
     return _controlled_entity_id
 
@@ -126,6 +186,10 @@ func debug_snapshot() -> Dictionary:
         "protocol_version": _protocol_version,
         "observed_entity_ids": observed_ids,
         "bound_entity_ids": bound_ids,
+        "controlled_spatial_initialized": _controlled_spatial_initialized,
+        "controlled_spatial_epoch": _controlled_spatial_epoch,
+        "controlled_spatial_tick": _controlled_spatial_tick,
+        "controlled_spatial_revision": _controlled_spatial_revision,
     }
 
 

@@ -8,7 +8,9 @@ Milestone 0's executable spine is present in source: CMake presets, separated `s
 
 The architecture foundation establishes stable positive `EntityId`, actor parity, protocol-owned human-control binding, separate `SimulationTick` / `WorldRevision`, `ObservedWorldProjection`, and one Godot `WorldPresentation` identity/presence owner. Godot is a presentation replica rather than world authority.
 
-The current `CharacterBody3D` motor remains a responsive presentation/prediction shell. It is not authoritative world location.
+The historical/magic/causal-fidelity foundation is accepted. The authoritative spatial bridge is now in progress: Simulation has the first exact spatial value/state contract and controlled-actor spatial read model, while the real deterministic movement/collision solver is still pending.
+
+The current `CharacterBody3D` motor remains a responsive presentation/prediction shell. It is not authoritative world movement.
 
 **Milestone 0 is not accepted merely because the files exist.** Acceptance remains defined by [`VERIFICATION.md`](VERIFICATION.md).
 
@@ -41,9 +43,7 @@ Acceptance:
 
 > The game opens in the pinned Godot environment; the player can control the third-person presentation responsively with keyboard/mouse and gamepad; and separate smoke evidence proves the Godot -> GDExtension -> protocol -> C++ authoritative round-trip plus identity binding.
 
-## Pre-spatial simulation model foundation
-
-**This foundation comes before the authoritative spatial contract.** Spatial work must not accidentally freeze simplistic assumptions about what an actor, role, institution or world-resolution unit means.
+## Pre-spatial simulation model foundation — accepted
 
 Established contracts:
 
@@ -62,24 +62,44 @@ Canonical sources:
 - [`decisions/0005-historical-counterfactual-and-causal-fidelity.md`](decisions/0005-historical-counterfactual-and-causal-fidelity.md)
 - [`MODELING.md`](MODELING.md)
 
-Acceptance:
+No empty `MagicSystem`, `SocialClass`, `FidelityManager`, universal modifier bus or dynamic aggregation framework is part of this foundation.
 
-> A new serious simulation mechanic can state its historical baseline, causal entities/state, identity-vs-aggregate-vs-deferred resolution, magic sensitivity, observable criteria and deliberate omissions without introducing a fake universal medieval/magic/fidelity framework.
+## Pre-Milestone 1 authoritative spatial bridge — in progress
 
-No empty `MagicSystem`, `SocialClass`, `FidelityManager`, universal modifier bus or dynamic aggregation framework is part of this stage.
+The bridge is split deliberately so a guessed physics framework does not become the architecture.
 
-## Pre-Milestone 1 authoritative spatial bridge — next after model foundation
+### Stage A — durable spatial contract
 
-After the historical/magic/fidelity foundation is accepted, complete the minimum production bridge needed to stop using the Godot transform as de facto actor location:
+Implemented in the current stage:
 
-1. define the real authoritative spatial/location representation from actual terrain/navigation/determinism requirements;
-2. send semantic controlled-actor movement intent through protocol;
-3. produce ordered/revisioned authoritative movement/location samples;
-4. update Godot representation by `EntityId` through the existing presentation owner;
-5. interpolate samples smoothly and add local prediction/reconciliation only if measured playtest need justifies it;
-6. prove that leaving/rematerializing a representation does not create/delete the Simulation entity.
+1. exact identity-resolved Simulation spatial state uses signed 64-bit millimeters / millimeters-per-second;
+2. axes match the Godot metric Y-up/right-handed 3D convention, while Godot types stay outside Simulation;
+3. exact `SpatialState` is optional — authoritative existence does not imply every entity always has a microscopic 3D pose;
+4. `SpatialEpoch` separates continuous motion from teleport/respawn/discontinuous relocation;
+5. `ControlledActorSpatialProjection` carries identity, position, velocity, epoch, tick/revision and protocol version;
+6. GDExtension translates millimeters to Godot meters;
+7. `WorldPresentation` uses the authoritative sample for initial controlled-actor placement and resets interpolation after placement;
+8. the bootstrap grid probe remains isolated and cannot move production `SpatialState`.
 
-Do not turn this bridge into ECS, networking, sharding or automatic regional simulation LOD work.
+See [`decisions/0006-authoritative-spatial-contract.md`](decisions/0006-authoritative-spatial-contract.md) and [`models/spatial-location.md`](models/spatial-location.md).
+
+### Stage B — next bounded spatial implementation
+
+Still required before locomotion is authoritative:
+
+1. define the first neutral Simulation-owned collision/environment representation from the real demo terrain need;
+2. implement one deterministic authoritative movement/collision transition in `sim_core`;
+3. send semantic controlled-actor movement intent through protocol — never a final-position setter;
+4. produce ordered authoritative movement samples;
+5. buffer/interpolate those samples in Godot and reconcile the existing presentation shell;
+6. add local prediction only if real playtest latency requires it;
+7. prove the same movement rule can later be driven by NPC intent without a player-only world path.
+
+Do not turn this bridge into ECS, networking, sharding, a general rigid-body engine or automatic regional simulation LOD work.
+
+Acceptance for the full bridge:
+
+> The controlled actor's authoritative movement and collision are decided by Godot-free Simulation state/rules, Godot renders ordered samples smoothly by `EntityId`, and local presentation state cannot create an authoritative location outcome.
 
 ## Milestone 1 — Living Need
 
