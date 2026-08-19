@@ -14,6 +14,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | circa-1200 non-magical historical baseline | [`research/high-medieval-baseline-c1200.md`](research/high-medieval-baseline-c1200.md) | economy/social/politics/institution/history assumptions |
 | historical counterfactual + adaptive causal fidelity decision | [`decisions/0005-historical-counterfactual-and-causal-fidelity.md`](decisions/0005-historical-counterfactual-and-causal-fidelity.md) | changing role/status, magic participation or simulation-detail policy |
 | authoritative exact 3D location/spatial samples | [`models/spatial-location.md`](models/spatial-location.md) + [`decisions/0006-authoritative-spatial-contract.md`](decisions/0006-authoritative-spatial-contract.md) | movement/location/spatial ownership/interpolation work |
+| protocol/Godot integer range and unsigned Core counter conversion | [`decisions/0007-protocol-integer-range.md`](decisions/0007-protocol-integer-range.md) | exporting tick/revision/seed/epoch or adding protocol integer fields |
 | grounded locomotion behavior + neutral acceptance arena | [`models/grounded-locomotion.md`](models/grounded-locomotion.md) | movement solver, collision, slope/step/grounding or first test-arena work |
 | tests, playtest supervisor, evidence, local DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
 | current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target |

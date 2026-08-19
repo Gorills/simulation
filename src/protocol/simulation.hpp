@@ -1,22 +1,21 @@
 #pragma once
 
 #include "protocol/bootstrap_move.hpp"
+#include "protocol/integer.hpp"
 #include "protocol/observed_world.hpp"
 #include "protocol/spatial.hpp"
 #include "sim/world.hpp"
-
-#include <cstdint>
 
 namespace worldsim::protocol {
 
 class Simulation final {
 public:
-    explicit Simulation(std::uint64_t seed = 1);
+    explicit Simulation(ProtocolInteger seed = 1);
 
-    [[nodiscard]] BootstrapMoveOutcome bootstrap_move(const BootstrapMoveIntent &intent) noexcept;
-    [[nodiscard]] BootstrapActorProjection bootstrap_controlled_actor_projection() const noexcept;
+    [[nodiscard]] BootstrapMoveOutcome bootstrap_move(const BootstrapMoveIntent &intent);
+    [[nodiscard]] BootstrapActorProjection bootstrap_controlled_actor_projection() const;
     [[nodiscard]] ObservedWorldProjection observed_world_projection() const;
-    [[nodiscard]] ControlledActorSpatialProjection controlled_actor_spatial_projection() const noexcept;
+    [[nodiscard]] ControlledActorSpatialProjection controlled_actor_spatial_projection() const;
 
 private:
     sim::World world_;

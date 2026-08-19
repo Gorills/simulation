@@ -1,5 +1,6 @@
 #pragma once
 
+#include "protocol/integer.hpp"
 #include "protocol/version.hpp"
 
 #include <cstdint>
@@ -17,9 +18,9 @@ struct ControlledActorSpatialProjection final {
     std::int64_t velocity_x_mm_per_second{};
     std::int64_t velocity_y_mm_per_second{};
     std::int64_t velocity_z_mm_per_second{};
-    std::uint64_t spatial_epoch{};
-    std::uint64_t tick{};
-    std::uint64_t revision{};
+    ProtocolInteger spatial_epoch{};
+    ProtocolInteger tick{};
+    ProtocolInteger revision{};
     std::uint32_t protocol_version{kProtocolVersion};
 
     constexpr bool operator==(const ControlledActorSpatialProjection &) const = default;
