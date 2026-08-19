@@ -20,7 +20,7 @@ The model is fit for the current stage when:
 - protocol samples carry enough ordering metadata for future interpolation/reconciliation;
 - no Godot physics object becomes authoritative world state.
 
-The next solver stage will add movement/collision criteria.
+Grounded movement/collision acceptance criteria are owned by [`grounded-locomotion.md`](grounded-locomotion.md). That model defines what the first test arena must prove without prematurely choosing the solver representation or numeric thresholds.
 
 ## Historical baseline and region
 
@@ -129,7 +129,7 @@ Future continuous movement input must be a semantic intent (desired movement dir
 
 Current production spatial state is static after spawn; the Milestone 0 grid step deliberately mutates only bootstrap state.
 
-The next stage will define deterministic continuous movement/collision transitions and their relation to `SimulationTick`.
+The accepted grounded locomotion contract now defines the observable flat/wall/slope/step/fall behaviors and deterministic arena fixtures. The next implementation chooses the smallest neutral collision representation and deterministic transition needed to satisfy those criteria.
 
 No authoritative spatial rule depends on Godot `_process`, `_physics_process`, rendered FPS or wall-clock time.
 
@@ -166,15 +166,15 @@ Not yet decided:
 - authoritative movement tick frequency;
 - body/capsule representation;
 - static/dynamic collision representation;
-- slope/step/grounding semantics;
+- numeric slope/step/grounding thresholds;
 - navigation representation;
 - authoritative facing/orientation;
-- jump/fall/swim/fly models;
+- jump/fall-damage/swim/fly models beyond the grounded fall/landing baseline;
 - local prediction policy;
 - sample interpolation delay/buffer size;
 - world-origin rebasing policy.
 
-These are deliberately deferred to measured/vertical requirements rather than guessed now.
+These are deliberately deferred to measured/vertical requirements rather than guessed now. See [`grounded-locomotion.md`](grounded-locomotion.md) for the accepted observable criteria that constrain the first subset of these choices.
 
 ## Simplifications
 
@@ -204,6 +204,7 @@ Engineering facts:
 - Godot 4.7, [Physics interpolation quick start](https://docs.godotengine.org/en/4.7/tutorials/physics/interpolation/physics_interpolation_quick_start_guide.html): set initial/teleport transform then reset physics interpolation.
 - Godot, [Physics interpolation introduction](https://docs.godotengine.org/en/stable/tutorials/physics/interpolation/physics_interpolation_introduction.html): fixed-timestep interpolation and custom interpolation for externally timed/server-style samples.
 - Epic Games, [Networked Movement in Character Movement Component](https://dev.epicgames.com/documentation/en-us/unreal-engine/understanding-networked-movement-in-the-character-movement-component-for-unreal-engine): production precedent separating movement input, authoritative evaluation, corrections and presentation smoothing. This is conceptual evidence only; Unreal is not a dependency.
+- See [`grounded-locomotion.md`](grounded-locomotion.md) for the source basis specific to floor/wall/slope/step/fall acceptance semantics.
 
 Historical human locomotion/travel sources will be added when their numeric assumptions become gameplay rules.
 
