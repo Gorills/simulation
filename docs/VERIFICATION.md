@@ -32,7 +32,7 @@ python tools/dev.py play --scenario smoke --locale en
 - `native` configures/builds/tests the Godot-free native graph and also runs localization-catalog integrity through `tools/dev.py check`.
 - `sanitize` runs the same Godot-free graph with ASan+UBSan under GCC/Clang and the same localization-catalog integrity check.
 - `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
-- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed identity, authoritative controlled-actor spatial state, one real authoritative movement sample batch, duplicate/stale-batch rejection, presentation reconciliation, active locale/translated probes and screenshot evidence.
+- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates bootstrap transport, observed controlled + living-need NPC identities, authoritative controlled-actor spatial state, one real two-actor authoritative movement sample batch, duplicate/stale-batch rejection, NPC materialization from the sample stream, presentation reconciliation, active locale/translated probes and screenshot evidence.
 - localization-affecting runtime UI changes require rendered evidence for every supported locale; catalog parity alone is not visual proof.
 - material third-person control changes additionally require real local keyboard/mouse and gamepad playtesting; automated smoke proves the authority round-trip, not subjective control feel.
 
@@ -77,17 +77,21 @@ The current domain tests prove, among other locomotion/state contracts:
 - equal initial state/action sequences remain deterministic;
 - shared grounded-locomotion batches are atomic and actor-count independent for time advancement;
 - authoritative movement samples are returned in canonical ascending `EntityId` order even when intent collection order is reversed;
-- fixed-step continuation survives snapshot/restore deterministically.
+- fixed-step continuation survives snapshot/restore deterministically;
+- first `RestNeedState` is validated/persisted and its causal decision is deterministic/read-only;
+- rest-need satisfaction follows authoritative position/tolerance rather than a presentation or duplicate completion flag.
 
 The current protocol tests prove:
 
-- the minimum `ObservedWorldProjection` contains only the externally controlled actor identity and current tick/revision;
+- the current `ObservedWorldProjection` contains the controlled actor plus the first identity-resolved living-need NPC while remaining identity/presence-only;
 - the controlled actor starts with exact authoritative spatial state at the origin, zero velocity and epoch 1;
 - bootstrap grid movement advances world revision but does **not** alter production `SpatialState`;
 - malformed bootstrap input is rejected without mutating observed authoritative state;
 - movement intent submission alone does not mutate authoritative world state;
 - a fixed locomotion tick returns a post-transition `AuthoritativeMovementSampleBatch`;
-- repeated movement batches increase tick/revision deterministically.
+- repeated movement batches increase tick/revision deterministically;
+- every current application locomotion batch carries canonical samples for both controlled actor and living-need NPC;
+- the living-need NPC travels toward the assigned rest point and emits zero movement after authoritative position enters its tolerance.
 
 CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol` and enforces the Godot-free dependency boundary.
 
@@ -221,41 +225,40 @@ For the `smoke` scenario, `debug.json` is a boundary-evidence object with six lo
 
 ```text
 bootstrap_projection:
-  entity_id=1, x=1, y=0, tick=0, revision=2, seed=1, protocol_version=5
+  entity_id=1, x=1, y=0, tick=0, revision=3, seed=1, protocol_version=5
 
 observed_world_projection:
-  controlled_actor_id=1, tick=1, revision=3, protocol_version=5
-  entities=[{entity_id=1}]
+  controlled_actor_id=1, tick=1, revision=4, protocol_version=5
+  entities=[{entity_id=1},{entity_id=2}]
 
 controlled_actor_spatial_projection:
   entity_id=1
   position_m=[0.096,0,0]
   velocity_mps=[5.8,0,0]
   spatial_epoch=1
-  tick=1, revision=3, protocol_version=5
+  tick=1, revision=4, protocol_version=5
 
 movement_stream:
   duplicate_batch_rejected=true
   batch:
-    tick=1, revision=3, protocol_version=5
-    samples=[{
-      entity_id=1,
-      position_m=[0.096,0,0],
-      velocity_mps=[5.8,0,0],
-      spatial_epoch=1
-    }]
+    tick=1, revision=4, protocol_version=5
+    samples=[
+      {entity_id=1, position_m=[0.096,0,0], velocity_mps=[5.8,0,0], spatial_epoch=1},
+      {entity_id=2, position_m=[2.904,0,-3.0], velocity_mps=[-5.8,0,0], spatial_epoch=1}
+    ]
 
 presentation:
   controlled_entity_id=1
   last_tick=1
-  last_revision=3
+  last_revision=4
   protocol_version=5
-  observed_entity_ids=[1]
-  bound_entity_ids=[1]
+  observed_entity_ids=[1,2]
+  bound_entity_ids=[1,2]
+  visible_bound_entity_ids=[1,2]
   controlled_spatial_initialized=true
   controlled_spatial_epoch=1
   controlled_spatial_tick=1
-  controlled_spatial_revision=3
+  controlled_spatial_revision=4
   controlled_authoritative_position_m=[0.096,0,0]
   controlled_authoritative_velocity_mps=[5.8,0,0]
   movement_batches_applied=1
@@ -269,7 +272,7 @@ localization:
 
 The localization section proves the active presentation locale and selected translated runtime strings. Simulation/protocol evidence remains language-independent.
 
-The initial actor spawn creates revision 1. `WorldPresentation` binds identity and performs initial placement from the revision-1 spatial projection, then calls `reset_physics_interpolation()`. The bootstrap step creates revision 2 but mutates only the old grid probe. The smoke scenario then submits semantic +X movement intent at full scale and advances one real locomotion tick, producing tick 1 / revision 3 and 96 mm of authoritative displacement at the current 5800 mm/s, 60 Hz fixture.
+The controlled actor spawn creates revision 1 and the living-need NPC spawn creates revision 2. `WorldPresentation` binds/materializes observed identity while only the controlled actor receives the initial spatial read; the NPC shell remains hidden. The bootstrap step creates revision 3 but mutates only the old grid probe. The smoke scenario then submits semantic +X controlled movement while Core derives the NPC rest-task intent and advances one shared locomotion tick, producing tick 1 / revision 4: the controlled actor moves to 96 mm and the NPC moves from x=3000 mm to x=2904 mm toward its authoritative rest point. The first NPC sample makes its presentation shell visible.
 
 The same returned movement batch is submitted to `WorldPresentation` a second time only as a rejection probe. It must be rejected before presentation mutation because its tick/revision are duplicate/stale. This is boundary evidence, not a second authoritative Simulation transition.
 

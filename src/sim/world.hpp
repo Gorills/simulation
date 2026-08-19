@@ -16,6 +16,7 @@ namespace worldsim::sim {
 enum class WorldError : std::uint8_t {
     invalid_entity_id,
     invalid_spatial_state,
+    invalid_rest_need_state,
     duplicate_entity,
     unknown_entity,
 };
@@ -37,6 +38,7 @@ enum class WorldSnapshotError : std::uint8_t {
     unsupported_schema_version,
     invalid_entity_id,
     invalid_spatial_state,
+    invalid_rest_need_state,
     invalid_grounded_locomotion_state,
     duplicate_entity,
 };
@@ -105,17 +107,35 @@ struct GroundedLocomotionContinuation final {
     constexpr bool operator==(const GroundedLocomotionContinuation &) const = default;
 };
 
+// First Milestone 1 need state. The actor needs to be within the assigned local
+// rest-point tolerance; satisfaction is derived from authoritative SpatialState,
+// so no parallel Boolean completion flag can drift from location truth. This is
+// deliberately not a generic needs/task framework or a production home model.
+struct RestNeedState final {
+    Millimeters rest_x{};
+    Millimeters rest_z{};
+    Millimeters axis_arrival_tolerance{};
+
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return axis_arrival_tolerance.value >= 0;
+    }
+
+    constexpr bool operator==(const RestNeedState &) const = default;
+};
+
 struct ActorSpawnState final {
     // Milestone 0 transport probe only. Production spatial movement must not
     // depend on this grid position.
     GridPosition bootstrap_position{};
     std::optional<SpatialState> spatial{};
+    std::optional<RestNeedState> rest_need{};
 };
 
 struct ActorState final {
     EntityId id{};
     GridPosition bootstrap_position{};
     std::optional<SpatialState> spatial{};
+    std::optional<RestNeedState> rest_need{};
     // Hidden fixed-step continuation state. It affects future authoritative
     // movement and therefore belongs to snapshot truth, but not to presentation
     // projections.
@@ -152,7 +172,7 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 2;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 3;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
 // protocol envelope versions belong to a later persistence layer; this value
@@ -208,6 +228,7 @@ public:
     [[nodiscard]] bool contains_actor(EntityId id) const noexcept;
     [[nodiscard]] std::optional<GridPosition> actor_bootstrap_position(EntityId id) const noexcept;
     [[nodiscard]] std::optional<SpatialState> actor_spatial_state(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<RestNeedState> actor_rest_need(EntityId id) const noexcept;
     [[nodiscard]] SimulationTick tick() const noexcept;
     [[nodiscard]] WorldRevision revision() const noexcept;
     [[nodiscard]] WorldSeed seed() const noexcept;

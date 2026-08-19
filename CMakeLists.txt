@@ -38,6 +38,7 @@ target_sources(
     sim_core
     PRIVATE
         src/sim/grounded_locomotion.cpp
+        src/sim/living_need.cpp
         src/sim/npc_locomotion.cpp
         src/sim/world.cpp
     PUBLIC
@@ -45,6 +46,7 @@ target_sources(
         BASE_DIRS src
         FILES
             src/sim/grounded_locomotion.hpp
+            src/sim/living_need.hpp
             src/sim/npc_locomotion.hpp
             src/sim/spatial.hpp
             src/sim/types.hpp
@@ -85,6 +87,7 @@ if(WORLD_SIM_BUILD_TESTS)
     add_executable(
         sim_core_tests
         tests/sim/grounded_locomotion_test.cpp
+        tests/sim/living_need_test.cpp
         tests/sim/npc_locomotion_test.cpp
         tests/sim/world_test.cpp
         tests/sim/world_locomotion_test.cpp

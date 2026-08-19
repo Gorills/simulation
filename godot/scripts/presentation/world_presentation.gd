@@ -1,8 +1,11 @@
 class_name WorldPresentation
 extends Node3D
 
+const NPC_PRESENTATION_SCENE: PackedScene = preload("res://scenes/npc_presentation.tscn")
+
 var _bindings: Dictionary = {}
 var _observed_entity_ids: Dictionary = {}
+var _spatial_epoch_by_entity: Dictionary = {}
 var _controlled_entity_id: int = 0
 var _last_tick: int = -1
 var _last_revision: int = -1
@@ -60,18 +63,64 @@ func apply_observed_world_projection(
         push_error("WorldPresentation controlled actor is absent from observed entities")
         return false
 
-    var presentation_root := controlled_binding.get_parent() as Node3D
-    if presentation_root == null:
+    var controlled_root := controlled_binding.get_parent() as Node3D
+    if controlled_root == null:
         push_error("EntityBinding must be a child of its Node3D presentation root")
         return false
-    if not is_ancestor_of(presentation_root):
+    if not is_ancestor_of(controlled_root):
         push_error("EntityBinding presentation root must live under WorldPresentation")
         return false
 
-    var existing_value = _bindings.get(controlled_entity_id, null)
-    if existing_value != null and existing_value != controlled_binding:
+    var existing_controlled = _bindings.get(controlled_entity_id, null)
+    if existing_controlled != null and existing_controlled != controlled_binding:
         push_error("WorldPresentation already has a different binding for this EntityId")
         return false
+
+    # Prepare every new non-controlled presentation while detached. All scene and
+    # binding validation therefore completes before the observed-world commit.
+    var pending_materializations: Array = []
+    var ordered_ids: Array = next_observed.keys()
+    ordered_ids.sort()
+    for entity_id_value in ordered_ids:
+        var entity_id := int(entity_id_value)
+        if entity_id == controlled_entity_id:
+            continue
+
+        var existing_value = _bindings.get(entity_id, null)
+        if existing_value != null:
+            var existing_binding := existing_value as EntityBinding
+            if existing_binding == null or existing_binding.entity_id() != entity_id:
+                _free_detached_materializations(pending_materializations)
+                push_error("WorldPresentation has an invalid existing non-controlled binding")
+                return false
+            var existing_root := existing_binding.get_parent() as Node3D
+            if existing_root == null or not is_ancestor_of(existing_root):
+                _free_detached_materializations(pending_materializations)
+                push_error("non-controlled presentation root must live under WorldPresentation")
+                return false
+            continue
+
+        var presentation_root := NPC_PRESENTATION_SCENE.instantiate() as Node3D
+        if presentation_root == null:
+            _free_detached_materializations(pending_materializations)
+            push_error("NPC presentation scene must instantiate a Node3D root")
+            return false
+        var binding := presentation_root.get_node_or_null("EntityBinding") as EntityBinding
+        if binding == null:
+            presentation_root.free()
+            _free_detached_materializations(pending_materializations)
+            push_error("NPC presentation scene requires an EntityBinding child")
+            return false
+        if not binding._assign_entity_id(entity_id):
+            presentation_root.free()
+            _free_detached_materializations(pending_materializations)
+            return false
+        presentation_root.visible = false
+        pending_materializations.append({
+            "entity_id": entity_id,
+            "presentation_root": presentation_root,
+            "binding": binding,
+        })
 
     var previous_entity_id := controlled_binding.entity_id()
     if previous_entity_id > 0 and previous_entity_id != controlled_entity_id:
@@ -80,9 +129,34 @@ func apply_observed_world_projection(
         controlled_binding._clear_entity_id()
 
     if not controlled_binding._assign_entity_id(controlled_entity_id):
+        _free_detached_materializations(pending_materializations)
         return false
 
+    # Projection is valid and all future materializations are prepared. Commit
+    # presence/binding changes before accepting later movement samples.
+    var existing_ids: Array = _bindings.keys()
+    for entity_id_value in existing_ids:
+        var entity_id := int(entity_id_value)
+        if entity_id == controlled_entity_id or next_observed.has(entity_id):
+            continue
+        var stale_binding := _bindings.get(entity_id, null) as EntityBinding
+        if stale_binding != null:
+            var stale_root := stale_binding.get_parent() as Node3D
+            stale_binding._clear_entity_id()
+            if stale_root != null:
+                stale_root.queue_free()
+        _bindings.erase(entity_id)
+        _spatial_epoch_by_entity.erase(entity_id)
+
     _bindings[controlled_entity_id] = controlled_binding
+    for pending_value in pending_materializations:
+        var pending: Dictionary = pending_value
+        var entity_id: int = pending["entity_id"]
+        var presentation_root := pending["presentation_root"] as Node3D
+        var binding := pending["binding"] as EntityBinding
+        add_child(presentation_root)
+        _bindings[entity_id] = binding
+
     _observed_entity_ids = next_observed
     _controlled_entity_id = controlled_entity_id
     _last_tick = tick
@@ -142,6 +216,7 @@ func initialize_controlled_spatial_presentation(
         (presentation_root as CharacterBody3D).velocity = velocity
     presentation_root.reset_physics_interpolation()
 
+    _spatial_epoch_by_entity[entity_id] = spatial_epoch
     _controlled_spatial_initialized = true
     _controlled_spatial_epoch = spatial_epoch
     _controlled_spatial_tick = tick
@@ -215,19 +290,14 @@ func apply_authoritative_movement_sample_batch(batch: Dictionary) -> bool:
             push_error("movement sample references an entity outside the observed world")
             return false
 
-        var presentation_root: Node3D = null
         var binding_value = _bindings.get(entity_id, null)
-        if binding_value != null:
-            var binding := binding_value as EntityBinding
-            if binding == null:
-                push_error("movement sample binding is not an EntityBinding")
-                return false
-            presentation_root = binding.get_parent() as Node3D
-            if presentation_root == null or not is_ancestor_of(presentation_root):
-                push_error("movement sample presentation root must live under WorldPresentation")
-                return false
-        if entity_id == _controlled_entity_id and presentation_root == null:
-            push_error("controlled movement sample has no bound presentation root")
+        var binding := binding_value as EntityBinding
+        if binding == null or binding.entity_id() != entity_id:
+            push_error("movement sample has no valid observed presentation binding")
+            return false
+        var presentation_root := binding.get_parent() as Node3D
+        if presentation_root == null or not is_ancestor_of(presentation_root):
+            push_error("movement sample presentation root must live under WorldPresentation")
             return false
 
         var position: Vector3 = position_value
@@ -251,19 +321,20 @@ func apply_authoritative_movement_sample_batch(batch: Dictionary) -> bool:
         var sample: Dictionary = sample_value
         var entity_id: int = sample["entity_id"]
         var presentation_root := sample["presentation_root"] as Node3D
-        if presentation_root == null:
-            continue
-
         var position: Vector3 = sample["position_m"]
         var velocity: Vector3 = sample["velocity_mps"]
         var spatial_epoch: int = sample["spatial_epoch"]
+        var previous_epoch := int(_spatial_epoch_by_entity.get(entity_id, 0))
+
         presentation_root.global_position = position
         if presentation_root is CharacterBody3D:
             (presentation_root as CharacterBody3D).velocity = velocity
+        if previous_epoch <= 0 or previous_epoch != spatial_epoch:
+            presentation_root.reset_physics_interpolation()
+        _spatial_epoch_by_entity[entity_id] = spatial_epoch
+        presentation_root.visible = true
 
         if entity_id == _controlled_entity_id:
-            if spatial_epoch != _controlled_spatial_epoch:
-                presentation_root.reset_physics_interpolation()
             _controlled_spatial_epoch = spatial_epoch
             _controlled_spatial_tick = tick
             _controlled_spatial_revision = revision
@@ -319,6 +390,12 @@ func debug_snapshot() -> Dictionary:
     observed_ids.sort()
     var bound_ids: Array = _bindings.keys()
     bound_ids.sort()
+    var visible_bound_ids: Array = []
+    for entity_id_value in bound_ids:
+        var entity_id := int(entity_id_value)
+        var presentation_root := presentation_for(entity_id)
+        if presentation_root != null and presentation_root.visible:
+            visible_bound_ids.append(entity_id)
     return {
         "controlled_entity_id": _controlled_entity_id,
         "last_tick": _last_tick,
@@ -326,6 +403,7 @@ func debug_snapshot() -> Dictionary:
         "protocol_version": _protocol_version,
         "observed_entity_ids": observed_ids,
         "bound_entity_ids": bound_ids,
+        "visible_bound_entity_ids": visible_bound_ids,
         "controlled_spatial_initialized": _controlled_spatial_initialized,
         "controlled_spatial_epoch": _controlled_spatial_epoch,
         "controlled_spatial_tick": _controlled_spatial_tick,
@@ -342,6 +420,14 @@ func debug_snapshot() -> Dictionary:
         ],
         "movement_batches_applied": _movement_batches_applied,
     }
+
+
+func _free_detached_materializations(pending_materializations: Array) -> void:
+    for pending_value in pending_materializations:
+        var pending: Dictionary = pending_value
+        var presentation_root := pending.get("presentation_root", null) as Node3D
+        if presentation_root != null and not presentation_root.is_inside_tree():
+            presentation_root.free()
 
 
 func _read_nonnegative_int(source: Dictionary, key: String) -> int:

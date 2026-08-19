@@ -46,6 +46,9 @@ std::expected<void, WorldError> World::spawn_actor(
     if (initial.spatial.has_value() && !initial.spatial->is_valid()) {
         return std::unexpected(WorldError::invalid_spatial_state);
     }
+    if (initial.rest_need.has_value() && !initial.rest_need->is_valid()) {
+        return std::unexpected(WorldError::invalid_rest_need_state);
+    }
 
     const auto [index_entry, inserted] = actor_index_by_id_.emplace(id.value, actors_.size());
     if (!inserted) {
@@ -57,6 +60,7 @@ std::expected<void, WorldError> World::spawn_actor(
             .id = id,
             .bootstrap_position = initial.bootstrap_position,
             .spatial = initial.spatial,
+            .rest_need = initial.rest_need,
         });
     } catch (...) {
         actor_index_by_id_.erase(index_entry);
@@ -229,6 +233,9 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         if (actor.spatial.has_value() && !actor.spatial->is_valid()) {
             return std::unexpected(WorldSnapshotError::invalid_spatial_state);
         }
+        if (actor.rest_need.has_value() && !actor.rest_need->is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_rest_need_state);
+        }
         if (
             !actor.grounded_locomotion.is_valid() ||
             (!actor.spatial.has_value() && !actor.grounded_locomotion.is_pristine())
@@ -269,6 +276,14 @@ std::optional<SpatialState> World::actor_spatial_state(const EntityId id) const 
         return std::nullopt;
     }
     return actors_[*index].spatial;
+}
+
+std::optional<RestNeedState> World::actor_rest_need(const EntityId id) const noexcept {
+    const auto index = actor_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
+    }
+    return actors_[*index].rest_need;
 }
 
 SimulationTick World::tick() const noexcept {

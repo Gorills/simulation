@@ -142,7 +142,7 @@ ObservedWorldProjection
 
 Do not create another `EntityId -> Node` registry in combat, HUD, inventory or NPC scripts.
 
-The current stage binds only the pre-existing controlled `Player`. Generic NPC/item scene factories wait for real second/third presentation kinds.
+The first Milestone 1 slice binds the pre-existing controlled `Player` and materializes observed non-controlled actor IDs through `npc_presentation.tscn`. The NPC shell starts hidden and receives no authoritative transform until its first movement sample. Additional item/NPC presentation kinds wait for real capabilities rather than a universal scene factory.
 
 ## Exact spatial state and materialization are different
 
@@ -159,7 +159,7 @@ visual frustum/occlusion
 
 An entity can exist and remain causally important without exact 3D state. A materialized entity normally needs enough projected state to render, but Godot materialization itself does not create world existence.
 
-The current controlled actor is exact-spatial because active third-person movement needs it. ADR 0005 governs when other entities require identity-resolved exact spatial detail.
+The controlled actor and the first living-need NPC are exact-spatial because their current shared locomotion causality needs it. ADR 0005 governs when other entities require identity-resolved exact spatial detail.
 
 ## Units and coordinates
 
@@ -211,12 +211,12 @@ Godot's interpolation contract requires resetting physics interpolation after in
 
 ## Continuous movement — implemented bridge
 
-The active controlled path is:
+The active movement path is:
 
 ```text
-PlayerControls semantic movement intent
+PlayerControls semantic movement intent + Core NPC need decision
         ↓
-protocol v5 movement intent
+protocol v5 collects actor-keyed movement intents
         ↓
 Godot-free Simulation movement/collision solver
         ↓
@@ -352,7 +352,7 @@ If the answer begins with “Godot sets the world state”, stop and move the de
 - regional runtime LOD/sharding;
 - multithread world jobs;
 - universal projection/event bus;
-- generic Godot entity-scene factory;
+- universal multi-kind Godot entity-scene factory;
 - production content-location collision/index representation;
 - authoritative facing/orientation;
 - authoritative sprint/acceleration/deceleration semantics;

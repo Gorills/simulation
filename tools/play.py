@@ -132,7 +132,7 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "x": 1,
         "y": 0,
         "tick": 0,
-        "revision": 2,
+        "revision": 3,
         "seed": 1,
         "protocol_version": 5,
     }
@@ -143,20 +143,20 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
     expected_observed = {
         "controlled_actor_id": 1,
         "tick": 1,
-        "revision": 3,
+        "revision": 4,
         "protocol_version": 5,
     }
     for key, value in expected_observed.items():
         if observed.get(key) != value:
             raise SystemExit(f"unexpected observed-world {key}: expected {value}, got {observed.get(key)}")
-    if observed.get("entities") != [{"entity_id": 1}]:
+    if observed.get("entities") != [{"entity_id": 1}, {"entity_id": 2}]:
         raise SystemExit(f"unexpected observed entities: {observed.get('entities')}")
 
     expected_spatial_scalars = {
         "entity_id": 1,
         "spatial_epoch": 1,
         "tick": 1,
-        "revision": 3,
+        "revision": 4,
         "protocol_version": 5,
     }
     for key, value in expected_spatial_scalars.items():
@@ -170,30 +170,59 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
     batch = movement_stream.get("batch")
     if not isinstance(batch, dict):
         raise SystemExit("movement stream is missing its authoritative batch")
-    expected_batch_header = {"tick": 1, "revision": 3, "protocol_version": 5}
+    expected_batch_header = {"tick": 1, "revision": 4, "protocol_version": 5}
     for key, value in expected_batch_header.items():
         if batch.get(key) != value:
             raise SystemExit(f"unexpected movement batch {key}: expected {value}, got {batch.get(key)}")
     samples = batch.get("samples")
-    if not isinstance(samples, list) or len(samples) != 1 or not isinstance(samples[0], dict):
+    if (
+        not isinstance(samples, list)
+        or len(samples) != 2
+        or not isinstance(samples[0], dict)
+        or not isinstance(samples[1], dict)
+    ):
         raise SystemExit(f"unexpected movement samples: {samples}")
-    sample = samples[0]
-    if sample.get("entity_id") != 1 or sample.get("spatial_epoch") != 1:
-        raise SystemExit(f"unexpected controlled movement sample identity/epoch: {sample}")
-    require_close_vector(sample.get("position_m"), [0.096, 0.0, 0.0], "movement sample position")
-    require_close_vector(sample.get("velocity_mps"), [5.8, 0.0, 0.0], "movement sample velocity")
+
+    controlled_sample = samples[0]
+    if controlled_sample.get("entity_id") != 1 or controlled_sample.get("spatial_epoch") != 1:
+        raise SystemExit(f"unexpected controlled movement sample identity/epoch: {controlled_sample}")
+    require_close_vector(
+        controlled_sample.get("position_m"),
+        [0.096, 0.0, 0.0],
+        "controlled movement sample position",
+    )
+    require_close_vector(
+        controlled_sample.get("velocity_mps"),
+        [5.8, 0.0, 0.0],
+        "controlled movement sample velocity",
+    )
+
+    npc_sample = samples[1]
+    if npc_sample.get("entity_id") != 2 or npc_sample.get("spatial_epoch") != 1:
+        raise SystemExit(f"unexpected NPC movement sample identity/epoch: {npc_sample}")
+    require_close_vector(
+        npc_sample.get("position_m"),
+        [2.904, 0.0, -3.0],
+        "living-need NPC movement sample position",
+    )
+    require_close_vector(
+        npc_sample.get("velocity_mps"),
+        [-5.8, 0.0, 0.0],
+        "living-need NPC movement sample velocity",
+    )
 
     expected_presentation = {
         "controlled_entity_id": 1,
         "last_tick": 1,
-        "last_revision": 3,
+        "last_revision": 4,
         "protocol_version": 5,
-        "observed_entity_ids": [1],
-        "bound_entity_ids": [1],
+        "observed_entity_ids": [1, 2],
+        "bound_entity_ids": [1, 2],
+        "visible_bound_entity_ids": [1, 2],
         "controlled_spatial_initialized": True,
         "controlled_spatial_epoch": 1,
         "controlled_spatial_tick": 1,
-        "controlled_spatial_revision": 3,
+        "controlled_spatial_revision": 4,
         "movement_batches_applied": 1,
     }
     for key, value in expected_presentation.items():

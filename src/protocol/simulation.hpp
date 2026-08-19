@@ -29,6 +29,10 @@ private:
     // Milestone 0 scenario/session binding only. Runtime entity identity is
     // Simulation/content-owned; clients must not choose authoritative IDs.
     sim::EntityId controlled_actor_{1};
+    // First Milestone 1 identity-resolved NPC. Its need and exact spatial state
+    // remain World-owned; this application object only orchestrates its Core
+    // decision output into the same fixed locomotion batch as human control.
+    sim::EntityId living_need_npc_{2};
     // Session/control state, not world truth. Submission validates and replaces
     // the desired planar intent; the authoritative World consumes it only when
     // the fixed locomotion tick advances.

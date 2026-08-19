@@ -38,17 +38,18 @@ TEST(SimulationProtocol, SeedUsesTheRepresentableProtocolIntegerDomain) {
     EXPECT_THROW((worldsim::protocol::Simulation{-1}), std::invalid_argument);
 }
 
-TEST(SimulationProtocol, ObservedWorldStartsWithOnlyTheBoundControlledActor) {
+TEST(SimulationProtocol, ObservedWorldStartsWithControlledActorAndLivingNeedNpc) {
     worldsim::protocol::Simulation simulation{42};
 
     const auto projection = simulation.observed_world_projection();
 
     EXPECT_EQ(projection.controlled_actor_id, 1);
     EXPECT_EQ(projection.tick, 0);
-    EXPECT_EQ(projection.revision, 1);
+    EXPECT_EQ(projection.revision, 2);
     EXPECT_EQ(projection.protocol_version, worldsim::protocol::kProtocolVersion);
-    ASSERT_EQ(projection.entities.size(), 1U);
-    EXPECT_EQ(projection.entities.front().entity_id, 1);
+    ASSERT_EQ(projection.entities.size(), 2U);
+    EXPECT_EQ(projection.entities[0].entity_id, 1);
+    EXPECT_EQ(projection.entities[1].entity_id, 2);
 }
 
 TEST(SimulationProtocol, ControlledActorStartsWithAuthoritativeSpatialState) {
@@ -65,7 +66,7 @@ TEST(SimulationProtocol, ControlledActorStartsWithAuthoritativeSpatialState) {
     EXPECT_EQ(spatial.velocity_z_mm_per_second, 0);
     EXPECT_EQ(spatial.spatial_epoch, 1);
     EXPECT_EQ(spatial.tick, 0);
-    EXPECT_EQ(spatial.revision, 1);
+    EXPECT_EQ(spatial.revision, 2);
     EXPECT_EQ(spatial.protocol_version, worldsim::protocol::kProtocolVersion);
 }
 
@@ -80,7 +81,7 @@ TEST(SimulationProtocol, BootstrapMoveUpdatesRevisionWithoutChangingSpatialState
     EXPECT_EQ(result->actor.x, 1);
     EXPECT_EQ(result->actor.y, 0);
     EXPECT_EQ(result->actor.tick, 0);
-    EXPECT_EQ(result->actor.revision, 2);
+    EXPECT_EQ(result->actor.revision, 3);
     EXPECT_EQ(result->actor.seed, 42);
     EXPECT_EQ(result->actor.protocol_version, worldsim::protocol::kProtocolVersion);
 
@@ -88,8 +89,9 @@ TEST(SimulationProtocol, BootstrapMoveUpdatesRevisionWithoutChangingSpatialState
     EXPECT_EQ(observed.controlled_actor_id, result->actor.entity_id);
     EXPECT_EQ(observed.tick, result->actor.tick);
     EXPECT_EQ(observed.revision, result->actor.revision);
-    ASSERT_EQ(observed.entities.size(), 1U);
-    EXPECT_EQ(observed.entities.front().entity_id, result->actor.entity_id);
+    ASSERT_EQ(observed.entities.size(), 2U);
+    EXPECT_EQ(observed.entities[0].entity_id, result->actor.entity_id);
+    EXPECT_EQ(observed.entities[1].entity_id, 2);
 
     const auto spatial_after = simulation.controlled_actor_spatial_projection();
     EXPECT_EQ(spatial_after.entity_id, spatial_before.entity_id);
@@ -110,7 +112,7 @@ TEST(SimulationProtocol, BootstrapMoveUpdatesRevisionWithoutChangingSpatialState
     );
     EXPECT_EQ(spatial_after.spatial_epoch, spatial_before.spatial_epoch);
     EXPECT_EQ(spatial_after.tick, 0);
-    EXPECT_EQ(spatial_after.revision, 2);
+    EXPECT_EQ(spatial_after.revision, 3);
     EXPECT_EQ(spatial_after.protocol_version, worldsim::protocol::kProtocolVersion);
 }
 
