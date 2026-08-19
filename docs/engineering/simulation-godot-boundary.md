@@ -38,7 +38,7 @@ OfferTrade
 Attack
 Travel
 GiveGift
-future: DesiredMovementIntent
+ControlledActorMoveIntent
 ```
 
 Bad:
@@ -53,6 +53,19 @@ SetTransform
 ```
 
 The client may describe what an actor attempts. Simulation computes the resulting world state.
+
+The native locomotion write path now exists below GDExtension:
+
+```text
+ControlledActorMoveIntent
+  -> protocol/session intent state
+  -> Simulation::advance_locomotion_tick()
+  -> World::advance_grounded_locomotion_tick(actor-keyed batch)
+  -> authoritative movement/collision transition
+  -> AuthoritativeMovementSampleBatch
+```
+
+Submitting movement intent alone is not a world mutation. The fixed locomotion tick is the authoritative time/state transition.
 
 ## Read path: purpose-built projections
 
@@ -89,6 +102,29 @@ The protocol retains explicit integer metric units. GDExtension translates posit
 Do not add hidden state or reconstruct domain meaning in the adapter.
 
 Future feature projections such as shops, inventory, relationships or institutions should appear only when real mechanics need them. Do not create a universal `WorldProjection`.
+
+## Transition results: ordered movement samples
+
+Continuous authoritative movement is not modeled as repeated polling of `ControlledActorSpatialProjection`.
+
+A successful native locomotion tick returns one `AuthoritativeMovementSampleBatch`:
+
+```text
+tick
+revision
+protocol_version
+samples[] sorted ascending by EntityId
+  entity_id
+  position mm X/Y/Z
+  velocity mm/s X/Y/Z
+  SpatialEpoch
+```
+
+The batch is the post-transition result of one atomic World locomotion tick. Every sample shares the batch tick/revision. Sample order is canonical and does not inherit the order in which player/NPC intent producers were collected.
+
+Across locomotion batches, `SimulationTick` provides movement-time order. `WorldRevision` locates that batch relative to other authoritative world mutations. Do not add a second sequence counter until a concrete transport/presentation requirement proves that tick + revision are insufficient.
+
+This native sample result is **not yet exposed through `SimFacade`**. Until the GDExtension/Godot slice lands, the existing read projection remains initial/debug read state, not an implicit continuous stream API.
 
 ## Identity and presentation replicas
 
@@ -142,9 +178,9 @@ Simulation's integer coordinates also remain independent of Godot's floating-poi
 
 These are different contracts:
 
-- `SimulationTick` — authoritative world-time context;
-- `WorldRevision` — monotonic authoritative mutation order;
-- `SpatialEpoch` — continuity identity for movement interpolation.
+- `SimulationTick` — authoritative world-time context and locomotion-batch time order;
+- `WorldRevision` — monotonic authoritative mutation order across movement and non-movement changes;
+- `SpatialEpoch` — per-actor continuity identity for movement interpolation.
 
 A non-spatial command can increase revision while position stays unchanged. A teleport/respawn/discontinuous transfer changes epoch. Ordinary continuous movement stays within an epoch.
 
@@ -169,29 +205,39 @@ This API is **initial placement only**. Reusing it every authoritative update wo
 
 Godot's official interpolation guidance requires resetting physics interpolation after initial placement/teleport to avoid interpolating from an invalid previous transform.
 
-## Continuous movement — next stage
+## Continuous movement — current boundary and next bridge slice
 
-The target path is:
+Implemented native path:
 
 ```text
-PlayerControls semantic movement intent
-        ↓
 protocol movement intent
         ↓
 Godot-free Simulation movement/collision solver
         ↓
-ordered authoritative spatial samples
+ordered AuthoritativeMovementSampleBatch
+```
+
+Next bridge slice:
+
+```text
+AuthoritativeMovementSampleBatch
         ↓
-Godot sample buffer
+GDExtension translation
         ↓
-interpolation
+Godot EntityId-keyed sample buffer
         ↓
-optional local prediction + reconciliation if measured need exists
+monotonic tick/revision validation
+        ↓
+SpatialEpoch-aware interpolation + reconciliation
+        ↓
+remove duplicate local world-law movement
+        ↓
+optional local prediction only if measured need exists
 ```
 
 The current `ThirdPersonPlayer.move_and_slide()` path remains presentation/prototype movement. Do **not** copy its resulting `global_position`/velocity back into Simulation.
 
-The first real solver must choose neutral Simulation-owned environment/collision data from a concrete terrain/reachability requirement. Do not make Godot Physics/Jolt, `StaticBody3D`, a navmesh or `CharacterBody3D` authoritative by convenience.
+The implemented solver uses neutral Simulation-owned acceptance geometry. Production content-location geometry/query representation is still deliberately unresolved; choose it from a concrete terrain/reachability requirement. Do not make Godot Physics/Jolt, `StaticBody3D`, a navmesh or `CharacterBody3D` authoritative by convenience.
 
 ## Smooth presentation
 
@@ -212,7 +258,7 @@ Prediction is optional. If later playtests justify it:
 
 `WorldPresentation` rejects an observed-world projection older than its last applied revision.
 
-Future continuous spatial buffers must also order samples explicitly by authoritative tick/revision and reject impossible regressions/duplicates according to their own contract.
+The next continuous spatial buffer must consume the explicit sample-batch contract and reject impossible regressions/duplicates according to its own rules. It must preserve the distinction between movement tick order and global world revision order rather than substituting local frame counters.
 
 This is an ordering guard, not networking architecture or rollback.
 
@@ -247,7 +293,7 @@ Allowed:
 - Godot primitives ↔ protocol DTOs;
 - explicit unit conversion such as millimeters ↔ meters;
 - enums/errors ↔ Godot-friendly values;
-- projections/events ↔ Dictionaries/Arrays/typed Godot values;
+- projections/events/ordered sample batches ↔ Dictionaries/Arrays/typed Godot values;
 - diagnostics.
 
 Not allowed:
@@ -268,6 +314,8 @@ bootstrap_submit_move(...)      # smoke only
 bootstrap_debug_projection()    # smoke/debug only
 ```
 
+`AuthoritativeMovementSampleBatch` is native-only in the current slice. Adding its GDExtension method is the next explicit boundary change; review the shared protocol version at that point because the sample contract will become client-facing.
+
 ## Extension checklist
 
 For a feature crossing the boundary, answer:
@@ -277,7 +325,7 @@ For a feature crossing the boundary, answer:
 3. Which Simulation state/rules decide it?
 4. What result/error is returned?
 5. Which events explain the consequence?
-6. Which purpose-built projection is needed?
+6. Which purpose-built projection or transition-result stream is needed?
 7. Which fields are actually observable?
 8. Which parts are presentation-only?
 9. Can an NPC use the same world capability?
@@ -295,7 +343,7 @@ If the answer begins with “Godot sets the world state”, stop and move the de
 - multithread world jobs;
 - universal projection/event bus;
 - generic Godot entity-scene factory;
-- authoritative continuous movement/collision solver;
+- production content-location collision/index representation;
 - authoritative facing/orientation;
 - automatic origin rebasing;
 - prediction/reconciliation framework.

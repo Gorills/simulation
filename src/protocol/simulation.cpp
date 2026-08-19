@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cassert>
+#include <cstddef>
 #include <expected>
 #include <optional>
 #include <stdexcept>
@@ -78,6 +79,21 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
     return ControlledActorMovementError::world_rejected;
 }
 
+[[nodiscard]] AuthoritativeMovementSample movement_sample(
+    const sim::GroundedLocomotionSample &sample
+) {
+    return AuthoritativeMovementSample{
+        .entity_id = sample.actor.value,
+        .x_mm = sample.spatial.position.x.value,
+        .y_mm = sample.spatial.position.y.value,
+        .z_mm = sample.spatial.position.z.value,
+        .velocity_x_mm_per_second = sample.spatial.velocity.x.value,
+        .velocity_y_mm_per_second = sample.spatial.velocity.y.value,
+        .velocity_z_mm_per_second = sample.spatial.velocity.z.value,
+        .spatial_epoch = checked_protocol_integer(sample.spatial.epoch.value),
+    };
+}
+
 } // namespace
 
 Simulation::Simulation(const ProtocolInteger seed)
@@ -141,6 +157,13 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
             },
         },
     };
+
+    // Allocate the protocol result before mutating World. The current session has
+    // one controlled actor; future multi-actor orchestration can size this from
+    // its deterministic intent batch before invoking the same World transition.
+    AuthoritativeMovementSampleBatch result{};
+    result.samples.resize(intents.size());
+
     const auto advanced = world_.advance_grounded_locomotion_tick(
         locomotion_context_,
         intents
@@ -149,7 +172,14 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
         return std::unexpected(map_world_locomotion_error(advanced.error()));
     }
 
-    return controlled_actor_spatial_projection();
+    assert(advanced->samples.size() == result.samples.size());
+    result.tick = checked_protocol_integer(advanced->tick.value);
+    result.revision = checked_protocol_integer(advanced->revision.value);
+    result.protocol_version = kProtocolVersion;
+    for (std::size_t index = 0; index < advanced->samples.size(); ++index) {
+        result.samples[index] = movement_sample(advanced->samples[index]);
+    }
+    return result;
 }
 
 BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() const {

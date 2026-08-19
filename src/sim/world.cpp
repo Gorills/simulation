@@ -1,5 +1,6 @@
 #include "sim/world.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <expected>
 #include <utility>
@@ -98,7 +99,8 @@ std::expected<void, WorldError> World::apply_bootstrap_step(
     return {};
 }
 
-std::expected<void, GroundedLocomotionTickError> World::advance_grounded_locomotion_tick(
+std::expected<GroundedLocomotionTickResult, GroundedLocomotionTickError>
+World::advance_grounded_locomotion_tick(
     const GroundedLocomotionContext &context,
     const std::span<const ActorGroundedMoveIntent> intents
 ) {
@@ -158,6 +160,24 @@ std::expected<void, GroundedLocomotionTickError> World::advance_grounded_locomot
         });
     }
 
+    // Build and order the complete public result before mutating World state.
+    // Allocation failure therefore cannot leave a successful subset committed.
+    std::vector<GroundedLocomotionSample> samples;
+    samples.reserve(pending.size());
+    for (const auto &update : pending) {
+        samples.push_back(GroundedLocomotionSample{
+            .actor = actors_[update.actor_index].id,
+            .spatial = update.next.spatial,
+        });
+    }
+    std::sort(
+        samples.begin(),
+        samples.end(),
+        [](const GroundedLocomotionSample &left, const GroundedLocomotionSample &right) {
+            return left.actor.value < right.actor.value;
+        }
+    );
+
     for (const auto &update : pending) {
         auto &actor = actors_[update.actor_index];
         actor.spatial = update.next.spatial;
@@ -169,7 +189,11 @@ std::expected<void, GroundedLocomotionTickError> World::advance_grounded_locomot
 
     ++tick_.value;
     ++revision_.value;
-    return {};
+    return GroundedLocomotionTickResult{
+        .tick = tick_,
+        .revision = revision_,
+        .samples = std::move(samples),
+    };
 }
 
 void World::advance_one_tick() noexcept {

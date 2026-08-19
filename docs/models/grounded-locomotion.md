@@ -33,11 +33,11 @@ Implemented in the Godot-free native transition:
 - deterministic replay for the implemented fixtures;
 - one actor-keyed `World` locomotion batch per authoritative tick, with atomic validation/mutation and one `SimulationTick` / `WorldRevision` advance regardless of actor count;
 - persisted per-actor fixed-step continuation required for deterministic subsequent movement;
-- semantic controlled-actor protocol intent whose submission does not itself mutate world state, followed by a separate authoritative locomotion tick through the same `World` transition.
+- semantic controlled-actor protocol intent whose submission does not itself mutate world state, followed by a separate authoritative locomotion tick through the same `World` transition;
+- one post-transition authoritative sample batch per successful locomotion tick, with samples canonically ordered by ascending `EntityId` and shared tick/revision metadata.
 
 Still deliberately pending:
 
-- ordered authoritative movement samples;
 - GDExtension/Godot movement wiring, buffering and reconciliation;
 - prediction/navigation and the first content location;
 - an actual NPC decision source feeding the already actor-generic `World` movement batch.
@@ -54,6 +54,7 @@ Still deliberately pending:
 8. **Performance is correctness.** The current vector scans are acceptable only for the tiny acceptance fixture. They are not the production spatial index for a large world; production lookup must be bounded by actual local/causal geometry before this transition is used at scale.
 9. **Intent submission is not time advancement.** Protocol/controller state may replace a desired planar intent without mutating `World`; the fixed locomotion tick is the authoritative mutation boundary.
 10. **A world tick is not an actor call count.** One movement batch may contain multiple actor intents and advances tick/revision once after the entire batch succeeds.
+11. **Sample order is authoritative and source-independent.** A successful locomotion result contains each moved actor at most once, sorted by ascending `EntityId`, so downstream presentation never inherits arbitrary player/NPC intent collection order.
 
 ## Current native representation
 
@@ -182,19 +183,21 @@ While airborne, gravity integrates vertical velocity using the configured positi
 
 This slice deliberately does not add jump impulse, coyote time, air acceleration/steering, floor snap, fall damage or steep-surface sliding.
 
-### World batch and protocol transition
+### World batch, authoritative samples and protocol transition
 
 `World::advance_grounded_locomotion_tick()` accepts a batch of actor-keyed `PlanarMoveIntent` values plus one Simulation-owned locomotion context.
 
-Before mutating any actor it validates the full batch and computes every candidate transition. Invalid entity identity, missing exact spatial state, duplicate actor intent, incompatible continuation state, invalid intent, unsupported state or solver failure reject the operation without partial actor mutation or time advancement. Once all candidates succeed, their spatial/continuation states are committed and the world advances `SimulationTick` and `WorldRevision` exactly once.
+Before mutating any actor it validates the full batch and computes every candidate transition. Invalid entity identity, missing exact spatial state, duplicate actor intent, incompatible continuation state, invalid intent, unsupported state or solver failure reject the operation without partial actor mutation or time advancement. Once all candidates succeed, the complete public sample result is allocated and canonically ordered before mutation; only then are spatial/continuation states committed and the world advances `SimulationTick` and `WorldRevision` exactly once.
 
-This makes actor count independent from time advancement and gives human-controlled and NPC actors the same world-law seam. Current tests exercise two actors through one batch; wiring a real NPC decision source into that seam remains a later acceptance item.
+The successful Core result is one `GroundedLocomotionTickResult`: one shared post-transition tick/revision plus one `GroundedLocomotionSample` per moved actor. Samples contain the post-transition `SpatialState` and are sorted by ascending `EntityId`, independent of the order in which future player/NPC intent sources were collected. This makes actor count independent from time advancement and gives human-controlled and NPC actors the same world-law and sample seam. Current tests deliberately submit two actor intents in reverse entity order and require the returned samples to be canonical.
 
-At the protocol boundary, `submit_controlled_actor_move_intent()` validates and stores only desired planar intent. It does not advance time or mutate `SpatialState`. `advance_locomotion_tick()` is the authoritative tick boundary: it binds the stored controller intent to the controlled `EntityId`, invokes the shared World batch and returns a fresh controlled spatial projection. There is still no `SetPosition`, `SetVelocity`, `SetTransform` or final-displacement command.
+At the protocol boundary, `submit_controlled_actor_move_intent()` validates and stores only desired planar intent. It does not advance time or mutate `SpatialState`. `advance_locomotion_tick()` is the authoritative tick boundary: it binds the stored controller intent to the controlled `EntityId`, invokes the shared World batch and maps the Core result to one `AuthoritativeMovementSampleBatch`. The batch carries shared post-transition `tick`, `revision` and `protocol_version`; each sample carries entity identity, position, velocity and `SpatialEpoch`. Repeated movement batches are ordered by strictly increasing locomotion tick, while revision positions each batch relative to other authoritative World mutations. There is no extra sequence counter and still no `SetPosition`, `SetVelocity`, `SetTransform` or final-displacement command.
+
+The current native application protocol version remains 4 because this sample batch is not yet part of the GDExtension/Godot runtime surface and does not break an existing client-facing movement method. The bridge version must be reviewed when the next slice actually exposes the new movement contract through GDExtension.
 
 ### Deterministic replay
 
-Native tests require exact equality for repeated flat/wall, slope, step and ledge/fall/landing intent streams from identical state/configuration/environment. World/protocol tests additionally prove exact repeated integration, atomic multi-actor batches and deterministic continuation across snapshot/restore.
+Native tests require exact equality for repeated flat/wall, slope, step and ledge/fall/landing intent streams from identical state/configuration/environment. World/protocol tests additionally prove exact repeated integration, atomic multi-actor batches, deterministic continuation across snapshot/restore, canonical sample order independent of intent-source order, and strict tick/revision ordering across repeated protocol batches.
 
 ## Neutral acceptance arena
 
@@ -241,15 +244,16 @@ Defaults from Godot, Unreal or Unity remain references, not project values.
 
 ## Godot presentation contract
 
-Once authoritative continuous samples are exposed, Godot must:
+Authoritative continuous movement samples now exist at the native World/protocol boundary. When GDExtension/Godot consumes them, Godot must:
 
-- consume ordered `EntityId`-keyed samples;
+- consume the ordered `EntityId`-keyed sample batches rather than poll the read projection as an accidental stream;
+- reject/reconcile non-monotonic batch tick/revision according to the presentation buffer contract;
 - smooth compatible samples without changing Simulation truth;
 - snap/reset only across real `SpatialEpoch` discontinuities;
 - never decide authoritative wall/slope/step/landing results;
 - remove duplicate local world-law movement as authoritative migration completes.
 
-The current local `ThirdPersonPlayer` remains a temporary presentation/feel shell. The new protocol movement API is intentionally not exposed through GDExtension in this bounded slice; the next movement task must first define ordered authoritative samples rather than turning a polling projection into an accidental continuous-presentation contract.
+The current local `ThirdPersonPlayer` remains a temporary presentation/feel shell. The ordered native sample API is intentionally not exposed through GDExtension in this bounded slice.
 
 ## Performance contract
 
@@ -284,9 +288,9 @@ The 50° slope migration baseline and the numerical 0.3 m reference used to sele
 
 ## Next bounded task
 
-Produce **ordered authoritative movement samples** from the now-shared World/protocol movement transition. Only after sample ordering/continuity is explicit should GDExtension/Godot consume the stream and add buffering/interpolation/reconciliation.
+Expose `AuthoritativeMovementSampleBatch` through GDExtension and establish the Godot sample buffer/interpolation/reconciliation path. The bridge must preserve batch tick/revision, per-actor `SpatialEpoch`, and canonical `EntityId` order without copying local `CharacterBody3D` collision results back into Simulation.
 
-Do not expose a final-position setter, and do not turn the current read projection into an implicit frame-sampling contract.
+Do not add prediction unless measured playtest latency requires it, and do not expose a final-position setter.
 
 ## Falsifiers
 
