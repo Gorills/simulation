@@ -10,8 +10,9 @@ Before changing anything:
 2. For any code/tooling task, read [`docs/engineering/AGENT_RUNBOOK.md`](docs/engineering/AGENT_RUNBOOK.md) and follow its exact commands instead of rediscovering the stack.
 3. Read [`docs/engineering/DEVELOPMENT_RULES.md`](docs/engineering/DEVELOPMENT_RULES.md).
 4. Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before changing repository structure, CMake, graphics/platform code, or verification tooling.
-5. Read [`docs/specs/PROJECT_SPEC.md`](docs/specs/PROJECT_SPEC.md) only when product/gameplay direction is relevant.
-6. For documentation changes, follow [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md).
+5. For any player-visible UI/design task, read the design foundation in this order before editing: [`docs/design/GAME_UI_DESIGN_SKILL.md`](docs/design/GAME_UI_DESIGN_SKILL.md) -> [`docs/design/DESIGN_SYSTEM.md`](docs/design/DESIGN_SYSTEM.md) -> [`docs/design/UI_UX_RULES.md`](docs/design/UI_UX_RULES.md) -> [`docs/design/DESIGN_REVIEW.md`](docs/design/DESIGN_REVIEW.md). Source provenance is in [`docs/design/SOURCES.md`](docs/design/SOURCES.md); do not re-install/research external skill packs during ordinary UI work.
+6. Read [`docs/specs/PROJECT_SPEC.md`](docs/specs/PROJECT_SPEC.md) only when product/gameplay direction is relevant.
+7. For documentation changes, follow [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md).
 
 Inspect the existing code/tests/commands before assuming an API or contract exists.
 
@@ -20,9 +21,10 @@ Inspect the existing code/tests/commands before assuming an API or contract exis
 This repository is currently a **development foundation**, not a game implementation.
 
 - The native graphical stack is implemented and locally verifiable.
+- The UI/UX design workflow, persistent design-memory contract, usability/accessibility floor, review procedure, and source provenance are documented, but there is intentionally no game UI implementation yet.
 - There is intentionally no gameplay, Simulation Core, protocol, game executable, `GAME.md`, or gameplay playtest runner yet.
-- `src/platform/graphics_smoke.cpp` is a stack diagnostic fixture, **not gameplay**.
-- Do not create gameplay code until the user explicitly starts the first gameplay task in a later bounded pass.
+- `src/platform/graphics_smoke.cpp` is a stack diagnostic fixture, **not gameplay or UI design evidence**.
+- Do not create gameplay or game-UI implementation until the user explicitly starts the corresponding bounded task in a later pass.
 
 ## Hard invariants
 
@@ -31,6 +33,8 @@ This repository is currently a **development foundation**, not a game implementa
 - Third-party source used by the required path is vendored and integrity-checked.
 - The planned authoritative world belongs in a future C++23 Simulation Core; presentation/platform code must never become gameplay authority.
 - Future gameplay work is vertical: rule -> protocol -> graphical player experience -> proof.
+- Future player-visible UI work must follow the repo-owned design foundation and persist durable approved choices only in `docs/design/DESIGN_SYSTEM.md`.
+- Do not install external UI/UX skills or create agent-specific skill copies as part of ordinary UI work; reviewed guidance has been adapted into repository-owned policy.
 - Do not add abstractions, dependencies, subsystems, or refactors for hypothetical future use.
 - Do not invent commands, files, events, schemas, or APIs. Read them first.
 - Do not perform unrelated cleanup in a bounded task.
@@ -57,7 +61,7 @@ One development pass performs one bounded task:
 4. Make the minimal coherent change.
 5. Self-review the diff.
 6. Run the smallest sufficient local verification from the runbook.
-7. If player-visible gameplay exists later and changes, run exactly one canonical bounded gameplay playtest.
+7. When real player-visible UI exists and changes, apply the bounded review/evidence procedure in `docs/design/DESIGN_REVIEW.md`; when player-visible gameplay exists later and changes, run exactly one canonical bounded gameplay playtest.
 8. Commit/push only when permitted.
 9. Report `VERIFIED / NOT VERIFIED / ASSUMPTIONS / BLOCKERS` and stop.
 
