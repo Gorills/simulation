@@ -122,7 +122,7 @@ mouse_filter = 2
 theme_type_variation = &"DsRow"
 
 [node name="HUDStack" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow"]
-custom_minimum_size = Vector2(560, 0)
+custom_minimum_size = Vector2(700, 0)
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsStack"
@@ -137,24 +137,313 @@ layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsStack"
 
-[node name="Eyebrow" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+[node name="Header" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsStack"
+
+[node name="Eyebrow" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/Header"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsAccentLabel"
-text = "WORLD SIMULATION / PRESENTATION BRIDGE"
+text = "WORLD SIMULATION / READ-ONLY HUD"
 
-[node name="Title" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+[node name="Title" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/Header"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsSectionTitleLabel"
-text = "Third-person sandbox"
+text = "Runtime diagnostics"
 
-[node name="Debug" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+[node name="HeaderDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="RuntimeMetrics" type="HBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsRow"
+
+[node name="FpsMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="FpsCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/FpsMetric"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "FPS"
+
+[node name="DebugFps" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/FpsMetric"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+
+[node name="ProcessMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="ProcessCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/ProcessMetric"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "PROCESS"
+
+[node name="DebugProcess" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/ProcessMetric"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+
+[node name="PhysicsMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="PhysicsCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/PhysicsMetric"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "PHYSICS"
+
+[node name="DebugPhysics" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/PhysicsMetric"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+
+[node name="InputMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="InputCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/InputMetric"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "INPUT"
+
+[node name="DebugInput" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/InputMetric"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+autowrap_mode = 2
+
+[node name="AuthorityDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="AuthorityTitle" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsAccentLabel"
+text = "AUTHORITY"
+
+[node name="AuthorityGrid" type="GridContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsGrid"
+columns = 2
+
+[node name="EntityLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Controlled entity"
+
+[node name="DebugEntity" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="TickLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Simulation tick"
+
+[node name="DebugTick" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
 theme_type_variation = &"DsBodyLabel"
-text = "Initializing simulation presentation…"
+text = "—"
+horizontal_alignment = 2
+
+[node name="RevisionLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "World revision"
+
+[node name="DebugRevision" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsBodyLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="ProtocolLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Protocol"
+
+[node name="DebugProtocol" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsBodyLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="SeedLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "World seed"
+
+[node name="DebugSeed" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsBodyLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="ScenarioLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Scenario"
+
+[node name="DebugScenario" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsBodyLabel"
+text = "interactive"
+horizontal_alignment = 2
+
+[node name="SpatialDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SpatialTitle" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsAccentLabel"
+text = "SPATIAL"
+
+[node name="SpatialGrid" type="GridContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsGrid"
+columns = 2
+
+[node name="AuthoritativePositionLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Authoritative position"
+
+[node name="DebugAuthorityPosition" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="EpochLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Spatial epoch"
+
+[node name="DebugEpoch" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsBodyLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="PresentationPositionLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Presentation position"
+
+[node name="DebugPresentationPosition" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsBodyLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="DivergenceLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "Presentation delta"
+
+[node name="DebugDivergence" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+horizontal_alignment = 2
+
+[node name="TransportNote" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "Bootstrap transport probe is retained in smoke evidence, not presented as authoritative spatial truth."
+autowrap_mode = 2
+
+[node name="ControlsDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ControlsHint" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "WASD / left stick move  ·  mouse / right stick look  ·  Shift / L3 sprint  ·  Esc releases pointer"
 autowrap_mode = 2
 
 [node name="VerticalSpacer" type="Control" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
