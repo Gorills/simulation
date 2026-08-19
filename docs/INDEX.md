@@ -9,6 +9,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | change readiness, dependency admission, premature/conflicting requests | [`CHANGE_ADMISSION.md`](CHANGE_ADMISSION.md) | before production implementation |
 | product goals, playable invariants, player-role philosophy | [`PRODUCT.md`](PRODUCT.md) | gameplay/product work |
 | runtime ownership, dependency direction, protocol/GDExtension seam, AI Layer runtime boundary | [`ARCHITECTURE.md`](ARCHITECTURE.md) | architecture/integration work |
+| performance budgets, profiling, frame pacing, hot-path/scaling rules | [`PERFORMANCE.md`](PERFORMANCE.md) | any non-trivial runtime/simulation/bridge optimization or performance-sensitive feature |
 | determinism, NPC/economy/politics/social/history/magic/fidelity policy | [`MODELING.md`](MODELING.md) | simulation/model changes |
 | circa-1200 non-magical historical baseline | [`research/high-medieval-baseline-c1200.md`](research/high-medieval-baseline-c1200.md) | economy/social/politics/institution/history assumptions |
 | historical counterfactual + adaptive causal fidelity decision | [`decisions/0005-historical-counterfactual-and-causal-fidelity.md`](decisions/0005-historical-counterfactual-and-causal-fidelity.md) | changing role/status, magic participation or simulation-detail policy |
