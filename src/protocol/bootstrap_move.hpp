@@ -1,5 +1,6 @@
 #pragma once
 
+#include "protocol/integer.hpp"
 #include "protocol/version.hpp"
 
 #include <cstdint>
@@ -19,6 +20,7 @@ struct BootstrapMoveIntent final {
 enum class BootstrapMoveError : std::uint8_t {
     invalid_delta,
     controlled_actor_missing,
+    protocol_integer_exhausted,
 };
 
 // Milestone 0 projection only. Grid coordinates are deliberately not exposed as
@@ -27,9 +29,9 @@ struct BootstrapActorProjection final {
     std::int64_t entity_id{};
     std::int32_t x{};
     std::int32_t y{};
-    std::uint64_t tick{};
-    std::uint64_t revision{};
-    std::uint64_t seed{};
+    ProtocolInteger tick{};
+    ProtocolInteger revision{};
+    ProtocolInteger seed{};
     std::uint32_t protocol_version{kProtocolVersion};
 
     constexpr bool operator==(const BootstrapActorProjection &) const = default;

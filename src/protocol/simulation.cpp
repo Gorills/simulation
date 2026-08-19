@@ -3,6 +3,7 @@
 #include <cassert>
 #include <expected>
 #include <optional>
+#include <stdexcept>
 
 namespace worldsim::protocol {
 namespace {
@@ -25,9 +26,24 @@ namespace {
     return std::nullopt;
 }
 
+[[nodiscard]] sim::WorldSeed checked_world_seed(const ProtocolInteger seed) {
+    if (seed < 0) {
+        throw std::invalid_argument("protocol seed must be non-negative");
+    }
+    return sim::WorldSeed{static_cast<std::uint64_t>(seed)};
+}
+
+[[nodiscard]] ProtocolInteger checked_protocol_integer(const std::uint64_t value) {
+    const auto converted = to_protocol_integer(value);
+    if (!converted.has_value()) {
+        throw std::overflow_error("authoritative value exceeds protocol integer range");
+    }
+    return *converted;
+}
+
 } // namespace
 
-Simulation::Simulation(const std::uint64_t seed) : world_(sim::WorldSeed{seed}) {
+Simulation::Simulation(const ProtocolInteger seed) : world_(checked_world_seed(seed)) {
     const auto spawned = world_.spawn_actor(
         controlled_actor_,
         sim::ActorSpawnState{
@@ -42,10 +58,13 @@ Simulation::Simulation(const std::uint64_t seed) : world_(sim::WorldSeed{seed}) 
     (void)spawned;
 }
 
-BootstrapMoveOutcome Simulation::bootstrap_move(const BootstrapMoveIntent &intent) noexcept {
+BootstrapMoveOutcome Simulation::bootstrap_move(const BootstrapMoveIntent &intent) {
     const auto direction = cardinal_direction(intent);
     if (!direction.has_value()) {
         return std::unexpected(BootstrapMoveError::invalid_delta);
+    }
+    if (world_.revision().value >= kMaxProtocolInteger) {
+        return std::unexpected(BootstrapMoveError::protocol_integer_exhausted);
     }
 
     const auto moved = world_.apply_bootstrap_step(controlled_actor_, *direction);
@@ -56,7 +75,7 @@ BootstrapMoveOutcome Simulation::bootstrap_move(const BootstrapMoveIntent &inten
     return BootstrapMoveResult{.actor = bootstrap_controlled_actor_projection()};
 }
 
-BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() const noexcept {
+BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() const {
     const auto position = world_.actor_bootstrap_position(controlled_actor_);
     assert(position.has_value());
     if (!position.has_value()) {
@@ -67,9 +86,9 @@ BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() con
         .entity_id = controlled_actor_.value,
         .x = position->x,
         .y = position->y,
-        .tick = world_.tick().value,
-        .revision = world_.revision().value,
-        .seed = world_.seed().value,
+        .tick = checked_protocol_integer(world_.tick().value),
+        .revision = checked_protocol_integer(world_.revision().value),
+        .seed = checked_protocol_integer(world_.seed().value),
         .protocol_version = kProtocolVersion,
     };
 }
@@ -80,8 +99,8 @@ ObservedWorldProjection Simulation::observed_world_projection() const {
 
     ObservedWorldProjection result{
         .controlled_actor_id = controlled_actor_exists ? controlled_actor_.value : 0,
-        .tick = world_.tick().value,
-        .revision = world_.revision().value,
+        .tick = checked_protocol_integer(world_.tick().value),
+        .revision = checked_protocol_integer(world_.revision().value),
         .protocol_version = kProtocolVersion,
     };
 
@@ -91,7 +110,7 @@ ObservedWorldProjection Simulation::observed_world_projection() const {
     return result;
 }
 
-ControlledActorSpatialProjection Simulation::controlled_actor_spatial_projection() const noexcept {
+ControlledActorSpatialProjection Simulation::controlled_actor_spatial_projection() const {
     const auto spatial = world_.actor_spatial_state(controlled_actor_);
     assert(spatial.has_value());
     if (!spatial.has_value()) {
@@ -106,9 +125,9 @@ ControlledActorSpatialProjection Simulation::controlled_actor_spatial_projection
         .velocity_x_mm_per_second = spatial->velocity.x.value,
         .velocity_y_mm_per_second = spatial->velocity.y.value,
         .velocity_z_mm_per_second = spatial->velocity.z.value,
-        .spatial_epoch = spatial->epoch.value,
-        .tick = world_.tick().value,
-        .revision = world_.revision().value,
+        .spatial_epoch = checked_protocol_integer(spatial->epoch.value),
+        .tick = checked_protocol_integer(world_.tick().value),
+        .revision = checked_protocol_integer(world_.revision().value),
         .protocol_version = kProtocolVersion,
     };
 }
