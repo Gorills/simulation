@@ -195,4 +195,158 @@ TEST(WorldDeterminism, SameInitialActorsAndActionsProduceTheSameState) {
     EXPECT_EQ(first.seed(), second.seed());
 }
 
+TEST(WorldSnapshot, RestorePreservesAuthoritativeStateWithoutAdvancing) {
+    worldsim::sim::World source{worldsim::sim::WorldSeed{77}};
+    const worldsim::sim::EntityId resolved{10};
+    const worldsim::sim::EntityId unresolved{20};
+    const worldsim::sim::SpatialState spatial{
+        .position = {
+            .x = worldsim::sim::Millimeters{1500},
+            .y = worldsim::sim::Millimeters{250},
+            .z = worldsim::sim::Millimeters{-900},
+        },
+        .velocity = {
+            .x = worldsim::sim::MillimetersPerSecond{40},
+            .y = worldsim::sim::MillimetersPerSecond{-20},
+            .z = worldsim::sim::MillimetersPerSecond{80},
+        },
+        .epoch = worldsim::sim::SpatialEpoch{3},
+    };
+
+    ASSERT_TRUE(
+        source.spawn_actor(
+            resolved,
+            worldsim::sim::ActorSpawnState{
+                .bootstrap_position = {.x = 4, .y = -2},
+                .spatial = std::optional<worldsim::sim::SpatialState>{spatial},
+            }
+        ).has_value()
+    );
+    ASSERT_TRUE(source.spawn_actor(unresolved).has_value());
+    ASSERT_TRUE(source.apply_bootstrap_step(resolved, worldsim::sim::CardinalDirection::east).has_value());
+    source.advance_one_tick();
+    source.advance_one_tick();
+
+    const auto saved = source.snapshot();
+
+    worldsim::sim::World restored{worldsim::sim::WorldSeed{999}};
+    ASSERT_TRUE(restored.spawn_actor(worldsim::sim::EntityId{999}).has_value());
+    restored.advance_one_tick();
+    ASSERT_TRUE(restored.restore(saved).has_value());
+
+    EXPECT_EQ(restored.snapshot(), saved);
+    EXPECT_EQ(restored.seed(), source.seed());
+    EXPECT_EQ(restored.tick(), source.tick());
+    EXPECT_EQ(restored.revision(), source.revision());
+    EXPECT_TRUE(restored.contains_actor(resolved));
+    EXPECT_TRUE(restored.contains_actor(unresolved));
+    EXPECT_FALSE(restored.contains_actor(worldsim::sim::EntityId{999}));
+    EXPECT_EQ(restored.actor_spatial_state(resolved), source.actor_spatial_state(resolved));
+}
+
+TEST(WorldSnapshot, RejectsMalformedStateWithoutMutatingTarget) {
+    worldsim::sim::World source{worldsim::sim::WorldSeed{101}};
+    ASSERT_TRUE(source.spawn_actor(worldsim::sim::EntityId{1}).has_value());
+    const auto valid = source.snapshot();
+
+    worldsim::sim::World target{worldsim::sim::WorldSeed{202}};
+    ASSERT_TRUE(
+        target.spawn_actor(
+            worldsim::sim::EntityId{50},
+            worldsim::sim::ActorSpawnState{.bootstrap_position = {.x = 7, .y = 8}}
+        ).has_value()
+    );
+    const auto before = target.snapshot();
+
+    auto unsupported = valid;
+    ++unsupported.schema_version;
+    const auto unsupported_result = target.restore(unsupported);
+    ASSERT_FALSE(unsupported_result.has_value());
+    EXPECT_EQ(unsupported_result.error(), worldsim::sim::WorldSnapshotError::unsupported_schema_version);
+    EXPECT_EQ(target.snapshot(), before);
+
+    auto invalid_id = valid;
+    invalid_id.actors.front().id = worldsim::sim::EntityId{0};
+    const auto invalid_id_result = target.restore(invalid_id);
+    ASSERT_FALSE(invalid_id_result.has_value());
+    EXPECT_EQ(invalid_id_result.error(), worldsim::sim::WorldSnapshotError::invalid_entity_id);
+    EXPECT_EQ(target.snapshot(), before);
+
+    auto invalid_spatial = valid;
+    invalid_spatial.actors.front().spatial = worldsim::sim::SpatialState{
+        .epoch = worldsim::sim::SpatialEpoch{0},
+    };
+    const auto invalid_spatial_result = target.restore(invalid_spatial);
+    ASSERT_FALSE(invalid_spatial_result.has_value());
+    EXPECT_EQ(invalid_spatial_result.error(), worldsim::sim::WorldSnapshotError::invalid_spatial_state);
+    EXPECT_EQ(target.snapshot(), before);
+
+    auto duplicate = valid;
+    duplicate.actors.push_back(duplicate.actors.front());
+    const auto duplicate_result = target.restore(duplicate);
+    ASSERT_FALSE(duplicate_result.has_value());
+    EXPECT_EQ(duplicate_result.error(), worldsim::sim::WorldSnapshotError::duplicate_entity);
+    EXPECT_EQ(target.snapshot(), before);
+}
+
+TEST(WorldSnapshot, RestoredWorldContinuesDeterministically) {
+    worldsim::sim::World uninterrupted{worldsim::sim::WorldSeed{303}};
+    const worldsim::sim::EntityId first{5};
+    const worldsim::sim::EntityId second{8};
+
+    ASSERT_TRUE(
+        uninterrupted.spawn_actor(
+            first,
+            worldsim::sim::ActorSpawnState{
+                .bootstrap_position = {.x = -3, .y = 2},
+                .spatial = worldsim::sim::SpatialState{
+                    .position = {
+                        .x = worldsim::sim::Millimeters{-2500},
+                        .y = worldsim::sim::Millimeters{0},
+                        .z = worldsim::sim::Millimeters{4000},
+                    },
+                    .epoch = worldsim::sim::SpatialEpoch{4},
+                },
+            }
+        ).has_value()
+    );
+    ASSERT_TRUE(uninterrupted.spawn_actor(second).has_value());
+    ASSERT_TRUE(
+        uninterrupted.apply_bootstrap_step(first, worldsim::sim::CardinalDirection::north).has_value()
+    );
+    uninterrupted.advance_one_tick();
+    ASSERT_TRUE(
+        uninterrupted.apply_bootstrap_step(second, worldsim::sim::CardinalDirection::west).has_value()
+    );
+
+    worldsim::sim::World restored{worldsim::sim::WorldSeed{1}};
+    ASSERT_TRUE(restored.restore(uninterrupted.snapshot()).has_value());
+
+    constexpr std::array suffix{
+        worldsim::sim::CardinalDirection::east,
+        worldsim::sim::CardinalDirection::east,
+        worldsim::sim::CardinalDirection::south,
+        worldsim::sim::CardinalDirection::west,
+    };
+    for (const auto direction : suffix) {
+        ASSERT_TRUE(uninterrupted.apply_bootstrap_step(first, direction).has_value());
+        ASSERT_TRUE(restored.apply_bootstrap_step(first, direction).has_value());
+        uninterrupted.advance_one_tick();
+        restored.advance_one_tick();
+        EXPECT_EQ(restored.snapshot(), uninterrupted.snapshot());
+    }
+
+    const worldsim::sim::EntityId later_actor{99};
+    ASSERT_TRUE(uninterrupted.spawn_actor(later_actor).has_value());
+    ASSERT_TRUE(restored.spawn_actor(later_actor).has_value());
+    ASSERT_TRUE(
+        uninterrupted.apply_bootstrap_step(later_actor, worldsim::sim::CardinalDirection::south).has_value()
+    );
+    ASSERT_TRUE(
+        restored.apply_bootstrap_step(later_actor, worldsim::sim::CardinalDirection::south).has_value()
+    );
+
+    EXPECT_EQ(restored.snapshot(), uninterrupted.snapshot());
+}
+
 } // namespace

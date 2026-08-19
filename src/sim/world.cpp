@@ -76,6 +76,50 @@ void World::advance_one_tick() noexcept {
     ++revision_.value;
 }
 
+WorldSnapshot World::snapshot() const {
+    return WorldSnapshot{
+        .schema_version = kWorldSnapshotSchemaVersion,
+        .seed = seed_,
+        .tick = tick_,
+        .revision = revision_,
+        .actors = actors_,
+    };
+}
+
+std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snapshot_state) {
+    if (snapshot_state.schema_version != kWorldSnapshotSchemaVersion) {
+        return std::unexpected(WorldSnapshotError::unsupported_schema_version);
+    }
+
+    // Build into a temporary World so malformed snapshots or allocation failure
+    // never partially mutate the current authoritative state.
+    World restored{snapshot_state.seed};
+    restored.actors_.reserve(snapshot_state.actors.size());
+    restored.actor_index_by_id_.reserve(snapshot_state.actors.size());
+
+    for (const auto &actor : snapshot_state.actors) {
+        if (!actor.id.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_entity_id);
+        }
+        if (actor.spatial.has_value() && !actor.spatial->is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_spatial_state);
+        }
+
+        const bool inserted = restored.actor_index_by_id_
+                                  .emplace(actor.id.value, restored.actors_.size())
+                                  .second;
+        if (!inserted) {
+            return std::unexpected(WorldSnapshotError::duplicate_entity);
+        }
+        restored.actors_.push_back(actor);
+    }
+
+    restored.tick_ = snapshot_state.tick;
+    restored.revision_ = snapshot_state.revision;
+    *this = std::move(restored);
+    return {};
+}
+
 bool World::contains_actor(const EntityId id) const noexcept {
     return id.is_valid() && actor_index_by_id_.contains(id.value);
 }
