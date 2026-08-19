@@ -10,9 +10,9 @@ The architecture foundation establishes stable positive `EntityId`, actor parity
 
 The historical/magic/causal-fidelity foundation, authoritative spatial representation contract, grounded locomotion acceptance/test-arena contract, and pre-Milestone 1 authoritative spatial bridge are accepted. The Godot-free grounded locomotion transition proves deterministic flat movement, wall blocking/sliding semantics, walkable-versus-too-steep slope classification/traversal, ordinary 300 mm step-up versus 301 mm blocking-step semantics, and ledge support loss -> gravity-driven fall -> stable lower-plane landing against neutral Simulation-owned geometry. That transition is routed through one actor-generic `World` batch; human control and deterministic NPC local-waypoint steering both produce the same `PlanarMoveIntent` shape, successful ticks produce canonical ordered authoritative samples, and the v5 GDExtension/Godot bridge consumes those samples on fixed physics ticks with tick/revision/epoch guards and presentation interpolation.
 
-The controlled `CharacterBody3D` is a presentation replica: its physics-root position/velocity come from Simulation samples rather than `move_and_slide()`, Godot gravity, local acceleration or local sprint. Facing/camera remain presentation concerns. Sprint/acceleration/deceleration are deliberately inactive until authoritative locomotion semantics define them. NPC local steering deliberately does not choose needs, tasks, schedules or routes; those causal decisions begin in Milestone 1.
+The controlled `CharacterBody3D` is a presentation replica: its physics-root position/velocity come from Simulation samples rather than `move_and_slide()`, Godot gravity, local acceleration or local sprint. Facing/camera remain presentation concerns. Sprint/acceleration/deceleration are deliberately inactive until authoritative locomotion semantics define them.
 
-The next development focus is **Milestone 1 — Living Need**: introduce one real NPC need that causes one feasible task and gives the already-shared locomotion capability an actual world reason to travel.
+**Milestone 1 is now in progress.** The first bounded slice adds one authoritative `RestNeedState` to an identity-resolved NPC. Core derives a concrete local rest task from that need, the NPC intent enters the same World locomotion batch as human control, and Godot materializes the observed non-controlled `EntityId` only from authoritative observation/sample data. The next M1 work is shared player interference/help plus offscreen continuation evidence, not a generic AI framework.
 
 **Milestone 0 is not accepted merely because the files exist.** Acceptance remains defined by [`VERIFICATION.md`](VERIFICATION.md).
 
@@ -129,35 +129,48 @@ Implemented:
 
 1. ordinary step-up versus blocking-step semantics use an explicit **300 mm** `max_step_up` baseline; the neutral paired fixture proves **300 mm traverses / 301 mm blocks**, preserves tangential movement when the entry axis is blocked, preserves `SpatialEpoch`, and replays deterministically;
 2. ledge support loss, gravity/falling and stable landing use a non-magical **9807 mm/s²** gravity baseline, preserve takeoff planar velocity without inventing air-control semantics, carry fractional vertical integration deterministically, prevent downward support snap/tunneling, clear vertical velocity/remainders on landing, preserve `SpatialEpoch`, and replay deterministically;
-3. the solver is exposed through one actor-keyed `World` locomotion batch and a semantic controlled-actor protocol path: the full batch validates before mutation, advances `SimulationTick` / `WorldRevision` once regardless of actor count, persists fixed-step continuation through `WorldSnapshot` schema v2, and keeps controller intent submission separate from authoritative time advancement. No final-position/velocity setter exists. The temporary protocol fixture uses Simulation-owned flat acceptance geometry rather than Godot colliders;
+3. the solver is exposed through one actor-keyed `World` locomotion batch and a semantic controlled-actor protocol path: the full batch validates before mutation, advances `SimulationTick` / `WorldRevision` once regardless of actor count, persists fixed-step continuation through the current `WorldSnapshot` schema, and keeps controller intent submission separate from authoritative time advancement. No final-position/velocity setter exists. The temporary protocol fixture uses Simulation-owned flat acceptance geometry rather than Godot colliders;
 4. every successful World locomotion batch returns post-transition `GroundedLocomotionSample` values with one shared post-transition tick/revision and canonical ascending `EntityId` ordering, independent of intent-source collection order. The application protocol maps that result to one `AuthoritativeMovementSampleBatch`; repeated batches are ordered by increasing locomotion tick, while revision locates them relative to other authoritative World mutations. No extra presentation sequence counter is introduced;
 5. protocol v5 exposes semantic move-intent submission plus authoritative sample-batch advancement through `SimFacade`. `WorldPresentation` requires consecutive locomotion ticks, strictly newer revisions, matching protocol version, strictly ascending observed `EntityId` samples and a controlled-actor sample before applying the batch. Same-epoch samples update the physics-root transform on Godot physics ticks and use Godot's enabled physics interpolation for rendered smoothing; epoch changes reset interpolation. The old local `move_and_slide()`/gravity/acceleration/sprint position path has been removed, so Godot no longer creates a competing authoritative location outcome;
 6. `decide_npc_local_move_toward_waypoint()` is a Core-owned deterministic NPC intent producer. It reads authoritative actor spatial state, converts an already-selected local X/Z waypoint plus caller-supplied per-axis arrival tolerance into the existing bounded `PlanarMoveIntent`, and never mutates world state. Native parity evidence feeds an NPC-produced full-strength +X intent and an equivalent human intent into one `World::advance_grounded_locomotion_tick()` batch and requires equivalent spatial/velocity results with canonical EntityId-ordered samples.
 
 Local prediction remains optional: add it only if measured playtest latency shows a real need. It is not required to complete C2.
 
-The NPC local steering primitive is deliberately **not** pathfinding, a schedule, a need/task selector, a behavior tree or a production navigation system. It establishes only the final actor-parity seam required by C2. Milestone 1 must supply a real causal reason/goal/task before using that steering as gameplay behavior.
+The NPC local steering primitive is deliberately **not** pathfinding, a schedule, a need/task selector, a behavior tree or a production navigation system. Stage C2 only establishes the actor-parity movement seam; Milestone 1 supplies causal reasons/goals/tasks above it.
 
 The initial step threshold is a project-owned migration/acceptance value, not an engine default. It is numerically aligned with the existing playable profile's 0.3 m local floor-contact reach while retaining separate step and snap semantics, and it remains subject to later player-facing feel verification.
 
 The gravity baseline is the nearest integer millimeter representation of standard gravity **9.80665 m/s²**. It is a configurable non-magical physical baseline, not a controller-engine default; future magic or world conditions may alter gravity only through explicit authoritative rules.
 
-The current flat protocol integration context is deliberately temporary Stage C2 test data. It proves semantic command -> shared World transition -> authoritative `SpatialState`; it does **not** declare the visible Godot scene floor to be authoritative Simulation content. The visible Godot floor/collider now serves presentation/camera demonstration only and cannot resolve authoritative locomotion.
+The current flat protocol integration context is deliberately temporary acceptance data. It proves semantic command -> shared World transition -> authoritative `SpatialState`; it does **not** declare the visible Godot scene floor to be authoritative Simulation content. The visible Godot floor/collider serves presentation/camera demonstration only and cannot resolve authoritative locomotion.
 
-Do not turn the accepted bridge into ECS, networking, sharding, a general rigid-body engine, automatic regional simulation LOD or speculative navigation work. Production location geometry/querying and navigation should be admitted from the first real Milestone 1 travel requirement.
+Do not turn the accepted bridge into ECS, networking, sharding, a general rigid-body engine, automatic regional simulation LOD or speculative navigation work. Production location geometry/querying and navigation should be admitted from a real Milestone 1 reachability requirement.
 
 Acceptance for the full bridge:
 
 > Human and NPC intent sources enter the same Godot-free authoritative locomotion rules, the controlled actor's authoritative movement/collision are rendered from ordered samples in Godot, and local presentation state cannot create an authoritative location outcome.
 
-## Milestone 1 — Living Need
+## Milestone 1 — Living Need — in progress
 
-- one NPC need;
-- one causal task;
-- authoritative travel/action using the accepted shared locomotion capability;
-- visible Godot result from Simulation projection/state;
-- player can interfere or help through the same actor/world-rule layer;
-- the NPC continues to exist/act when its Godot representation is absent.
+Implemented first slice:
+
+1. `EntityId{2}` is an identity-resolved authoritative NPC with exact `SpatialState` and optional `RestNeedState` stored in `ActorState`;
+2. `RestNeedState` assigns one local rest X/Z point plus an arrival tolerance. Need satisfaction is derived from authoritative position rather than a duplicate completion flag;
+3. Core `decide_npc_rest_need()` turns that need into the existing actor-keyed movement intent and becomes satisfied/zero-intent inside the configured tolerance;
+4. protocol application ticks collect the human-controlled intent and the NPC need-produced intent into the same `World::advance_grounded_locomotion_tick()` batch;
+5. `ObservedWorldProjection` observes both actors without adding spatial truth to the identity/presence DTO;
+6. Godot `WorldPresentation` materializes non-controlled observed actors with a generic NPC presentation shell, keeps the shell hidden until its first authoritative sample, then applies the same ordered position/velocity/epoch stream used by the controlled actor;
+7. `RestNeedState` is causal snapshot truth in `WorldSnapshot` schema v3.
+
+Still required before Milestone 1 acceptance:
+
+- introduce the minimum shared authoritative condition/action through which the controlled actor can help or obstruct the NPC's need outcome;
+- prove the NPC continues the causal need/task behavior when its Godot representation is absent;
+- complete one bounded real playtest of that interference/help loop.
+
+Deliberately not introduced by the first slice: fatigue accumulation, sleep duration, schedules, behavior trees, GOAP, generic planners, alternate rest-site evaluation, production pathfinding/navigation or household/home ownership semantics.
+
+See [`models/living-need.md`](models/living-need.md).
 
 Acceptance:
 

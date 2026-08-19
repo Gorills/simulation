@@ -1,0 +1,31 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/presentation/entity_binding.gd" id="1_binding"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial_npc"]
+albedo_color = Color(0.82, 0.42, 0.18, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_npc"]
+material = SubResource("StandardMaterial_npc")
+radius = 0.38
+height = 1.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_facing"]
+material = SubResource("StandardMaterial_npc")
+size = Vector3(0.22, 0.22, 0.55)
+
+[node name="NpcPresentation" type="CharacterBody3D"]
+visible = false
+
+[node name="EntityBinding" type="Node" parent="."]
+script = ExtResource("1_binding")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+position = Vector3(0, 0.9, 0)
+
+[node name="Body" type="MeshInstance3D" parent="VisualRoot"]
+mesh = SubResource("CapsuleMesh_npc")
+
+[node name="FacingMarker" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(0, 0.25, -0.58)
+mesh = SubResource("BoxMesh_facing")

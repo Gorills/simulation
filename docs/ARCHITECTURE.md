@@ -150,7 +150,7 @@ NPC decision -------------------------------+-> same authoritative action/rule p
 
 Human control is a relationship outside the actor's world identity. It must not grant alternate economy, inventory, relationship, institution, ownership, law, combat or movement rules.
 
-For locomotion, the shared Core seam is concrete: `World::advance_grounded_locomotion_tick()` consumes an actor-keyed batch. Tests prove two actors can move in one world tick, invalid batches do not partially mutate actors, and returned samples are canonically ordered by ascending `EntityId` even when input intent order is reversed. Core now also provides `decide_npc_local_move_toward_waypoint()`: it reads authoritative actor spatial state and emits the same `ActorGroundedMoveIntent` shape rather than moving the NPC itself. Native parity evidence batches an NPC-produced full-strength +X intent with an equivalent human +X intent through the same World transition and requires equivalent movement/velocity results. The protocol/Godot session still binds only the human-controlled actor; why an NPC chooses a waypoint belongs to Milestone 1 causal need/task logic, not to a second locomotion law.
+For locomotion, the shared Core seam is concrete: `World::advance_grounded_locomotion_tick()` consumes an actor-keyed batch. Tests prove two actors can move in one world tick, invalid batches do not partially mutate actors, and returned samples are canonically ordered by ascending `EntityId` even when input intent order is reversed. Core provides `decide_npc_local_move_toward_waypoint()` for local steering and now `decide_npc_rest_need()` for the first causal Milestone 1 producer: authoritative `RestNeedState` selects an already-assigned rest point and emits the same `ActorGroundedMoveIntent` shape rather than moving the NPC itself. The application session observes both the controlled actor and `EntityId{2}`, collects human and rest-need NPC intents into one World batch, and Godot materializes the NPC only as a presentation replica of authoritative samples. Why later NPCs choose among needs/tasks remains Simulation-domain work, not a separate movement law.
 
 If an NPC can open a shop, buy an item, attack a traveler, join an institution, acquire property or move through a place, a human-controlled actor uses the same world capability when the same prerequisites hold.
 
@@ -170,6 +170,7 @@ Durable distinctions now include:
 - `SpatialState` — optional exact spatial state when current causal fidelity requires it;
 - `PlanarMoveIntent` — bounded semantic X/Z movement intent, never displacement or final state;
 - `NpcLocalWaypoint` — already-selected local planar waypoint plus caller-owned arrival tolerance used only to produce NPC movement intent;
+- `RestNeedState` — first authoritative NPC need state: assigned local rest point plus arrival tolerance, with satisfaction derived from exact spatial state;
 - `GroundedLocomotionContinuation` — hidden per-actor fixed-step remainder/tick-rate state that affects the next authoritative movement result and therefore belongs to snapshot truth;
 - `GroundedLocomotionTickResult` — one post-transition temporal batch with actor samples canonically ordered by `EntityId`;
 - bootstrap grid/cardinal types — explicitly temporary transport probes.
@@ -199,7 +200,7 @@ Exact state is selective:
 entity exists != entity has SpatialState != Godot node exists
 ```
 
-The controlled actor in the active 3D session has exact spatial state. A distant or aggregate-resolved actor may remain authoritative without exact pose when current mechanics do not require one.
+The controlled actor and the first identity-resolved living-need NPC in the active 3D scenario have exact spatial state because current locomotion causality needs it. A distant or aggregate-resolved actor may remain authoritative without exact pose when current mechanics do not require one.
 
 `SpatialEpoch` changes on teleport/respawn/discontinuous transfer. Samples across different epochs are not interpolated as ordinary motion.
 
@@ -277,11 +278,11 @@ full authoritative Simulation world
               -> presentation nodes / bindings
 ```
 
-`WorldPresentation` validates monotonic world revisions, tracks observed IDs and binds the controlled `Player` representation through `EntityBinding`. It performs initial controlled placement from `ControlledActorSpatialProjection`, then applies continuous movement through ordered `AuthoritativeMovementSampleBatch` results.
+`WorldPresentation` validates monotonic world revisions, tracks observed IDs and owns the `EntityId -> EntityBinding -> presentation root` map. It binds the pre-authored controlled `Player`, materializes observed non-controlled actors through the generic NPC presentation shell, performs controlled initial placement from `ControlledActorSpatialProjection`, and then applies continuous movement for all bound observed actors through ordered `AuthoritativeMovementSampleBatch` results.
 
-The initial-placement API remains separate from continuous movement. `WorldPresentation` rejects non-consecutive locomotion ticks, stale/duplicate revisions, protocol mismatches, invalid/unordered samples and samples outside the observed set before moving a presentation root. Same-epoch movement uses the project's enabled Godot physics interpolation; a changed `SpatialEpoch` applies the authoritative relocation and resets interpolation.
+The initial-placement API remains separate from continuous movement. A newly materialized NPC shell starts hidden and has no assumed authoritative transform; its first valid movement sample supplies position/velocity/`SpatialEpoch` and makes it visible. `WorldPresentation` rejects non-consecutive locomotion ticks, stale/duplicate revisions, protocol mismatches, invalid/unordered samples, missing bindings and samples outside the observed set before moving any presentation root. Same-epoch movement uses the project's enabled Godot physics interpolation; a changed `SpatialEpoch` applies the authoritative relocation and resets interpolation.
 
-Future materialization may instantiate/update/dematerialize typed presentation scenes when real NPC/item capabilities exist. Removing a Godot representation must never delete the simulated entity.
+Removing or hiding a Godot representation must never delete the simulated entity. Additional presentation kinds should be added only when real entity capabilities require them rather than through a universal scene factory.
 
 Keep distinct:
 
@@ -341,6 +342,7 @@ InputMap
 SimFacade.observed_world_projection()
   -> WorldPresentation
        -> EntityBinding -> Player presentation
+       -> EntityBinding -> materialized NPC presentation
 
 SimFacade.controlled_actor_spatial_projection()
   -> WorldPresentation.initialize_controlled_spatial_presentation()
@@ -438,13 +440,14 @@ Current executable structure establishes load-bearing boundaries:
 - Core `decide_npc_local_move_toward_waypoint()` is read-only/deterministic and produces the existing actor-keyed movement-intent shape from authoritative state rather than mutating position;
 - native parity tests batch NPC-produced and equivalent human intents through the same World transition and require equivalent movement/velocity outcomes;
 - `GroundedLocomotionTickResult` returns post-transition samples canonically sorted by `EntityId`, independent of intent collection order;
-- fixed-step locomotion continuation that affects subsequent state is captured by `WorldSnapshot` schema v2 and deterministic restore continuation tests;
+- fixed-step locomotion continuation and first `RestNeedState` that affect subsequent decisions are captured by `WorldSnapshot` schema v3 and deterministic restore tests;
+- Core living-need tests prove rest-task intent is derived from authoritative state, becomes satisfied inside the assigned tolerance, and survives snapshot/restore;
 - protocol movement tests prove semantic intent submission does not mutate world state, fixed locomotion ticks produce `AuthoritativeMovementSampleBatch`, and repeated batches increase tick/revision monotonically;
 - protocol v5 is the shared Godot-facing contract once movement intent/batches cross GDExtension;
 - `ObservedWorldProjection` and `ControlledActorSpatialProjection` remain separate purpose-built reads rather than the continuous movement stream;
 - native tests prove exact-spatial and non-exact actors can coexist and invalid spatial epoch cannot mutate the world;
 - protocol tests prove bootstrap grid movement changes revision but not production spatial position;
-- Godot has one `WorldPresentation` identity/presence/sample owner; controlled movement rejects duplicate/non-consecutive batches and applies authoritative sample position/velocity instead of local collision results;
+- Godot has one `WorldPresentation` identity/presence/sample owner; it materializes observed non-controlled actors hidden until their first authoritative sample, rejects duplicate/non-consecutive batches, and applies authoritative sample position/velocity instead of local collision results;
 - `ThirdPersonPlayer` has no `move_and_slide()`/Godot-gravity position path;
 - bootstrap movement names discourage treating the grid probe as production locomotion;
 - only `world_sim_gdextension` links godot-cpp;

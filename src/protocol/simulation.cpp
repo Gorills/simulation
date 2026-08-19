@@ -1,5 +1,7 @@
 #include "protocol/simulation.hpp"
 
+#include "sim/living_need.hpp"
+
 #include <array>
 #include <cassert>
 #include <cstddef>
@@ -99,7 +101,7 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
 Simulation::Simulation(const ProtocolInteger seed)
     : world_(checked_world_seed(seed)),
       locomotion_context_(sim::make_flat_locomotion_acceptance_context()) {
-    const auto spawned = world_.spawn_actor(
+    const auto controlled_spawned = world_.spawn_actor(
         controlled_actor_,
         sim::ActorSpawnState{
             .spatial = sim::SpatialState{
@@ -109,8 +111,33 @@ Simulation::Simulation(const ProtocolInteger seed)
             },
         }
     );
-    assert(spawned.has_value());
-    (void)spawned;
+    assert(controlled_spawned.has_value());
+    (void)controlled_spawned;
+
+    // First Milestone 1 acceptance scenario: the NPC starts six meters away
+    // from its assigned local rest point. RestNeedState is authoritative actor
+    // state; the visible Godot shell merely presents the resulting samples.
+    const auto npc_spawned = world_.spawn_actor(
+        living_need_npc_,
+        sim::ActorSpawnState{
+            .spatial = sim::SpatialState{
+                .position = {
+                    .x = sim::Millimeters{3'000},
+                    .y = sim::Millimeters{0},
+                    .z = sim::Millimeters{-3'000},
+                },
+                .velocity = {},
+                .epoch = sim::SpatialEpoch{1},
+            },
+            .rest_need = sim::RestNeedState{
+                .rest_x = sim::Millimeters{-3'000},
+                .rest_z = sim::Millimeters{-3'000},
+                .axis_arrival_tolerance = sim::Millimeters{150},
+            },
+        }
+    );
+    assert(npc_spawned.has_value());
+    (void)npc_spawned;
 }
 
 BootstrapMoveOutcome Simulation::bootstrap_move(const BootstrapMoveIntent &intent) {
@@ -148,6 +175,11 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
         return std::unexpected(ControlledActorMovementError::protocol_integer_exhausted);
     }
 
+    const auto npc_decision = sim::decide_npc_rest_need(world_, living_need_npc_);
+    if (!npc_decision.has_value()) {
+        return std::unexpected(ControlledActorMovementError::world_rejected);
+    }
+
     const std::array intents{
         sim::ActorGroundedMoveIntent{
             .actor = controlled_actor_,
@@ -156,11 +188,12 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
                 .z = controlled_move_intent_.z,
             },
         },
+        npc_decision->movement,
     };
 
-    // Allocate the protocol result before mutating World. The current session has
-    // one controlled actor; future multi-actor orchestration can size this from
-    // its deterministic intent batch before invoking the same World transition.
+    // Allocate the protocol result before mutating World. Both human and NPC
+    // intents enter one fixed authoritative batch; result ordering is supplied
+    // by World and is independent of collection order.
     AuthoritativeMovementSampleBatch result{};
     result.samples.resize(intents.size());
 
@@ -202,7 +235,9 @@ BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() con
 
 ObservedWorldProjection Simulation::observed_world_projection() const {
     const bool controlled_actor_exists = world_.contains_actor(controlled_actor_);
+    const bool npc_exists = world_.contains_actor(living_need_npc_);
     assert(controlled_actor_exists);
+    assert(npc_exists);
 
     ObservedWorldProjection result{
         .controlled_actor_id = controlled_actor_exists ? controlled_actor_.value : 0,
@@ -213,6 +248,9 @@ ObservedWorldProjection Simulation::observed_world_projection() const {
 
     if (controlled_actor_exists) {
         result.entities.push_back(ObservedEntityProjection{.entity_id = controlled_actor_.value});
+    }
+    if (npc_exists) {
+        result.entities.push_back(ObservedEntityProjection{.entity_id = living_need_npc_.value});
     }
     return result;
 }
