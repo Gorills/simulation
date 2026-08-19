@@ -6,6 +6,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 
 | Concern | Canonical source | Open when |
 | --- | --- | --- |
+| change readiness, dependency admission, premature/conflicting requests | [`CHANGE_ADMISSION.md`](CHANGE_ADMISSION.md) | before production implementation |
 | product goals, playable invariants, player-role philosophy | [`PRODUCT.md`](PRODUCT.md) | gameplay/product work |
 | runtime ownership, dependency direction, protocol/GDExtension seam, AI Layer runtime boundary | [`ARCHITECTURE.md`](ARCHITECTURE.md) | architecture/integration work |
 | determinism, NPC/economy/politics/social/history/magic/fidelity policy | [`MODELING.md`](MODELING.md) | simulation/model changes |
@@ -55,6 +56,8 @@ For **required behavior/design not yet implemented**, use the canonical concern 
 
 A stale prose statement is a documentation defect. Do not change working code merely to imitate stale prose without first identifying the intended outcome.
 
+A user directive is product intent, not a new source of implemented truth. Before production code, run the request through [`CHANGE_ADMISSION.md`](CHANGE_ADMISSION.md); if the desired outcome requires changing an accepted contract, change/supersede the canonical owner deliberately rather than bypassing it in one feature.
+
 ## Documentation rules
 
 - One canonical owner per durable fact.
@@ -70,10 +73,11 @@ A stale prose statement is a documentation defect. Do not change working code me
 
 ## Progressive disclosure for agents
 
-Default route:
+Default route for a code-changing request:
 
 ```text
 AGENTS.md
+  -> CHANGE_ADMISSION.md
   -> this INDEX
   -> one canonical concern document
   -> one relevant engineering/model/ADR/research source
