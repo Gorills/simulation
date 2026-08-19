@@ -16,6 +16,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | authoritative exact 3D location/spatial samples | [`models/spatial-location.md`](models/spatial-location.md) + [`decisions/0006-authoritative-spatial-contract.md`](decisions/0006-authoritative-spatial-contract.md) | movement/location/spatial ownership/interpolation work |
 | protocol/Godot integer range and unsigned Core counter conversion | [`decisions/0007-protocol-integer-range.md`](decisions/0007-protocol-integer-range.md) | exporting tick/revision/seed/epoch or adding protocol integer fields |
 | Core snapshot/restore and deterministic continuation | [`decisions/0008-core-snapshot-restore.md`](decisions/0008-core-snapshot-restore.md) | adding authoritative Core state or persistence/replay work |
+| Simulation authority vs spatial implementation choice, offscreen exact-spatial limits, future external/LLM decision-source boundary | [`decisions/0009-simulation-authority-and-decision-sources.md`](decisions/0009-simulation-authority-and-decision-sources.md) | scaling spatial work, adding offscreen continuation/time systems, or considering external NPC policy/language control |
 | grounded locomotion behavior + neutral acceptance arena | [`models/grounded-locomotion.md`](models/grounded-locomotion.md) | movement solver, collision, slope/step/grounding or first test-arena work |
 | first NPC living need / causal rest task | [`models/living-need.md`](models/living-need.md) | Milestone 1 need/task behavior, NPC rest decision or its presentation evidence |
 | runtime UI localization, supported locales, translation keys/plurals | [`engineering/localization.md`](engineering/localization.md) | adding/changing player-visible text, locale selection or localization verification |
@@ -65,14 +66,36 @@ A stale prose statement is a documentation defect. Do not change working code me
 
 A user directive is product intent, not a new source of implemented truth. Before production code, run the request through [`CHANGE_ADMISSION.md`](CHANGE_ADMISSION.md); if the desired outcome requires changing an accepted contract, change/supersede the canonical owner deliberately rather than bypassing it in one feature.
 
+## Fact placement and maintenance
+
+Use the document type to decide where a fact is allowed to live:
+
+| Fact type | Owner |
+| --- | --- |
+| durable product outcome/non-goal | `PRODUCT.md` |
+| durable runtime/authority/dependency invariant | `ARCHITECTURE.md` or one accepted ADR |
+| mechanic causality, terminology, domain acceptance values | `MODELING.md` or the relevant `models/<mechanic>.md` |
+| current implementation status and immediate sequencing | `ROADMAP.md` |
+| verification commands, proof obligations and collected evidence | `VERIFICATION.md` |
+| stack-specific implementation procedure | the relevant `engineering/*.md` guide |
+| external/historical/scientific evidence | `research/` or `engineering/SOURCES.md` as appropriate |
+
+A non-owner document may give a **short stable summary** so it remains readable in isolation, then link to the owner. It must not copy a changing implementation paragraph, status checklist, protocol-version history, numeric acceptance table or verification result merely for convenience.
+
+If one implementation change appears to require editing the same changing fact in three or more prose documents, treat that as a documentation-design defect: choose the canonical owner, keep the full fact there, and replace the other copies with stable summaries/links unless each copy expresses a genuinely different contract.
+
+When a feature PR changes source and also touches several broad documents, review those doc edits for ownership before merging. More documentation edits are not automatically safer; unnecessary copies increase stale-prose risk.
+
 ## Documentation rules
 
 - One canonical owner per durable fact.
 - Do not copy exact dependency/tool versions into README, AGENTS or editor rules; route to machine-readable pins / [`engineering/VERSIONS.md`](engineering/VERSIONS.md).
 - Do not copy AI Layer Work/Task/Epic procedure into this repository.
-- ADRs record consequential decisions and rationale; they are not alternate full specs.
-- Engineering guides explain how/how-not for a chosen stack; they do not redefine product goals.
-- Model documents exist only for serious mechanics that need a durable causal contract.
+- ADRs record consequential decisions and rationale; they are not alternate full specs or current-status logs.
+- `ROADMAP.md` owns current milestone status/next sequencing; architecture/model documents should not become parallel roadmaps.
+- `VERIFICATION.md` owns proof obligations/evidence; do not duplicate test-result inventories across architecture, roadmap and engineering guides.
+- Engineering guides explain how/how-not for a chosen stack; they do not redefine product goals or copy complete mechanic specifications.
+- Model documents exist only for serious mechanics that need a durable causal contract and own the detailed mechanic semantics they introduce.
 - Research artifacts record source quality, uncertainty and modeling consequence rather than becoming an uncurated link dump.
 - Broad historical research is not permission to guess precise local rates/rules; narrow the source when a mechanic depends on them.
 - Planned files/directories must not be described as if they already exist.
