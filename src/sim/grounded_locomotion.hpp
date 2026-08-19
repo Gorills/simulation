@@ -9,6 +9,7 @@
 namespace worldsim::sim {
 
 inline constexpr std::int32_t kIntentScale = 1000;
+inline constexpr std::uint32_t kSlopeRunScale = 1000;
 
 enum class PlanarAxis : std::uint8_t {
     x,
@@ -31,9 +32,8 @@ struct MillimeterRange final {
 };
 
 // A bounded support patch whose height changes linearly along one planar axis.
-// Flat ground is represented by equal endpoint heights. The first solver slice
-// only resolves flat patches; ramps are data-shaped now so the accepted arena
-// does not require a new environment ownership model later.
+// Flat ground is represented by equal endpoint heights. Non-flat patches are
+// classified against GroundedStepConfig's project-owned slope threshold.
 struct GroundPatch final {
     MillimeterRange x{};
     MillimeterRange z{};
@@ -60,7 +60,7 @@ struct GroundPatch final {
     constexpr bool operator==(const GroundPatch &) const = default;
 };
 
-// Two-sided, axis-aligned vertical blocker. For the first acceptance arena a
+// Two-sided, axis-aligned vertical blocker. For the current acceptance arena a
 // blocker spans its full lane, so finite wall-end/corner behavior is deliberately
 // deferred until a real location requires it.
 struct VerticalBarrier final {
@@ -96,9 +96,15 @@ struct UprightCapsule final {
 struct GroundedStepConfig final {
     std::uint32_t ticks_per_second{};
     MillimetersPerSecond move_speed{};
+    // Maximum absolute rise allowed for each 1000 mm of horizontal run.
+    // 1192 approximates the existing project-owned 50 degree presentation
+    // baseline without floating-point/trigonometry in authoritative code.
+    std::uint32_t max_slope_rise_per_1000_run{};
 
     [[nodiscard]] constexpr bool is_valid() const noexcept {
-        return ticks_per_second > 0 && move_speed.value >= 0;
+        return ticks_per_second > 0
+            && move_speed.value >= 0
+            && max_slope_rise_per_1000_run > 0;
     }
 
     constexpr bool operator==(const GroundedStepConfig &) const = default;
@@ -145,7 +151,7 @@ enum class GroundedStepError : std::uint8_t {
     invalid_config,
     invalid_state,
     invalid_intent,
-    no_flat_support,
+    no_ground_support,
     arithmetic_overflow,
 };
 

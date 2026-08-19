@@ -4,298 +4,225 @@ Status: ACCEPTED
 
 ## Purpose
 
-Define the **minimum observable contract** that authoritative third-person grounded locomotion and its neutral test arena must satisfy.
+Define the minimum observable contract for authoritative third-person grounded locomotion and the neutral native test arena that proves it.
 
-This document specifies outcomes before implementation so a Godot `CharacterBody3D`, demo scene, or convenient physics API cannot silently define Simulation movement semantics.
+Simulation owns movement truth. Godot may present, interpolate or predict, but `CharacterBody3D` collision results and transforms are never authoritative world state.
 
 Related contracts:
 
 - [`spatial-location.md`](spatial-location.md)
 - [`../decisions/0006-authoritative-spatial-contract.md`](../decisions/0006-authoritative-spatial-contract.md)
+- [`../PERFORMANCE.md`](../PERFORMANCE.md)
 - [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
-- [`../MODELING.md`](../MODELING.md)
 
-## Admission result
+## Admission / implementation state
 
-The acceptance contract was the prerequisite for solver work. The first flat/wall implementation slice is now admitted and implemented; slope/step/fall and live protocol/presentation wiring remain separate bounded stages.
+Implemented in the Godot-free native transition:
+
+- flat support and exact fixed-step planar integration;
+- head-on wall blocking;
+- oblique wall motion with preserved tangential component;
+- walkable-slope classification and grounded traversal;
+- too-steep slope blocking of the gradient component while valid tangential motion remains;
+- zero-input rest on flat and walkable sloped support without downhill creep;
+- deterministic replay for the implemented fixtures.
+
+Still deliberately pending:
+
+- ordinary step-up / blocking-step semantics;
+- ledge support loss, gravity, falling and landing;
+- `World` / protocol movement wiring;
+- ordered authoritative movement samples and Godot reconciliation;
+- prediction/navigation and the first content location.
 
 ## Authoritative invariants
 
-1. **Simulation decides movement.** Human or NPC code supplies intent; the solver produces authoritative position/velocity/state.
-2. **Godot does not submit final transforms.** No `SetPosition`, `SetVelocity` or copy-back from `CharacterBody3D` is a production movement path.
-3. **Player/NPC parity holds.** The same movement transition accepts intent for any equivalent exact-spatial actor; human control is only one intent source.
-4. **The environment is Simulation-owned data.** A Godot scene may visualize the fixture, but Godot collision objects are not authoritative inputs to native tests.
-5. **Fixed input + initial state + environment = repeatable result.** Deterministic native replay is required before presentation feel is considered accepted.
-6. **Continuous movement stays in one `SpatialEpoch`.** A normal collision, slope transition, step or fall must not masquerade as teleportation.
-7. **Exact spatial fidelity remains selective.** This contract applies to actors whose local 3D position is causally relevant; it does not require microscopic poses for every offscreen actor.
+1. **Simulation decides movement.** Human or NPC code supplies intent; the shared solver produces authoritative spatial state.
+2. **No client-authored outcome.** There is no production `SetPosition`, `SetVelocity`, grounded flag or Godot collision result input.
+3. **Player/NPC parity.** Equivalent actors use the same transition; control source is not a world-law distinction.
+4. **Simulation-owned environment.** Godot geometry can visualize a fixture but is not authoritative collision input.
+5. **Determinism.** Same initial state + environment + ordered intent + fixed configuration yields the same result.
+6. **Continuous movement preserves `SpatialEpoch`.** Walls, slopes, steps and falls are not teleports.
+7. **Selective exact fidelity remains valid.** Only actors needing exact local spatial causality require this state.
+8. **Performance is correctness.** The current vector scans are acceptable only for the tiny acceptance fixture. They are not the production spatial index for a large world; production lookup must be bounded by actual local/causal geometry before this transition is used at scale.
 
-## First movement scope
+## Current native representation
 
-The initial authoritative solver models ordinary **grounded humanoid locomotion** over static local geometry.
-
-The full accepted baseline needs enough state to distinguish:
-
-- supported/grounded motion;
-- unsupported/falling motion;
-- blocking versus traversable surfaces;
-- continuous position/velocity updates.
-
-Do not create a universal movement-mode framework merely to reserve future features.
-
-### Explicitly out of scope
-
-- jumping;
-- swimming;
-- climbing/mantling;
-- ladders;
-- mounts/vehicles;
-- flight;
-- moving platforms;
-- pushing dynamic rigid bodies;
-- ragdolls;
-- root-motion authority;
-- NPC pathfinding/navigation;
-- local prediction/reconciliation;
-- networking;
-- magic locomotion implementations.
-
-Those may extend or supersede this baseline when a real mechanic requires them.
-
-## Input semantics
-
-Production movement input expresses **intent**, not outcome.
-
-`PlanarMoveIntent` is the first native form: signed analog X/Z components use a fixed scale of 1000 and must remain inside the unit circle. The transition derives displacement from authoritative configuration and fixed-step integration. Client-authored final position, transform, collision result or grounded flag are not inputs.
-
-The protocol DTO is still deferred until the shared world transition is ready to enter the controlled-actor runtime path.
-
-## Implemented flat/wall slice
-
-The first native slice deliberately chooses the smallest representation needed to prove flat ground and walls.
-
-### Neutral environment data
+### Environment
 
 `GroundedEnvironment` currently contains:
 
-- `GroundPatch` — bounded X/Z support with endpoint heights; equal endpoint heights are flat support, while unequal heights reserve a neutral ramp representation for the next slope slice;
-- `VerticalBarrier` — a two-sided axis-aligned vertical blocker at one X or Z coordinate and a vertical range.
+- `GroundPatch` — bounded X/Z support whose height is either flat or changes linearly along one planar axis;
+- `VerticalBarrier` — two-sided axis-aligned vertical blocker at one X or Z coordinate and vertical range.
 
-The current barrier intentionally spans its whole test lane. Finite wall endpoints/corners and arbitrary triangle meshes are not generalized before a real location requires them.
+This is intentionally the smallest representation required by the acceptance arena. Finite arbitrary wall meshes, triangle-mesh collision, terrain acceleration structures and general rigid-body physics are not selected yet.
 
-### Body and timing baseline
+Acceptance fixtures should avoid ambiguous overlapping support patches except deliberate equal-height seams. A real-location collision representation must define lookup/overlap semantics explicitly instead of depending on vector order.
 
-The first `UprightCapsule` uses:
+### Body / timing / movement baseline
+
+The first `UprightCapsule` uses the existing project shell values:
 
 - radius: **380 mm**;
 - height: **1800 mm**.
 
-The first `GroundedStepConfig` uses:
+`GroundedStepConfig` currently uses:
 
 - **60 authoritative steps/second**;
-- **5800 mm/s** full-strength planar move speed for the flat/wall fixture.
+- **5800 mm/s** full-strength planar move-speed fixture;
+- maximum walkable slope: **1192 mm rise per 1000 mm horizontal run**, an integer approximation of the existing project-owned **50°** Godot locomotion-profile baseline.
 
-These values are repository migration baselines taken from the existing playable Godot shell (`CapsuleShape3D`, project physics rate, and locomotion profile). They are **not** Godot/Unreal/Unity defaults and are not treated as final feel tuning.
+These are repository migration values, not engine defaults and not immutable final feel tuning.
 
-Acceleration/deceleration, sprint, slope response and turning/facing are not promoted into authoritative movement by this slice.
+Acceleration/deceleration, sprint, facing/turn response, step height, grounding snap and gravity are not yet authoritative.
 
-### Deterministic integer integration
+### Input
 
-Authoritative spatial state remains integer millimeters/mm-per-second. Fixed-step integration stores a small per-axis remainder so fractional millimeters are carried into later ticks instead of being truncated away every step.
+`PlanarMoveIntent` is signed analog X/Z intent at fixed scale 1000 and must remain inside the unit circle. It is intent only, never displacement.
 
-With the current fixture, 5800 mm/s for 60 identical full-strength ticks therefore resolves to exactly 5800 mm of authoritative travel.
+### Integer integration
 
-### Implemented outcomes
+Authoritative positions and velocities remain integer millimeters / millimeters-per-second. Per-axis integration remainders carry fractional millimeters between ticks rather than truncating them every step.
 
-The native transition currently proves:
+Slope support height is derived deterministically from the patch endpoints and planar coordinate. Walkability uses integer rise/run comparison; authoritative code does not call floating-point trigonometry.
 
-- stable flat support at the actor's current support height;
-- exact fixed-step planar integration;
-- zero-input rest without positional jitter;
-- head-on wall blocking at capsule radius;
-- repeated wall input without accumulating penetration;
-- oblique wall intent preserving tangential motion while the normal component is blocked;
-- deterministic replay from identical state/environment/intent;
-- explicit rejection of invalid analog intent;
-- explicit rejection of sloped support by the **current** transition rather than pretending slope behavior is implemented.
+## Implemented behavior
 
-The transition is Godot-free and actor-neutral. It is not yet called from `World`/protocol, so the live Godot player still uses its local presentation motor while migration continues.
+### Flat ground
 
-## Required observable behaviors
+Supported movement advances according to intent and fixed configuration. Zero input produces stable rest with no positional jitter.
 
-### 1. Flat-ground movement — first slice implemented
+At the current fixture, 5800 mm/s for 60 full-strength ticks resolves to exactly 5800 mm travel.
 
-Given supported initial state on a flat walkable surface and non-zero planar intent:
+### Walls
 
-- the actor advances continuously in the intended horizontal direction;
-- authoritative velocity reflects the motion;
-- the actor remains supported;
-- no vertical drift is introduced by resting on a flat plane.
+Head-on movement stops at capsule radius and repeated input does not accumulate penetration.
 
-With zero intent, the actor reaches the current slice's defined resting state without positional jitter.
+For oblique input, the wall-normal component is constrained while the tangential component remains valid.
 
-### 2. Head-on blocking wall — first slice implemented
+### Walkable slope
 
-Given intent directly into a blocking near-vertical surface:
+A non-flat `GroundPatch` whose absolute rise/run is within the configured threshold is ordinary ground.
 
-- the actor does not pass through it;
-- the final pose remains non-penetrating under the chosen capsule/barrier model;
-- repeated identical input does not accumulate penetration.
+While traversing it:
 
-### 3. Oblique wall motion — first slice implemented
+- X/Z movement remains intent-driven;
+- authoritative Y is derived from the support surface;
+- vertical velocity reflects the per-tick support-height change;
+- the actor remains in the same `SpatialEpoch`;
+- zero input does not introduce implicit downhill creep.
 
-Given movement with into-wall and tangential components:
+### Too-steep slope
 
-- the blocking component is constrained;
-- valid tangential motion remains possible;
-- the actor does not stick merely because desired motion touches a wall obliquely.
+A patch outside the threshold is not ordinary grounded support for ascent.
 
-### 4. Walkable versus unwalkable slope — pending
+When a candidate step enters a too-steep patch:
 
-The solver must expose an explicit authoritative distinction between a slope considered ground and one too steep for ordinary grounded ascent.
+- the movement component along that patch's gradient axis is blocked;
+- its velocity/remainder on that axis are cleared;
+- a valid tangential component is preserved when supported by ordinary ground;
+- the actor is not allowed to stand authoritatively on the too-steep patch through this grounded transition.
 
-The acceptance arena contains a paired slope fixture:
+Sliding/falling on steep surfaces belongs to the future gravity/fall slice; this stage does not invent it.
 
-- one ramp strictly inside the configured walkable threshold;
-- one ramp strictly outside it.
+### Deterministic replay
 
-Expected outcomes:
+Native tests require exact equality for repeated flat/wall and slope intent streams from identical state/configuration/environment.
 
-- the inside-threshold ramp can be traversed while remaining grounded;
-- the outside-threshold ramp cannot be ascended as ordinary ground;
-- standing still on supported ordinary ground does not create unintended downhill creep unless a future reviewed rule deliberately chooses that behavior.
-
-No numeric angle is accepted yet.
-
-### 5. Traversable versus blocking step — pending
-
-The solver must expose an explicit maximum ordinary step-up capability.
-
-The acceptance arena contains:
-
-- one obstacle strictly below the configured step-up threshold;
-- one obstacle strictly above it.
-
-The lower fixture is traversable without jump/teleport semantics; the higher fixture blocks ordinary grounded movement. No numeric step height is accepted yet.
-
-### 6. Ledge, fall and landing — pending
-
-When intent carries the actor beyond support:
-
-- grounded support is lost;
-- authoritative vertical motion becomes falling motion under an explicit gravity rule;
-- presentation cannot keep the actor suspended;
-- contact with a lower walkable surface produces stable grounded state;
-- landing remains continuous and does not change `SpatialEpoch`.
-
-Gravity magnitude and fall-damage rules remain outside the current slice.
-
-### 7. Deterministic replay — first slice implemented for flat/wall
-
-For each implemented fixture, native tests require:
+## Neutral acceptance arena
 
 ```text
-same initial world state
-+ same neutral collision fixture
-+ same ordered intent sequence
-+ same fixed simulation step configuration
-=
-exact same authoritative result
-```
-
-As slope/step/fall become implemented, the same requirement extends to those fixtures.
-
-## Neutral acceptance-arena geometry
-
-The arena is a **test fixture**, not content/location design:
-
-```text
-start pad / flat lane
+flat lane
 wall lane:
   head-on wall
-  oblique wall approach
+  oblique approach
 slope lane:
   below-threshold ramp
   above-threshold ramp
-step lane:
+step lane (pending):
   below-threshold step
   above-threshold step
-ledge lane:
-  supported platform
+ledge lane (pending):
+  platform
   drop
   lower landing plane
 ```
 
-Geometry rules:
+Rules:
 
 - dimensions use Simulation integer millimeters;
-- authoritative geometry comes from neutral native data, never Godot nodes;
-- paired threshold fixtures sit on opposite sides of actual solver configuration with deliberate margin;
-- tests provide geometry and assert outcomes instead of duplicating classification code;
-- Godot may later visualize the same authored fixture values, but presentation geometry is not authoritative collision input.
+- native data is authoritative; Godot scenes are visualization only;
+- paired fixtures sit deliberately on opposite sides of the real configured threshold;
+- tests assert outcomes rather than duplicating solver classification logic;
+- do not generalize the tiny fixture representation into arbitrary-world collision before a real location requires it.
 
-The current flat/wall representation must be extended only as the pending fixtures require. Do not generalize to arbitrary world meshes before a real location requires them.
+## Parameters deliberately unresolved
 
-## Parameters still deliberately unresolved
+Still require reviewed choices backed by the next real mechanic/playtest:
 
-The next solver slices still need reviewed choices for:
-
-- contact tolerance/skin semantics beyond the exact flat/wall capsule boundary;
-- walkable-slope threshold;
+- contact/skin tolerance beyond the exact current boundaries;
 - ordinary step-up threshold;
 - grounding/snap tolerance;
-- gravity magnitude;
-- authoritative acceleration/deceleration/gait semantics;
-- maximum solver iterations or equivalent bounded collision-resolution rule.
+- gravity and falling integration;
+- acceleration/deceleration/gait semantics;
+- bounded collision-resolution iteration or equivalent rule;
+- production local-geometry indexing/query representation.
 
-Defaults from Godot, Unreal or Unity remain **references, not project values**.
+Defaults from Godot, Unreal or Unity remain references, not project values.
 
 ## Godot presentation contract
 
-Once continuous authoritative samples exist, Godot must:
+Once authoritative continuous samples are exposed, Godot must:
 
-- consume ordered `EntityId`-keyed spatial samples;
-- visually smooth compatible samples without changing Simulation truth;
-- reset/snap only across real `SpatialEpoch` discontinuities;
-- not decide whether a wall, slope, step or landing was authoritative;
-- keep camera/animation feel separate from native movement correctness.
+- consume ordered `EntityId`-keyed samples;
+- smooth compatible samples without changing Simulation truth;
+- snap/reset only across real `SpatialEpoch` discontinuities;
+- never decide authoritative wall/slope/step/landing results;
+- remove duplicate local world-law movement as authoritative migration completes.
 
-The existing local `ThirdPersonPlayer` motor may remain temporarily useful during migration, but it must not become a second world-law implementation.
+The current local `ThirdPersonPlayer` remains a temporary presentation/feel shell.
+
+## Performance contract
+
+The acceptance fixture is intentionally tiny, so the current `std::vector` environment scan is bounded test code, not evidence that scanning all world geometry per actor per 60 Hz tick is acceptable.
+
+Before this solver is applied to a real populated location, admission must identify the actual local-geometry query bound and measure it against [`../PERFORMANCE.md`](../PERFORMANCE.md). Do not add an octree/BVH/ECS merely in anticipation; do not ship an unbounded full-location scan either.
 
 ## Magic sensitivity surface
 
-This is the non-magical baseline, but magic must later alter the **real constraints**:
+Magic must modify real authoritative constraints when implemented:
 
-- flight removes ordinary support requirement;
-- levitation/altered gravity changes authoritative gravity/up/support rules;
+- flight removes ordinary support requirements;
+- levitation/altered gravity changes support/gravity rules;
 - phasing changes applicable collision constraints;
 - body transformation changes collision dimensions/clearance;
-- supernatural speed changes movement limits while still resolving authoritative collision;
-- teleportation changes `SpatialEpoch` instead of pretending to be extreme continuous velocity.
+- supernatural speed changes movement limits while preserving authoritative collision;
+- teleportation changes `SpatialEpoch` rather than becoming extreme continuous velocity.
 
 Do not reserve a generic `MagicMovementMode` hierarchy now.
 
 ## Source basis
 
-The acceptance categories are based on established character-controller contracts, not copied implementations:
+The behavior categories are adapted from established controller contracts, not their implementations/default values:
 
-- **Godot 4.7 `CharacterBody3D`** — <https://docs.godotengine.org/en/4.7/classes/class_characterbody3d.html>: grounded mode, floor/wall classification, `floor_max_angle`, floor snapping and wall sliding.
-- **Epic Games Unreal Engine `UCharacterMovementComponent`** — <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UCharacterMovementComponent> and <https://dev.epicgames.com/documentation/en-us/unreal-engine/understanding-networked-movement-in-the-character-movement-component-for-unreal-engine>: walking/falling, walkable-floor semantics, step height, bounded simulation and authoritative movement/smoothing precedents.
-- **Unity 6 Character Controller** — <https://docs.unity3d.com/6000.0/Documentation/Manual/class-CharacterController.html>: independent slope, step and contact/skin concerns.
+- Godot 4.7 `CharacterBody3D`: <https://docs.godotengine.org/en/4.7/classes/class_characterbody3d.html>
+- Unreal Engine `UCharacterMovementComponent`: <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UCharacterMovementComponent>
+- Unity 6 Character Controller: <https://docs.unity3d.com/6000.0/Documentation/Manual/class-CharacterController.html>
 
-These sources justify the **questions and observable categories**. Their default values and engine-specific algorithms are not imported into Simulation.
+The 50° migration baseline comes from this repository's existing `godot/config/default_locomotion_profile.tres`, not from an engine default.
 
 ## Next bounded task
 
-The next locomotion implementation should extend the accepted neutral model to **slope classification/traversal**, then ordinary step handling and fall/landing. Only after the native grounded set is stable should the shared transition be wired through `World`/protocol and drive ordered Godot presentation samples.
+Implement ordinary **step-up versus blocking-step** semantics using the accepted neutral fixture. Then implement ledge/fall/landing. Only after the native grounded set is stable should the shared transition enter `World`/protocol and drive ordered Godot presentation samples.
 
-Do not build the visual first content location before the neutral fixture/solver stages prove the required collision semantics.
+Do not build the first visual content location before the required native collision semantics are proven.
 
 ## Falsifiers
 
-Revise this contract if a real third-person gameplay requirement shows that:
+Revise this model if a real third-person requirement shows that:
 
-- grounded/wall/slope/step/fall categories are insufficient for the first playable movement slice;
-- the body/contact model cannot express stable behavior without different observable semantics;
-- a required magical capability invalidates ordinary support/gravity as the non-magical baseline;
+- the flat/wall/slope/step/fall categories are insufficient;
+- the body/contact representation cannot provide stable behavior without different observable semantics;
+- a required magical capability invalidates support/gravity as the non-magical baseline;
 - deterministic native evaluation is impossible with the chosen environment representation;
 - player/NPC parity requires materially different world-rule inputs rather than different intent sources.
