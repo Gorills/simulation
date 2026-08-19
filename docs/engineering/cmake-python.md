@@ -1,132 +1,123 @@
 # CMake, native tests, and Python developer tools
 
-Python in this project is developer tooling/orchestration only; it is not a second Simulation Core.
+Python is developer tooling/orchestration only; it is not a second Simulation Core.
 
 Canonical contracts:
 
-- target/dependency direction: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
-- Godot/godot-cpp version dimensions: [`VERSIONS.md`](VERSIONS.md)
-- verification/playtest lifecycle: [`../VERIFICATION.md`](../VERIFICATION.md)
-- C++ implementation policy: [`cpp.md`](cpp.md)
+- dependency direction: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+- active Godot/native pins: [`VERSIONS.md`](VERSIONS.md)
+- verification/playtest: [`../VERIFICATION.md`](../VERIFICATION.md)
+- C++ policy: [`cpp.md`](cpp.md)
 
-Primary upstream references are tracked in [`SOURCES.md`](SOURCES.md): CMake dependency/file guidance, GoogleTest and Python `subprocess` security/lifecycle behavior.
+Primary upstream references are tracked in [`SOURCES.md`](SOURCES.md).
+
+## Actual build graph
+
+The root `CMakeLists.txt` owns the executable native graph:
+
+```text
+sim_core
+  ^
+  |-- sim_tests (+ GTest::gtest_main)
+  `-- world_sim_gdextension (+ godot::cpp)
+```
+
+`sim_core` is C++23 and Godot-free. `world_sim_gdextension` is the only project target that links godot-cpp. The architecture check is registered with CTest when tests are enabled.
 
 ## CMake principles
 
-### Targets, not directory-wide globals
+### Targets, not directory globals
 
-Use target-scoped configuration:
+Use `target_sources`, `target_include_directories`, `target_compile_features`, `target_compile_options` and `target_link_libraries`. Avoid project-wide `include_directories()`, `add_definitions()` and broad `add_compile_options()` for project code.
 
-- `target_sources`;
-- `target_include_directories`;
-- `target_compile_features`;
-- `target_compile_options`;
-- `target_link_libraries`.
+C++23 and no compiler extensions are target/project requirements, not ambient compiler assumptions.
 
-Avoid project-wide `include_directories()`, `add_definitions()` and broad `add_compile_options()` for project code.
+### Explicit project sources
 
-The initial project uses C++23 without compiler extensions. Express that through target features/project configuration rather than relying on ambient compiler defaults.
+Do not use `file(GLOB)` / `GLOB_RECURSE` to discover project source files. Adding a project `.cpp` must be an explicit build-graph change.
 
-### Explicit source lists
-
-Do not use `file(GLOB)` / `GLOB_RECURSE` to discover project source files. CMake documentation explicitly discourages source collection by glob because source additions/removals are not an explicit build-graph change.
-
-Adding a `.cpp` means updating the owning target's source list.
+Upstream dependencies may internally choose different source-management policy; do not rewrite vendored/upstream build internals merely to mimic project style.
 
 ### Presets
 
-Shared project configuration belongs in `CMakePresets.json`. Machine-specific developer overrides belong in uncommitted `CMakeUserPresets.json`.
+`CMakePresets.json` is shared project configuration:
 
-Do not state that CMake/Ninja/Clang are installed merely because the project intends to use them. Bootstrap/current environment must prove tool availability.
+- `native` — Debug native core/tests, no GDExtension;
+- `dev` — Debug native core/tests + `template_debug` GDExtension;
+- `release` — Release verification + `template_release` GDExtension.
+
+Machine-specific overrides belong in uncommitted `CMakeUserPresets.json`.
 
 ## Dependency policy
 
-Declare third-party native dependencies centrally (planned location: `cmake/Dependencies.cmake`) and use immutable reviewed revisions/versions.
+`cmake/Dependencies.cmake` is the active native dependency owner. It uses immutable revisions for GoogleTest and godot-cpp. Current Godot binding configuration is API 4.7, single precision; exact values are summarized in [`VERSIONS.md`](VERSIONS.md).
 
-Initial intended dependency roles:
+Initial configure/bootstrap may acquire dependencies from the network. After population, ordinary tests/playtests must not silently update dependency checkouts.
+
+Dependency roles remain narrow:
 
 - GoogleTest — tests only;
-- nlohmann/json — serialization/persistence/adapter boundaries only, not live domain state;
-- godot-cpp — GDExtension target only.
+- godot-cpp — `world_sim_gdextension` only;
+- future serialization libraries stay at serialization/adapter/persistence boundaries rather than becoming live domain state.
 
-Exact active revisions belong in build/lock files once those files exist. Godot/godot-cpp compatibility semantics belong in [`VERSIONS.md`](VERSIONS.md).
-
-Never use floating `main`, `master` or `latest` as the project pin.
-
-Initial dependency acquisition may use explicit bootstrap/network access, but `ctest`, an ordinary playtest or a narrow local check should not unexpectedly mutate/fetch dependencies as a hidden side effect.
-
-Third-party warnings must not inherit the project's strongest warning/`-Werror` policy accidentally.
-
-## FetchContent
-
-When FetchContent is used, declare an immutable dependency revision and keep the ownership centralized.
-
-Do not add system-package fallback complexity until there is a concrete environment requirement. Do not cargo-cult Windows/gtest flags onto platforms that do not need them.
+Project warning policy must not accidentally turn third-party warnings into project `-Werror` failures.
 
 ## Native tests
 
-Enable CTest and use GoogleTest discovery after test executables exist.
+`sim_tests` links `sim_core` plus `GTest::gtest_main`; it does not link Godot. CTest discovery is used after the executable exists.
 
-Test executables prove simulation/protocol behavior by linking native project targets plus GoogleTest; they do not link Godot merely to access world rules.
+Prefer independent fresh state per test. Use behavior-oriented suite/test names. Prefer `EXPECT_*` when multiple observations can still be useful after one failure; use `ASSERT_*` when continuing would be invalid.
 
-Use `GTest::gtest_main` unless a test executable has a real process-level initialization need not expressible through fixtures/environment.
+Do not add a custom `main()` while also linking `gtest_main` unless there is a real process-level initialization need.
 
-```cmake
-add_library(sim_core STATIC)
-target_sources(sim_core PRIVATE src/sim/application/step.cpp)
+The architecture check is a separate CTest test because dependency direction is a build/source property, not a gameplay assertion.
 
-target_link_libraries(sim_tests PRIVATE
-  sim_core
-  GTest::gtest_main
-)
+## Local front door
+
+Bootstrap the project-owned CMake/Ninja environment, validate the exact Godot baseline and configure pinned dependencies:
+
+```bash
+python3 tools/bootstrap.py
 ```
 
-Bad:
+Then use the thin orchestration front door:
 
-```cmake
-include_directories(src)
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
-add_compile_options(-Werror)
+```bash
+.venv/bin/python tools/dev.py configure --preset native
+.venv/bin/python tools/dev.py build --preset native
+.venv/bin/python tools/dev.py test --preset native
+.venv/bin/python tools/dev.py check --preset dev
+.venv/bin/python tools/dev.py play --scenario smoke
 ```
+
+Windows uses the interpreter under `.venv\\Scripts`.
+
+`tools/dev.py` delegates to CMake, CTest and `tools/play.py`; it is deliberately not a custom build system.
 
 ## Python tooling policy
 
-Use a repository `.venv` and pin the Python developer tooling actually required. Ruff is the intended formatter/linter when Python tooling is bootstrapped; the active pinned version belongs in machine-readable dependency configuration.
+Use a repository `.venv`, `pathlib`, typed public functions where useful and explicit argv subprocess execution with deliberate cwd/environment.
 
-Use:
+Child work must be bounded by timeout/deadline and cleaned up with `try/finally` or context managers. Avoid `shell=True` unless a reviewed command truly requires shell semantics.
 
-- `pathlib` for paths;
-- typed public tool functions where it improves clarity;
-- `subprocess` with an explicit argv sequence;
-- explicit `cwd` and deliberate environment handling;
-- bounded timeouts/deadlines;
-- `try/finally` or context managers for child/process cleanup.
+Forbidden shortcuts include:
 
-Avoid `shell=True` unless an exceptional, reviewed command genuinely requires shell semantics. Do not build command strings that rely on shell quoting.
-
-```python
-subprocess.run(
-    [godot, "--path", str(godot_dir), "--", "--scenario", name],
-    cwd=root,
-    timeout=120,
-    check=False,
-)
-```
-
-Forbidden process shortcuts include `os.system("godot ... &")`, `pkill godot`, `killall godot` and unbounded polling.
+- `os.system("godot ... &")`;
+- `pkill godot` / `killall godot`;
+- unbounded polling;
+- a second Playwright/Chromium runner for the Godot client;
+- Python code that reimplements the authoritative simulation.
 
 ## Playtest process ownership
 
-Godot process lifecycle is implemented in one supervisor path once `tools/play.py` exists. The full contract for locking, timeouts, artifacts and process-group ownership is in [`../VERIFICATION.md`](../VERIFICATION.md#godot-playtest-supervisor).
-
-Do not create a second test runner around Playwright/Chromium, and do not create Python bindings that reimplement the native simulation merely for test convenience.
+`tools/play.py` owns one repository playtest process group, a non-blocking lock, timeout, logs and artifact validation. The complete contract is in [`../VERIFICATION.md`](../VERIFICATION.md#godot-playtest-supervisor).
 
 ## Agent traps
 
-- Installing random project tooling globally instead of using the repository environment/bootstrap.
-- Fetching godot-cpp during an unrelated `ctest` or playtest.
-- Adding SCons beside CMake because upstream godot-cpp examples use SCons.
-- Using GLOB “temporarily”.
-- Writing custom `main()` while also linking `gtest_main`.
-- Letting global compiler flags poison third-party targets.
-- Treating compile-green as gameplay acceptance; see [`../VERIFICATION.md`](../VERIFICATION.md).
+- adding SCons beside CMake because an upstream example uses SCons;
+- changing dependency versions during ordinary gameplay work;
+- treating a configured immutable pin as a verified build/load;
+- letting Godot headers leak into `sim_core`;
+- using source GLOBs “temporarily”;
+- fetching dependencies from an unrelated test/play command;
+- treating compile-green as gameplay acceptance.

@@ -15,6 +15,23 @@ Godot tests do not replace Simulation Core tests. Native simulation tests do not
 
 A claim is verified only by a check that actually ran. Missing tooling, an unbuilt target or an unperformed playtest is **not** a pass.
 
+## Current Milestone 0 gates
+
+The first executable verification paths now exist:
+
+```bash
+python tools/check_architecture.py
+python tools/dev.py check --preset native
+python tools/dev.py check --preset dev
+python tools/play.py --scenario smoke
+```
+
+- `native` configures/builds/tests the Godot-free native graph.
+- `dev` additionally builds the GDExtension against the configured immutable godot-cpp pin.
+- the smoke playtest is accepted only if Godot exits successfully and the supervisor validates the expected native projection plus screenshot artifact.
+
+The existence of these commands is not evidence that all of them have run in a particular environment.
+
 ## Capability proof
 
 A player-facing capability normally needs:
@@ -35,7 +52,11 @@ Use behavior-oriented names. Prefer `EXPECT_*` for multiple independent observat
 
 Native rule tests must not require Godot. Core tests use real value objects/state where practical rather than mock-heavy designs.
 
-Recommended CTest labels once targets exist:
+The first `sim_tests` cases prove equal initial seed/input produces equal movement projection and invalid diagonal movement does not mutate the world.
+
+CTest also registers `architecture_no_godot_in_core`, which runs `tools/check_architecture.py` against `src/sim` and `src/protocol`.
+
+Recommended CTest labels:
 
 ```text
 unit
@@ -44,13 +65,16 @@ protocol
 determinism
 scenario
 slow
+architecture
 ```
 
-Godot playtests do not have to be registered in the default `ctest` set.
+Godot playtests are not registered in the default CTest set.
 
 ## Sanitizers
 
-Provide a separate ASan+UBSan preset once the build exists. Run it for memory/UB-sensitive changes, crashes/corruption and milestone verification rather than every presentation-only edit.
+Provide a separate ASan+UBSan preset when memory/UB-sensitive implementation work justifies it. Run it for crashes/corruption and milestone verification rather than every presentation-only edit.
+
+Do not add sanitizer presets merely as decoration before they can run in a supported local toolchain.
 
 ## Debug surface
 
@@ -67,19 +91,25 @@ The development client should expose a read-only debug surface sufficient to exp
 
 The debug surface must not expose authoritative mutation methods. Scenario setup belongs to explicit initialization before the world starts, not debugger cheats.
 
+Milestone 0 starts this surface with `SimFacade.debug_projection()` and an on-screen JSON projection. It is intentionally read-only.
+
 ## Godot playtest supervisor
 
-When `tools/play.py` exists, it is the single ordinary playtest entry point:
+`tools/play.py` is the single ordinary playtest entry point:
 
 ```bash
-python tools/play.py --scenario <name>
+python tools/play.py --scenario smoke
 ```
 
-Until it exists, do not create an alternative long-lived runner just to satisfy documentation.
+Do not create an alternative long-lived runner merely for convenience.
+
+### Preflight
+
+The supervisor fails before launch unless the expected debug GDExtension library exists and the resolved Godot binary reports the exact 4.7.1 baseline. `GODOT_BIN` is the explicit override when Godot is not on `PATH`.
 
 ### Locking
 
-The supervisor takes a non-blocking lock such as `.cache/play/godot.lock`.
+The supervisor takes the non-blocking `.cache/play/godot.lock`.
 
 If the lock is held, exit non-zero with a clear `PLAYTEST BUSY` result. Do not wait forever, poll indefinitely or start a competing Godot process.
 
@@ -91,19 +121,19 @@ Never use `pkill godot` or `killall godot`. Never terminate an editor or process
 
 ### Deadlines
 
-Every start/action/state-wait/run has a bounded timeout. Exact values belong in executable scenario/tool configuration once implemented; no wait is infinite.
+Every run has a bounded timeout; the current smoke default is 30 seconds. No wait is infinite.
 
 Wait on conditions such as ready state, projection state, an explicit event or screenshot checkpoint. Arbitrary sleeps are only for intentional presentation observation.
 
 ### Cleanup
 
-The supervisor owns graceful termination, a hard outer deadline, forced termination of **its own** process group if necessary, diagnostics and lock release.
+The supervisor owns graceful termination, a hard deadline, forced termination of **its own** process group if necessary, diagnostics and lock release.
 
 Use `try/finally` or an equivalent lifecycle guard.
 
 ### Artifacts
 
-A useful run artifact layout is:
+Each run writes under:
 
 ```text
 .cache/play/<run-id>/
@@ -114,7 +144,15 @@ A useful run artifact layout is:
   debug.json
 ```
 
-Successful artifacts may be retained on a bounded rolling basis; failure artifacts should remain available for diagnosis until an explicit cleanup.
+For the `smoke` scenario, success additionally requires `debug.json` to contain the native projection:
+
+```text
+x=1, y=0, tick=1, seed=1, protocol_version=1
+```
+
+and `final.png` to exist. The Godot scene obtains that state by calling `SimFacade.submit_move(1, 0)` and rendering the returned projection; GDScript does not directly update authoritative coordinates.
+
+Successful artifacts may be retained on a bounded rolling basis; failure artifacts should remain available for diagnosis until explicit cleanup.
 
 ## Risk-based verification
 

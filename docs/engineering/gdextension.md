@@ -33,9 +33,7 @@ GDExtension API target    4.7
 godot-cpp                 independent v10 line, exact immutable revision
 ```
 
-The candidate/review/upgrade rules and upstream evidence live in [`VERSIONS.md`](VERSIONS.md). Build files/locks become authoritative for the active revision once bootstrap exists.
-
-Never depend on floating `master`, `main` or `latest`.
+Active pins and upgrade evidence live in [`VERSIONS.md`](VERSIONS.md) and machine-readable build/tool files. Never depend on floating `master`, `main` or `latest`.
 
 ## Class registration
 
@@ -49,7 +47,7 @@ Do not register every domain class with ClassDB for inspector convenience.
 
 This project uses one CMake graph for the native core and the extension adapter.
 
-Official godot-cpp tutorials/templates often demonstrate SCons; that is useful upstream context, not a requirement to introduce a second project build graph.
+Official godot-cpp tutorials/templates often demonstrate SCons; that is useful upstream context, not a requirement to introduce a second project build graph. Current godot-cpp also maintains a supported CMake build path, which this repository uses.
 
 The GDExtension target links the exact pinned godot-cpp revision. Native simulation/protocol targets do not.
 
@@ -59,6 +57,8 @@ A facade/application composition object may own or reference the application/sim
 
 Do not expose mutable `World*` to GDScript. If the public API wants `get_world()` so scripts can mutate internals, the boundary is wrong.
 
+The current Milestone 0 facade owns one `sim::World` and exposes only `submit_move` plus read-only `debug_projection`.
+
 ## Results and exceptions
 
 Ordinary gameplay failure is a protocol/domain result. Translate it to a Godot-friendly result/error representation.
@@ -67,13 +67,13 @@ Unexpected adapter exceptions may be caught at the adapter edge for diagnostics 
 
 ```cpp
 void SimFacade::_bind_methods() {
-  ClassDB::bind_method(
-      D_METHOD("submit_move", "dx", "dy"),
+  godot::ClassDB::bind_method(
+      godot::D_METHOD("submit_move", "dx", "dy"),
       &SimFacade::submit_move);
 }
 
-godot::Dictionary SimFacade::submit_move(int32_t dx, int32_t dy) {
-  auto result = app_.handle(MoveIntent{dx, dy});
+godot::Dictionary SimFacade::submit_move(std::int32_t dx, std::int32_t dy) {
+  auto result = world_.move({.dx = dx, .dy = dy});
   return to_godot(result);
 }
 ```
@@ -90,9 +90,9 @@ void set_gold(int value) { gold = value; }
 
 The `.gdextension` manifest belongs to the Godot project and points to the actual built library variants.
 
-For an extension genuinely targeting the 4.7 API, use the compatible minimum/loader configuration established in [`VERSIONS.md`](VERSIONS.md). Engine and extension floating-point precision must match.
+The current manifest targets the 4.7 API floor, uses `world_sim_library_init` as the entry symbol and maps debug/release platform libraries to the filenames emitted by the CMake target.
 
-Do not generate API metadata from an arbitrary Godot binary. Custom-engine APIs must match the engine that will load the extension.
+Engine and extension floating-point precision must match. Do not generate API metadata from an arbitrary Godot binary. Custom-engine APIs must match the engine that will load the extension.
 
 ## GDExtension vs engine module
 

@@ -44,7 +44,28 @@ src/protocol !-> Godot / godot-cpp / GDExtension
 godot/       !-> authoritative world state
 ```
 
-Folder names do not enforce architecture. Real CMake targets/import checks must eventually prove the edges.
+Folder names do not enforce architecture. Real CMake targets/import checks must prove the edges.
+
+## Implemented Milestone 0 target graph
+
+The first executable graph now exists:
+
+```text
+sim_tests ----------------> sim_core
+                                ^
+                                |
+world_sim_gdextension ----------+----> godot::cpp
+        ^
+        |
+Godot project / world_sim.gdextension
+```
+
+- `sim_core` is the C++23 Godot-free project library.
+- `sim_tests` links `sim_core` + `GTest::gtest_main` and does not link Godot.
+- `world_sim_gdextension` links `sim_core` + `godot::cpp`; it is the only project target with the Godot binding dependency.
+- `architecture_no_godot_in_core` runs `tools/check_architecture.py` through CTest and rejects Godot/godot-cpp include markers under `src/sim` and `src/protocol`.
+
+The first protocol path is `MoveIntent -> MoveOutcome -> PlayerProjection`. `World::move` accepts exactly one cardinal step, mutates authoritative coordinates/tick and returns the resulting projection. Invalid movement is rejected without changing the world.
 
 ## Ownership by layer
 
@@ -87,6 +108,8 @@ The adapter should be deliberately boring:
 4. translate results/projections/events back to Godot-facing values;
 5. expose diagnostics without embedding world rules.
 
+The Milestone 0 `SimFacade` follows that contract: it owns the native `sim::World`, exposes `submit_move` and read-only `debug_projection`, and converts only returned protocol projections into Godot dictionaries.
+
 If a gameplay rule is implemented inside a `GDCLASS`, GDScript node, UI script or serialization helper, the boundary is probably being violated.
 
 The adapter may depend on godot-cpp. `src/sim` and `src/protocol` may not. Version rules live only in [`engineering/VERSIONS.md`](engineering/VERSIONS.md).
@@ -96,6 +119,8 @@ The adapter may depend on godot-cpp. `src/sim` and `src/protocol` may not. Versi
 Godot is the real reference client, not merely a debug visualizer, but it remains presentation/application input rather than world authority.
 
 Prefer a composition root shaped around persistent application/UI ownership and replaceable world views, following Godot scene-organization guidance. Scene independence, parent-mediated wiring, typed GDScript, InputMap and restrained Autoload usage are detailed in [`engineering/godot.md`](engineering/godot.md).
+
+The first client creates `SimFacade`, maps InputMap actions to semantic moves and renders only the returned native projection. Its automated smoke scenario exercises that same path and captures read-only projection/screenshot evidence.
 
 Do not let a convenient Autoload, Resource or UI model become an authoritative parallel inventory/economy/social state.
 
@@ -131,22 +156,21 @@ Therefore:
 
 See [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md) for how agent instructions are packaged without conflicting with this boundary.
 
-## Target repository shape
+## Repository shape
 
-This is a target layout, not a claim that every path currently exists:
+The Milestone 0 paths below now exist; `content/`, mechanic models/research and additional adapters remain future-on-demand areas:
 
 ```text
 src/
   sim/
   protocol/
   adapters/
-    native_cli/
     gdextension/
 
 godot/
-content/
 tests/
 tools/
+cmake/
 
 docs/
   INDEX.md
@@ -162,17 +186,15 @@ docs/
   research/     # when load-bearing research artifacts exist
 ```
 
-Do not create directories solely to satisfy this picture. Establish physical boundaries when real code or evidence needs them.
+Do not create future directories solely to satisfy this picture. Establish physical boundaries when real code or evidence needs them.
 
 ## Mechanical architecture verification
 
-Once runtime code exists, enforce mechanically what can be tested:
+Current executable checks establish the first load-bearing boundaries:
 
-- CMake target dependencies prove the one-way graph;
-- native simulation/protocol tests build without Godot;
-- only the GDExtension adapter links godot-cpp;
-- architecture checks reject forbidden includes/dependency edges;
-- protocol tests prove command-to-core behavior;
-- Godot load/playtest proves the player-facing integration path.
+- CMake target dependencies keep native tests Godot-free and isolate godot-cpp to `world_sim_gdextension`;
+- `tools/check_architecture.py`/CTest rejects direct Godot include markers in `src/sim` and `src/protocol`;
+- native tests prove the first command-to-core behavior independently from Godot;
+- the smoke playtest is designed to prove Godot load plus a real protocol/projection round-trip once run in the pinned local environment.
 
-Do not add speculative architecture tooling before there is real code to check, but do not leave a mechanically checkable invariant as prose once the targets exist.
+As the graph grows, add narrow checks for new real dependency edges. Do not add speculative architecture tooling before there is code to check, but do not leave a mechanically checkable invariant as prose once the relevant targets exist.
