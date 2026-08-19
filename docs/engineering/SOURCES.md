@@ -24,8 +24,23 @@ Prefer versioned official documentation, project upstream repositories, language
 | Godot 4.7 `CharacterBody3D`, camera-relative movement, acceleration/deceleration and interpolation reference | [`godot-demo-projects` 4.7 `3d/platformer`](https://github.com/godotengine/godot-demo-projects/tree/4.7-6ad6167/3d/platformer) | `godot.md`, ADR 0002 |
 | commercial precedent that movement response needs explicit tuning | CD PROJEKT RED [The Witcher 3 patch 1.07 changelog](https://www.thewitcher.com/us/en/news/1081/patch-1-07-changelog) | ADR 0002 |
 | typed GDScript | Godot [Static typing](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/static_typing.html) | `godot.md` |
+| project-wide Theme and theme lookup/cascade | Godot 4.7 [Introduction to GUI skinning](https://docs.godotengine.org/en/4.7/tutorials/ui/gui_skinning.html) and [`Theme`](https://docs.godotengine.org/en/4.7/classes/class_theme.html) | [`ui-design-system.md`](ui-design-system.md), ADR 0003 |
+| semantic Theme type variations instead of repeated local overrides | Godot 4.7 [Theme type variations](https://docs.godotengine.org/en/4.7/tutorials/ui/gui_theme_type_variations.html) | `ui-design-system.md`, ADR 0003 |
+| responsive complex/RPG layout through nested Containers | Godot 4.7 [Using Containers](https://docs.godotengine.org/en/4.7/tutorials/ui/gui_containers.html) | `ui-design-system.md`, ADR 0003 |
+| keyboard/controller focus and separation of built-in UI actions from gameplay | Godot 4.7 [Keyboard/Controller Navigation and Focus](https://docs.godotengine.org/en/4.7/tutorials/ui/gui_navigation.html) | `ui-design-system.md`, ADR 0003 |
+| multi-resolution `canvas_items` / `expand` strategy | Godot 4.7 [Multiple resolutions](https://docs.godotengine.org/en/4.7/tutorials/rendering/multiple_resolutions.html) and [4.7 changed defaults](https://docs.godotengine.org/en/4.7/tutorials/migrating/upgrading_to_godot_4.7.html#changed-defaults) | `ui-design-system.md`, ADR 0003 |
 
 The Witcher changelog is used only as product-design evidence that movement response is a deliberate player-facing tuning concern. No proprietary Witcher implementation or numeric tuning value is treated as a project API.
+
+## UI accessibility / interaction quality
+
+| Topic | Primary source | Encoded in |
+| --- | --- | --- |
+| minimum default text size and future text scaling | Microsoft Xbox Accessibility Guideline 101 [Text display](https://learn.microsoft.com/en-us/gaming/accessibility/xbox-accessibility-guidelines/101) | `ui-design-system.md`, ADR 0003 |
+| contrast as a text/non-text legibility requirement | Microsoft Xbox Accessibility Guideline 102 [Contrast](https://learn.microsoft.com/en-us/gaming/accessibility/xbox-accessibility-guidelines/102) | `ui-design-system.md`, ADR 0003 |
+| highly visible, persistent UI focus indicator | Microsoft Xbox Accessibility Guideline 113 [UI focus handling](https://learn.microsoft.com/en-us/gaming/accessibility/xbox-accessibility-guidelines/113) | `ui-design-system.md`, ADR 0003 |
+
+These guidelines establish quality/accessibility floors, not the game's art direction. The project can exceed them while preserving its own visual identity.
 
 ## GDExtension / godot-cpp
 

@@ -9,7 +9,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | product goals, playable invariants, player-role philosophy | [`PRODUCT.md`](PRODUCT.md) | gameplay/product work |
 | runtime ownership, dependency direction, protocol/GDExtension seam, AI Layer runtime boundary | [`ARCHITECTURE.md`](ARCHITECTURE.md) | architecture/integration work |
 | determinism, NPC/economy/politics/social/history/magic/save modeling | [`MODELING.md`](MODELING.md) | simulation/model changes |
-| tests, playtest supervisor, evidence, CI/DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
+| tests, playtest supervisor, evidence, local DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
 | current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target |
 | agent context packaging | [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md) | maintaining AGENTS/Cursor/Claude/Gemini/skills |
 | stack-specific implementation | [`engineering/STACK.md`](engineering/STACK.md) | coding/build work |
@@ -24,6 +24,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | --- | --- |
 | C++23 Simulation Core + protocol | [`engineering/cpp.md`](engineering/cpp.md) |
 | Godot 4 typed GDScript client | [`engineering/godot.md`](engineering/godot.md) |
+| Godot UI design system / responsive layout | [`engineering/ui-design-system.md`](engineering/ui-design-system.md) |
 | GDExtension adapter | [`engineering/gdextension.md`](engineering/gdextension.md) |
 | CMake / GoogleTest / Python tooling | [`engineering/cmake-python.md`](engineering/cmake-python.md) |
 | primary upstream references | [`engineering/SOURCES.md`](engineering/SOURCES.md) |

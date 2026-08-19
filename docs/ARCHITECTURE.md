@@ -170,6 +170,33 @@ The ordinary third-person client and the native smoke probe are intentionally se
 
 Detailed ownership and extension points are in [`engineering/godot.md`](engineering/godot.md).
 
+### UI design-system boundary
+
+The Godot UI has one project-wide visual source of truth:
+
+```text
+godot/ui/design_system/world_theme.tres
+```
+
+`project.godot` installs it through `gui/theme/custom`. Feature scenes consume semantic `theme_type_variation` roles and compose layout with Godot `Container`s. Static colors, typography sizes, StyleBoxes, focus treatment and common spacing do not belong in inventory/journal/HUD/settings scenes as copied local overrides.
+
+The intended dependency direction is:
+
+```text
+world_theme.tres
+   -> semantic Theme variations / DesignTokens
+       -> optional reusable design-system components
+           -> feature UI scenes
+```
+
+Feature UI may own screen-specific information architecture and behavior. It must not become a second skinning system. If a visual change that should be global requires edits across feature screens, the design-system boundary is missing an abstraction.
+
+The logical desktop baseline is 1920×1080 with `canvas_items` + `expand`. Responsive screen structure is container/anchor-driven rather than a list of resolution-specific coordinate branches.
+
+The supplied dark-fantasy mockups are mood references, not canonical assets. The baseline preserves their dark cinematic surfaces, sparse gold selection and cool informational accent while deliberately reducing nested framing so hierarchy comes from surface elevation, spacing and typography.
+
+See [`decisions/0003-project-wide-ui-design-system.md`](decisions/0003-project-wide-ui-design-system.md) and [`engineering/ui-design-system.md`](engineering/ui-design-system.md) for the visual ownership and extension contract.
+
 Do not let a convenient Autoload, Resource, transform cache or UI model become an authoritative parallel inventory/economy/social state.
 
 ## Vertical capability rule
@@ -223,6 +250,8 @@ godot/
   scripts/
     controls/
     player/
+  ui/
+    design_system/
 
 tests/
 tools/
