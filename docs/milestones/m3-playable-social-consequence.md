@@ -10,7 +10,7 @@ The milestone must reuse the accepted M1/M2 world instead of replacing it with a
 
 The accepted M2 shortage becomes a situation about a specific neighbour rather than a resource test.
 
-A short household can become short without player intervention. The player may materially help through an existing M2 path or may decline to help. The relevant household/NPC remembers the contribution in authoritative Simulation state. Later, a concrete household opportunity is available or refused because of that remembered social state.
+A short household can become short without player intervention. The player may make an attributable material contribution through an existing M2 path or the shortage may be addressed without earning the player personal social credit. The relevant household/NPC remembers the causally attributable contribution in authoritative Simulation state. Later, a concrete household opportunity is available or refused because of that remembered social state.
 
 The minimum playable loop is:
 
@@ -19,7 +19,7 @@ shortage appears without player input
   -> player recognizes the affected neighbour/household
   -> player chooses whether/how to help
   -> authoritative material consequence occurs
-  -> authoritative social memory changes
+  -> authoritative social memory changes when the contribution is attributable
   -> time/action advances to a later opportunity
   -> the same neighbour/household responds differently because of the earlier choice
 ```
@@ -32,13 +32,13 @@ The bounded M3 vignette is built on the M2 acceptance village.
 
 1. The short household autonomously develops the existing grain shortage.
 2. The player can see which household is affected and can distinguish the relevant neighbour from the other villagers without reading entity IDs or opening technical diagnostics.
-3. The player may help through at least one existing M2 material path. Gift, field work, and the standing household transfer remain valid M2 paths; M3 must not create a fake social-only "help" button that bypasses them.
-4. A real accepted material contribution records a bounded social consequence for the contributing actor. A refused or impossible action does not create social credit.
-5. A control path also exists in which the actor reaches the later social check without earning the relevant remembered aid. Verification must keep the later material prerequisites comparable enough that the contrasting outcome cannot be explained by stock, occupancy, or another non-social failure.
+3. The player may address the shortage through the existing M2 material paths; M3 must not create a fake social-only "help" button that bypasses them. For the first personal social-memory path, use an action whose contribution is causally attributable to the acting actor (Gift or Work are valid candidates). Executing the existing standing household transfer does **not** automatically create a personal obligation toward the executor, because the transferred stock and pledge belong to the source household.
+4. A real accepted, attributable material contribution records a bounded social consequence for the contributing actor. A refused/impossible action, or merely executing another party's material obligation, does not create personal social credit.
+5. A control path also exists in which the shortage is materially addressed without the actor earning the relevant remembered aid. The standing household transfer is a natural candidate because it can change the target household's stock through an existing real world rule without falsely attributing the source household's contribution to the executor. Verification must keep the later material prerequisites comparable enough that the contrasting outcome cannot be explained by stock, occupancy, or another non-social failure.
 6. Later, the player can ask the previously affected household for one bounded reciprocal aid opportunity. The request succeeds only when the authoritative social condition is present and all material prerequisites are still valid; otherwise it is refused without mutation.
 7. The successful reciprocal aid must change existing authoritative world state through a shared actor-generic rule. The client may request the action and present the result, but it may not own the relationship or manufacture the reward.
 
-The exact quantity/bounds of reciprocal aid are implementation fixtures, not historical claims and not owned by this document. The detailed mechanic semantics belong in the M3 model document once implementation starts.
+The exact qualifying M2 action, quantity/bounds of reciprocal aid, and social-state representation are implementation/model decisions, not historical claims and not owned by this document. The detailed mechanic semantics belong in the M3 model document once implementation starts.
 
 ## Social dimension
 
@@ -49,7 +49,8 @@ It represents that a household has a concrete reason to reciprocate toward an ac
 Required semantics:
 
 - the remembered consequence identifies the relevant actor and social counterparty; it is not a global player reputation flag;
-- only an accepted material contribution can create/increase the M3 obligation;
+- social credit follows the causally attributable contributor, not whichever actor happened to submit/execute a command on behalf of another household;
+- only an accepted qualifying material contribution can create/increase the M3 obligation;
 - refusal/no-op cannot create social state;
 - the later reciprocal opportunity checks current authoritative social state and current material feasibility;
 - consuming the bounded reciprocal opportunity changes or clears the corresponding obligation according to the mechanic contract;
@@ -68,7 +69,7 @@ Minimum presentation requirements:
 - the relevant NPC is distinguishable from other villagers by a stable ordinary-play cue;
 - the household store/work location is legible as a place with a world meaning, not only as an unexplained coloured collision/occupancy rectangle;
 - the player can tell that the shortage concerns that household;
-- after helping, the player can tell that the neighbour/household recognized the contribution;
+- after a qualifying personal contribution, the player can tell that the neighbour/household recognized it;
 - at the later opportunity, acceptance/refusal is understandable as a consequence of the earlier relationship state.
 
 Greybox presentation is sufficient. Final art, character models, animation, voice, dialogue trees, and environment production are not required.
@@ -121,7 +122,7 @@ Milestone 3 is accepted only when bounded ordinary-play evidence demonstrates bo
 
 - the shortage appears without a player economic command;
 - the player can identify the affected neighbour/household;
-- the player performs a real accepted M2 material contribution;
+- the player performs a real accepted M2 material contribution that the mechanic contract attributes to that actor;
 - ordinary play communicates that the contribution was recognized;
 - a later reciprocal-aid opportunity is available;
 - taking that opportunity changes authoritative world state;
@@ -129,7 +130,7 @@ Milestone 3 is accepted only when bounded ordinary-play evidence demonstrates bo
 
 ### Control branch
 
-- the actor reaches the same later opportunity without the qualifying remembered aid;
+- the shortage is materially addressed and the actor reaches the same later opportunity without the qualifying personal remembered aid;
 - the reciprocal request is unavailable/refused or otherwise materially different for the social reason defined by the mechanic contract;
 - verification proves the material prerequisites are otherwise satisfiable, so the differing outcome is not merely caused by empty stock, wrong occupancy, exhausted content, or another unrelated refusal;
 - the refusal leaves authoritative state unchanged.
@@ -141,7 +142,7 @@ With technical diagnostics hidden, a human playthrough should be able to answer,
 1. Who has the problem?
 2. What can I do about it?
 3. Did my chosen action materially help?
-4. Did that person/household remember it?
+4. Was that contribution actually mine, and did that person/household remember it?
 5. What later opportunity changed because of what I did?
 
 If those answers require entity IDs, raw projections, fixture-coordinate knowledge, or reading the automated scenario implementation, M3 is not accepted even if native/protocol tests are green.
