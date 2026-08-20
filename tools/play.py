@@ -19,7 +19,7 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
-SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference")
+SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference", "shortage")
 SMOKE_AUDIO_DRIVER = "Dummy"
 PROTOCOL_VERSION = 7
 OBSERVED_ENTITY_IDS = [1, 2, 3]
@@ -557,6 +557,163 @@ def validate_rest_interference_artifact(path: Path, expected_locale: str) -> dic
     return evidence
 
 
+def validate_shortage_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+    evidence = load_playtest_artifact(path)
+    initial_resources = evidence.get("initial_village_household_resource_projection")
+    resources = evidence.get("village_household_resource_projection")
+    shortage = evidence.get("autonomous_shortage")
+    bootstrap = evidence.get("bootstrap_projection")
+    living_need = evidence.get("living_need_projection")
+    movement_stream = evidence.get("movement_stream")
+    presentation = evidence.get("presentation")
+    localization = evidence.get("localization")
+    if not all(
+        isinstance(section, dict)
+        for section in (
+            initial_resources,
+            resources,
+            shortage,
+            bootstrap,
+            living_need,
+            movement_stream,
+            presentation,
+            localization,
+        )
+    ):
+        raise SystemExit("shortage artifact is missing authoritative resource/runtime evidence")
+
+    assert isinstance(initial_resources, dict)
+    assert isinstance(resources, dict)
+    assert isinstance(shortage, dict)
+    assert isinstance(bootstrap, dict)
+    assert isinstance(living_need, dict)
+    assert isinstance(movement_stream, dict)
+    assert isinstance(presentation, dict)
+    assert isinstance(localization, dict)
+
+    if shortage.get("player_economic_intent_submitted") is not False:
+        raise SystemExit("autonomous shortage proof must not submit a player economic intent")
+    actor_id = shortage.get("actor_id")
+    household_id = shortage.get("household_id")
+    if not isinstance(actor_id, int) or actor_id <= 0 or not isinstance(household_id, int) or household_id <= 0:
+        raise SystemExit("autonomous shortage evidence has invalid actor/household identity")
+    if living_need.get("entity_id") != actor_id:
+        raise SystemExit("shortage actor does not match authoritative living-need discovery")
+
+    def household_by_id(projection: dict[str, object], label: str) -> dict[str, object]:
+        households = projection.get("households")
+        if not isinstance(households, list):
+            raise SystemExit(f"{label} is missing household discovery")
+        for household in households:
+            if isinstance(household, dict) and household.get("household_id") == household_id:
+                return household
+        raise SystemExit(f"{label} does not contain tracked household {household_id}")
+
+    initial_household = household_by_id(initial_resources, "initial resource projection")
+    final_household = household_by_id(resources, "final resource projection")
+    for label, household in (("initial", initial_household), ("final", final_household)):
+        members = household.get("member_actor_ids")
+        if not isinstance(members, list) or actor_id not in members:
+            raise SystemExit(f"{label} tracked household does not contain the autonomous actor")
+
+    if initial_household.get("status") != "adequate" or shortage.get("initial_status") != "adequate":
+        raise SystemExit("tracked household did not begin adequate")
+    if final_household.get("status") != "shortage" or shortage.get("final_status") != "shortage":
+        raise SystemExit("tracked household did not end in authoritative shortage")
+
+    initial_stock = initial_household.get("grain_stock_units")
+    final_stock = final_household.get("grain_stock_units")
+    initial_threshold = initial_household.get("shortage_threshold_units")
+    final_threshold = final_household.get("shortage_threshold_units")
+    if not all(isinstance(value, int) for value in (
+        initial_stock,
+        final_stock,
+        initial_threshold,
+        final_threshold,
+    )):
+        raise SystemExit("shortage household quantities are invalid")
+    assert isinstance(initial_stock, int)
+    assert isinstance(final_stock, int)
+    assert isinstance(initial_threshold, int)
+    assert isinstance(final_threshold, int)
+    if initial_threshold != final_threshold:
+        raise SystemExit("shortage threshold changed during autonomous Consume proof")
+    if initial_stock < initial_threshold or final_stock >= final_threshold or final_stock >= initial_stock:
+        raise SystemExit("resource quantities do not prove adequate-to-shortage depletion")
+    if (
+        shortage.get("initial_stock_units") != initial_stock
+        or shortage.get("final_stock_units") != final_stock
+        or shortage.get("shortage_threshold_units") != final_threshold
+    ):
+        raise SystemExit("shortage scenario summary does not match authoritative resource projection")
+
+    if initial_resources.get("tick") != bootstrap.get("tick") or initial_resources.get("revision") != bootstrap.get("revision"):
+        raise SystemExit("initial resource discovery and startup projection are not one revision")
+    if initial_resources.get("protocol_version") != PROTOCOL_VERSION:
+        raise SystemExit("initial resource projection protocol mismatch")
+
+    batch = movement_stream.get("batch")
+    if not isinstance(batch, dict) or batch.get("protocol_version") != PROTOCOL_VERSION:
+        raise SystemExit("shortage movement stream is missing a valid final batch")
+    movement_tick = batch.get("tick")
+    movement_revision = batch.get("revision")
+    resource_tick = resources.get("tick")
+    resource_revision = resources.get("revision")
+    if not all(isinstance(value, int) for value in (
+        movement_tick,
+        movement_revision,
+        resource_tick,
+        resource_revision,
+    )):
+        raise SystemExit("shortage transition has invalid temporal fields")
+    assert isinstance(movement_tick, int)
+    assert isinstance(movement_revision, int)
+    assert isinstance(resource_tick, int)
+    assert isinstance(resource_revision, int)
+    if resource_tick != movement_tick or resource_revision != movement_revision + 1:
+        raise SystemExit("shortage did not arise from one post-movement resource revision")
+    if (
+        shortage.get("movement_tick") != movement_tick
+        or shortage.get("movement_revision") != movement_revision
+        or shortage.get("resource_tick") != resource_tick
+        or shortage.get("resource_revision") != resource_revision
+    ):
+        raise SystemExit("shortage temporal summary does not match authoritative projections")
+    if resources.get("protocol_version") != PROTOCOL_VERSION:
+        raise SystemExit("final resource projection protocol mismatch")
+
+    if presentation.get("controlled_spatial_tick") != movement_tick:
+        raise SystemExit("controlled spatial presentation tick does not match shortage movement")
+    if presentation.get("controlled_spatial_revision") != movement_revision:
+        raise SystemExit("controlled spatial presentation revision does not match shortage movement")
+    if presentation.get("last_tick") != resource_tick or presentation.get("last_revision") != resource_revision:
+        raise SystemExit("latest presentation revision does not match post-Consume world revision")
+    if presentation.get("protocol_version") != PROTOCOL_VERSION:
+        raise SystemExit("shortage presentation protocol mismatch")
+
+    localized = {
+        "ru": {
+            "status": "Нехватка",
+            "scenario": "Автономная нехватка",
+        },
+        "en": {
+            "status": "Shortage",
+            "scenario": "Autonomous shortage",
+        },
+    }
+    expected_status_text = f"{localized[expected_locale]['status']} · {final_stock} / {final_threshold}"
+    if localization.get("locale") != expected_locale:
+        raise SystemExit(f"unexpected shortage locale: {localization.get('locale')}")
+    if localization.get("household_resource_status_text") != expected_status_text:
+        raise SystemExit("localized household shortage HUD does not match authoritative quantities")
+    if shortage.get("shortage_hud_text") != expected_status_text:
+        raise SystemExit("shortage scenario did not capture the localized authoritative HUD state")
+    if localization.get("scenario_text") != localized[expected_locale]["scenario"]:
+        raise SystemExit("localized shortage scenario label is incorrect")
+
+    return evidence
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded Godot playtest owned by this repository")
     parser.add_argument("--scenario", default="smoke", choices=SUPPORTED_SCENARIOS)
@@ -631,6 +788,8 @@ def main() -> int:
         evidence = validate_offscreen_artifact(artifact_dir, args.locale)
     elif args.scenario == "rest_interference":
         evidence = validate_rest_interference_artifact(artifact_dir, args.locale)
+    elif args.scenario == "shortage":
+        evidence = validate_shortage_artifact(artifact_dir, args.locale)
     else:
         evidence = validate_smoke_artifact(artifact_dir, args.locale)
     metadata.update({"status": "passed", "evidence": evidence})
