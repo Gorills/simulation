@@ -260,7 +260,7 @@ For a valid controlled sample:
 - same-epoch updates use Godot physics interpolation for rendered smoothing;
 - epoch change applies the discontinuity and resets interpolation;
 - scene collision results are never fed back into Simulation;
-- visual facing may follow authoritative velocity because facing remains presentation-only.
+- visual facing follows the submitted planar move intent while it is non-zero and holds yaw when intent is released; it must not chase replica velocity, because independent-axis braking changes velocity direction during a stop. Facing remains presentation-only.
 
 `LocomotionProfile` now retains only presentation `turn_response`; old local move/sprint speeds, acceleration/deceleration, floor/slope movement fields were removed so there is no second source of movement truth.
 
