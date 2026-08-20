@@ -108,6 +108,9 @@ std::expected<void, WorldError> World::spawn_actor(
     if (initial.rest_need.has_value() && !initial.rest_need->is_valid()) {
         return std::unexpected(WorldError::invalid_rest_need_state);
     }
+    if (!initial.grain_carry.is_valid()) {
+        return std::unexpected(WorldError::invalid_actor_grain_carry_state);
+    }
     if (entity_id_in_use(id)) {
         return std::unexpected(WorldError::duplicate_entity);
     }
@@ -123,6 +126,7 @@ std::expected<void, WorldError> World::spawn_actor(
             .spatial = initial.spatial,
             .locomotion_capability = initial.locomotion_capability,
             .rest_need = initial.rest_need,
+            .grain_carry = initial.grain_carry,
         });
         try {
             actor_ids_.push_back(id);
@@ -407,6 +411,9 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         if (actor.rest_need.has_value() && !actor.rest_need->is_valid()) {
             return std::unexpected(WorldSnapshotError::invalid_rest_need_state);
         }
+        if (!actor.grain_carry.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_actor_grain_carry_state);
+        }
         if (
             !actor.grounded_locomotion.is_valid() ||
             (!actor.spatial.has_value() && !actor.grounded_locomotion.is_pristine())
@@ -525,6 +532,14 @@ std::optional<RestNeedState> World::actor_rest_need(const EntityId id) const noe
     return actors_[*index].rest_need;
 }
 
+std::optional<ActorGrainCarryState> World::actor_grain_carry_state(const EntityId id) const noexcept {
+    const auto index = actor_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
+    }
+    return actors_[*index].grain_carry;
+}
+
 std::optional<PlaceState> World::place_state(const EntityId id) const noexcept {
     const auto index = place_index(id);
     if (!index.has_value()) {
@@ -598,14 +613,21 @@ bool World::entity_id_in_use(const EntityId id) const noexcept {
 }
 
 bool World::actor_belongs_to_household(const EntityId id) const noexcept {
-    for (const auto &household : households_) {
-        for (const auto member : household.members) {
+    return actor_household_index(id).has_value();
+}
+
+std::optional<std::size_t> World::actor_household_index(const EntityId id) const noexcept {
+    if (!id.is_valid()) {
+        return std::nullopt;
+    }
+    for (std::size_t index = 0; index < households_.size(); ++index) {
+        for (const auto member : households_[index].members) {
             if (member == id) {
-                return true;
+                return index;
             }
         }
     }
-    return false;
+    return std::nullopt;
 }
 
 std::optional<std::size_t> World::actor_index(const EntityId id) const noexcept {
