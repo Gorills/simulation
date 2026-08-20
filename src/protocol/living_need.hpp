@@ -8,8 +8,10 @@
 namespace worldsim::protocol {
 
 // Purpose-built read-only presentation state for the first Milestone 1 need.
-// It reports the current derived outcome only; it is not a generic need/task
-// framework and does not expose RestNeedState internals or mutation authority.
+// It exposes the current derived outcome plus the observable rest-place footprint
+// required for the player to understand and physically interfere with the same
+// authoritative world rule. It is not a generic need/task framework and grants
+// no mutation authority.
 enum class LivingNeedStatus : std::uint8_t {
     traveling,
     blocked,
@@ -19,6 +21,9 @@ enum class LivingNeedStatus : std::uint8_t {
 struct LivingNeedProjection final {
     ProtocolInteger entity_id{};
     LivingNeedStatus status{LivingNeedStatus::traveling};
+    ProtocolInteger target_x_mm{};
+    ProtocolInteger target_z_mm{};
+    ProtocolInteger axis_arrival_tolerance_mm{};
     ProtocolInteger tick{};
     ProtocolInteger revision{};
     std::uint32_t protocol_version{kProtocolVersion};
