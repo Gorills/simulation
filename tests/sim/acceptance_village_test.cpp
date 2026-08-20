@@ -59,11 +59,34 @@ TEST(AcceptanceVillage, CoreContentOwnsActorsHouseholdsStoresAndControlBinding) 
     EXPECT_EQ(controlled_household->remaining_consume_budget, 0U);
     EXPECT_FALSE(*world.household_is_short(controlled_household->id));
 
+    const auto controlled_carry = world.actor_grain_carry_state(bindings->controlled_actor);
+    ASSERT_TRUE(controlled_carry.has_value());
+    EXPECT_EQ(controlled_carry->carried_grain_units, 0);
+    EXPECT_EQ(controlled_carry->grain_carry_capacity_units, 2);
+
+    std::optional<worldsim::sim::EntityId> surplus_npc;
+    for (const auto member : controlled_household->members) {
+        if (member != bindings->controlled_actor) {
+            ASSERT_FALSE(surplus_npc.has_value());
+            surplus_npc = member;
+        }
+    }
+    ASSERT_TRUE(surplus_npc.has_value());
+    const auto surplus_npc_carry = world.actor_grain_carry_state(*surplus_npc);
+    ASSERT_TRUE(surplus_npc_carry.has_value());
+    EXPECT_EQ(surplus_npc_carry->carried_grain_units, 0);
+    EXPECT_EQ(surplus_npc_carry->grain_carry_capacity_units, 2);
+
     EXPECT_EQ(short_household->members.size(), 1U);
     EXPECT_EQ(short_household->grain_stock_units, short_household->shortage_threshold_units);
     EXPECT_EQ(short_household->consume_amount_units, 1);
     EXPECT_EQ(short_household->remaining_consume_budget, 1U);
     EXPECT_FALSE(*world.household_is_short(short_household->id));
+
+    const auto short_actor_carry = world.actor_grain_carry_state(*rest_actor);
+    ASSERT_TRUE(short_actor_carry.has_value());
+    EXPECT_EQ(short_actor_carry->carried_grain_units, 0);
+    EXPECT_EQ(short_actor_carry->grain_carry_capacity_units, 0);
 
     const auto need = world.actor_rest_need(*rest_actor);
     const auto store = world.place_state(short_household->store_place);
