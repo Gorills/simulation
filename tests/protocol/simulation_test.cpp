@@ -70,7 +70,7 @@ TEST(SimulationProtocol, ObservedWorldComesFromCoreActorComposition) {
 
     EXPECT_EQ(projection.controlled_actor_id, 1);
     EXPECT_EQ(projection.tick, 0);
-    EXPECT_EQ(projection.revision, 7);
+    EXPECT_EQ(projection.revision, 9);
     EXPECT_EQ(projection.protocol_version, worldsim::protocol::kProtocolVersion);
     ASSERT_EQ(projection.entities.size(), 3U);
     EXPECT_EQ(projection.entities[0].entity_id, 1);
@@ -86,7 +86,7 @@ TEST(SimulationProtocol, HouseholdDiscoverySharesUnchangedStartupRevision) {
     const auto controlled = simulation.controlled_actor_spatial_projection();
 
     EXPECT_EQ(households.tick, 0);
-    EXPECT_EQ(households.revision, 7);
+    EXPECT_EQ(households.revision, 9);
     EXPECT_EQ(households.tick, observed.tick);
     EXPECT_EQ(households.revision, observed.revision);
     EXPECT_EQ(households.tick, controlled.tick);
@@ -138,7 +138,7 @@ TEST(SimulationProtocol, LivingNeedProjectionKeepsM1MeaningUnderGenericCollectio
         150 + worldsim::sim::kFirstPlayableBody.radius.value
     );
     EXPECT_EQ(initial.tick, 0);
-    EXPECT_EQ(initial.revision, 7);
+    EXPECT_EQ(initial.revision, 9);
     EXPECT_EQ(initial.protocol_version, worldsim::protocol::kProtocolVersion);
 
     ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
@@ -189,9 +189,6 @@ TEST(SimulationProtocol, AutonomousConsumeCommitsAfterMovementOnTheSameTick) {
 
     ASSERT_TRUE(shortage_seen);
 
-    // The post-movement resource mutation sits between locomotion batches. The
-    // next movement batch remains consecutive in tick and strictly later in
-    // revision; exhausted Consume budget adds no second resource mutation.
     const auto next_movement = simulation.advance_locomotion_tick();
     ASSERT_TRUE(next_movement.has_value());
     const auto after_next = simulation.village_household_resource_projection();
@@ -216,7 +213,7 @@ TEST(SimulationProtocol, ControlledActorStartsWithAuthoritativeSpatialState) {
     EXPECT_EQ(spatial.velocity_z_mm_per_second, 0);
     EXPECT_EQ(spatial.spatial_epoch, 1);
     EXPECT_EQ(spatial.tick, 0);
-    EXPECT_EQ(spatial.revision, 7);
+    EXPECT_EQ(spatial.revision, 9);
     EXPECT_EQ(spatial.protocol_version, worldsim::protocol::kProtocolVersion);
 }
 
@@ -231,7 +228,7 @@ TEST(SimulationProtocol, BootstrapMoveUpdatesRevisionWithoutChangingSpatialState
     EXPECT_EQ(result->actor.x, 1);
     EXPECT_EQ(result->actor.y, 0);
     EXPECT_EQ(result->actor.tick, 0);
-    EXPECT_EQ(result->actor.revision, 8);
+    EXPECT_EQ(result->actor.revision, 10);
     EXPECT_EQ(result->actor.seed, 42);
     EXPECT_EQ(result->actor.protocol_version, worldsim::protocol::kProtocolVersion);
 
@@ -263,7 +260,7 @@ TEST(SimulationProtocol, BootstrapMoveUpdatesRevisionWithoutChangingSpatialState
     );
     EXPECT_EQ(spatial_after.spatial_epoch, spatial_before.spatial_epoch);
     EXPECT_EQ(spatial_after.tick, 0);
-    EXPECT_EQ(spatial_after.revision, 8);
+    EXPECT_EQ(spatial_after.revision, 10);
     EXPECT_EQ(spatial_after.protocol_version, worldsim::protocol::kProtocolVersion);
 }
 
