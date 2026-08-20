@@ -1,6 +1,7 @@
 #include "sim/world.hpp"
 
 #include <cstdint>
+#include <limits>
 
 namespace worldsim::sim {
 namespace {
@@ -13,6 +14,21 @@ namespace {
         return static_cast<std::uint64_t>(first) - static_cast<std::uint64_t>(second);
     }
     return static_cast<std::uint64_t>(second) - static_cast<std::uint64_t>(first);
+}
+
+[[nodiscard]] constexpr bool checked_add_nonnegative(
+    const std::int64_t left,
+    const std::int64_t right,
+    std::int64_t &out
+) noexcept {
+    if (left < 0 || right < 0) {
+        return false;
+    }
+    if (left > std::numeric_limits<std::int64_t>::max() - right) {
+        return false;
+    }
+    out = left + right;
+    return true;
 }
 
 } // namespace
@@ -64,24 +80,16 @@ bool World::can_consume_household_grain(const EntityId actor) const noexcept {
         return false;
     }
 
-    for (const auto &household : households_) {
-        bool is_member = false;
-        for (const auto member : household.members) {
-            if (member == actor) {
-                is_member = true;
-                break;
-            }
-        }
-        if (!is_member) {
-            continue;
-        }
-
-        return household.has_valid_resource_state()
-            && household.remaining_consume_budget > 0
-            && household.grain_stock_units >= household.consume_amount_units
-            && is_actor_inside_place(actor, household.store_place);
+    const auto household_index_value = actor_household_index(actor);
+    if (!household_index_value.has_value()) {
+        return false;
     }
-    return false;
+
+    const auto &household = households_[*household_index_value];
+    return household.has_valid_resource_state()
+        && household.remaining_consume_budget > 0
+        && household.grain_stock_units >= household.consume_amount_units
+        && is_actor_inside_place(actor, household.store_place);
 }
 
 std::expected<HouseholdConsumeResult, HouseholdConsumeError>
@@ -95,19 +103,7 @@ World::consume_household_grain(const EntityId actor) noexcept {
         return std::unexpected(HouseholdConsumeError::unknown_actor);
     }
 
-    std::optional<std::size_t> household_index_value;
-    for (
-        std::size_t index = 0;
-        index < households_.size() && !household_index_value.has_value();
-        ++index
-    ) {
-        for (const auto member : households_[index].members) {
-            if (member == actor) {
-                household_index_value = index;
-                break;
-            }
-        }
-    }
+    const auto household_index_value = actor_household_index(actor);
     if (!household_index_value.has_value()) {
         return std::unexpected(HouseholdConsumeError::actor_without_household);
     }
@@ -140,6 +136,191 @@ World::consume_household_grain(const EntityId actor) noexcept {
         .remaining_grain_stock_units = household.grain_stock_units,
         .remaining_consume_budget = household.remaining_consume_budget,
         .shortage = household.grain_stock_units < household.shortage_threshold_units,
+        .tick = tick_,
+        .revision = revision_,
+    };
+}
+
+std::expected<HouseholdDrawResult, HouseholdDrawError>
+World::draw_household_grain(const EntityId actor) noexcept {
+    if (!actor.is_valid()) {
+        return std::unexpected(HouseholdDrawError::invalid_entity_id);
+    }
+
+    const auto actor_index_value = actor_index(actor);
+    if (!actor_index_value.has_value()) {
+        return std::unexpected(HouseholdDrawError::unknown_actor);
+    }
+    const auto household_index_value = actor_household_index(actor);
+    if (!household_index_value.has_value()) {
+        return std::unexpected(HouseholdDrawError::actor_without_household);
+    }
+
+    auto &actor_state = actors_[*actor_index_value];
+    auto &household = households_[*household_index_value];
+    if (!actor_state.grain_carry.is_valid()) {
+        return std::unexpected(HouseholdDrawError::invalid_actor_grain_carry_state);
+    }
+    if (!household.has_valid_resource_state()) {
+        return std::unexpected(HouseholdDrawError::invalid_household_state);
+    }
+    if (!actor_state.spatial.has_value()) {
+        return std::unexpected(HouseholdDrawError::missing_spatial_state);
+    }
+    if (!is_actor_inside_place(actor, household.store_place)) {
+        return std::unexpected(HouseholdDrawError::outside_store);
+    }
+    if (
+        actor_state.grain_carry.carried_grain_units
+        == actor_state.grain_carry.grain_carry_capacity_units
+    ) {
+        return std::unexpected(HouseholdDrawError::carry_full);
+    }
+    if (household.grain_stock_units == 0) {
+        return std::unexpected(HouseholdDrawError::store_empty);
+    }
+
+    const auto free_capacity =
+        actor_state.grain_carry.grain_carry_capacity_units
+        - actor_state.grain_carry.carried_grain_units;
+    const auto moved = household.grain_stock_units < free_capacity
+        ? household.grain_stock_units
+        : free_capacity;
+
+    actor_state.grain_carry.carried_grain_units += moved;
+    household.grain_stock_units -= moved;
+    ++revision_.value;
+
+    return HouseholdDrawResult{
+        .actor = actor,
+        .household = household.id,
+        .moved_grain_units = moved,
+        .carried_grain_units = actor_state.grain_carry.carried_grain_units,
+        .remaining_grain_stock_units = household.grain_stock_units,
+        .tick = tick_,
+        .revision = revision_,
+    };
+}
+
+std::expected<HouseholdDepositResult, HouseholdDepositError>
+World::deposit_household_grain(const EntityId actor) noexcept {
+    if (!actor.is_valid()) {
+        return std::unexpected(HouseholdDepositError::invalid_entity_id);
+    }
+
+    const auto actor_index_value = actor_index(actor);
+    if (!actor_index_value.has_value()) {
+        return std::unexpected(HouseholdDepositError::unknown_actor);
+    }
+    const auto household_index_value = actor_household_index(actor);
+    if (!household_index_value.has_value()) {
+        return std::unexpected(HouseholdDepositError::actor_without_household);
+    }
+
+    auto &actor_state = actors_[*actor_index_value];
+    auto &household = households_[*household_index_value];
+    if (!actor_state.grain_carry.is_valid()) {
+        return std::unexpected(HouseholdDepositError::invalid_actor_grain_carry_state);
+    }
+    if (!household.has_valid_resource_state()) {
+        return std::unexpected(HouseholdDepositError::invalid_household_state);
+    }
+    if (!actor_state.spatial.has_value()) {
+        return std::unexpected(HouseholdDepositError::missing_spatial_state);
+    }
+    if (!is_actor_inside_place(actor, household.store_place)) {
+        return std::unexpected(HouseholdDepositError::outside_store);
+    }
+    if (actor_state.grain_carry.carried_grain_units == 0) {
+        return std::unexpected(HouseholdDepositError::carry_empty);
+    }
+
+    std::int64_t updated_stock{};
+    if (!checked_add_nonnegative(
+            household.grain_stock_units,
+            actor_state.grain_carry.carried_grain_units,
+            updated_stock
+        )) {
+        return std::unexpected(HouseholdDepositError::stock_overflow);
+    }
+
+    const auto deposited = actor_state.grain_carry.carried_grain_units;
+    household.grain_stock_units = updated_stock;
+    actor_state.grain_carry.carried_grain_units = 0;
+    ++revision_.value;
+
+    return HouseholdDepositResult{
+        .actor = actor,
+        .household = household.id,
+        .deposited_grain_units = deposited,
+        .carried_grain_units = actor_state.grain_carry.carried_grain_units,
+        .remaining_grain_stock_units = household.grain_stock_units,
+        .tick = tick_,
+        .revision = revision_,
+    };
+}
+
+std::expected<HouseholdGiftResult, HouseholdGiftError>
+World::gift_household_grain(
+    const EntityId actor,
+    const EntityId receiving_household
+) noexcept {
+    if (!actor.is_valid() || !receiving_household.is_valid()) {
+        return std::unexpected(HouseholdGiftError::invalid_entity_id);
+    }
+
+    const auto actor_index_value = actor_index(actor);
+    if (!actor_index_value.has_value()) {
+        return std::unexpected(HouseholdGiftError::unknown_actor);
+    }
+    const auto receiving_index = household_index(receiving_household);
+    if (!receiving_index.has_value()) {
+        return std::unexpected(HouseholdGiftError::unknown_household);
+    }
+
+    auto &actor_state = actors_[*actor_index_value];
+    auto &household = households_[*receiving_index];
+    if (!actor_state.grain_carry.is_valid()) {
+        return std::unexpected(HouseholdGiftError::invalid_actor_grain_carry_state);
+    }
+    if (!household.has_valid_resource_state()) {
+        return std::unexpected(HouseholdGiftError::invalid_household_state);
+    }
+    if (actor_state.grain_carry.carried_grain_units == 0) {
+        return std::unexpected(HouseholdGiftError::carry_empty);
+    }
+
+    const auto own_household = actor_household_index(actor);
+    if (own_household.has_value() && *own_household == *receiving_index) {
+        return std::unexpected(HouseholdGiftError::own_household);
+    }
+    if (!actor_state.spatial.has_value()) {
+        return std::unexpected(HouseholdGiftError::missing_spatial_state);
+    }
+    if (!is_actor_inside_place(actor, household.store_place)) {
+        return std::unexpected(HouseholdGiftError::outside_store);
+    }
+
+    std::int64_t updated_stock{};
+    if (!checked_add_nonnegative(
+            household.grain_stock_units,
+            actor_state.grain_carry.carried_grain_units,
+            updated_stock
+        )) {
+        return std::unexpected(HouseholdGiftError::stock_overflow);
+    }
+
+    const auto gifted = actor_state.grain_carry.carried_grain_units;
+    household.grain_stock_units = updated_stock;
+    actor_state.grain_carry.carried_grain_units = 0;
+    ++revision_.value;
+
+    return HouseholdGiftResult{
+        .actor = actor,
+        .receiving_household = household.id,
+        .gifted_grain_units = gifted,
+        .carried_grain_units = actor_state.grain_carry.carried_grain_units,
+        .receiving_grain_stock_units = household.grain_stock_units,
         .tick = tick_,
         .revision = revision_,
     };
