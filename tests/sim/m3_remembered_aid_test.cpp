@@ -19,36 +19,32 @@ namespace {
     };
 }
 
-void add_store(
+[[nodiscard]] bool add_store(
     worldsim::sim::World &world,
     const worldsim::sim::EntityId store
 ) {
-    ASSERT_TRUE(
-        world.add_place(worldsim::sim::PlaceState{
-            .id = store,
-            .axis_occupancy_tolerance = worldsim::sim::Millimeters{100},
-        }).has_value()
-    );
+    return world.add_place(worldsim::sim::PlaceState{
+        .id = store,
+        .axis_occupancy_tolerance = worldsim::sim::Millimeters{100},
+    }).has_value();
 }
 
-void spawn_giver(
+[[nodiscard]] bool spawn_giver(
     worldsim::sim::World &world,
     const worldsim::sim::EntityId actor,
     const std::int64_t carried = 1,
     const std::int64_t x = 0
 ) {
-    ASSERT_TRUE(
-        world.spawn_actor(
-            actor,
-            worldsim::sim::ActorSpawnState{
-                .spatial = spatial_at(x, 0),
-                .grain_carry = worldsim::sim::ActorGrainCarryState{
-                    .carried_grain_units = carried,
-                    .grain_carry_capacity_units = carried,
-                },
-            }
-        ).has_value()
-    );
+    return world.spawn_actor(
+        actor,
+        worldsim::sim::ActorSpawnState{
+            .spatial = spatial_at(x, 0),
+            .grain_carry = worldsim::sim::ActorGrainCarryState{
+                .carried_grain_units = carried,
+                .grain_carry_capacity_units = carried,
+            },
+        }
+    ).has_value();
 }
 
 } // namespace
@@ -59,8 +55,8 @@ TEST(M3RememberedAid, ShortHouseholdGiftCommitsMaterialAndSocialStateTogether) {
     const worldsim::sim::EntityId store{10};
     const worldsim::sim::EntityId household{20};
 
-    spawn_giver(world, giver, 2);
-    add_store(world, store);
+    ASSERT_TRUE(spawn_giver(world, giver, 2));
+    ASSERT_TRUE(add_store(world, store));
     ASSERT_TRUE(
         world.add_household(worldsim::sim::HouseholdState{
             .id = household,
@@ -104,8 +100,8 @@ TEST(M3RememberedAid, GiftToNonShortHouseholdDoesNotCreatePersonalAidMemory) {
     const worldsim::sim::EntityId store{10};
     const worldsim::sim::EntityId household{20};
 
-    spawn_giver(world, giver, 1);
-    add_store(world, store);
+    ASSERT_TRUE(spawn_giver(world, giver, 1));
+    ASSERT_TRUE(add_store(world, store));
     ASSERT_TRUE(
         world.add_household(worldsim::sim::HouseholdState{
             .id = household,
@@ -134,9 +130,9 @@ TEST(M3RememberedAid, OutstandingAidSlotIsActorGenericAndDoesNotGetOverwritten) 
     const worldsim::sim::EntityId store{10};
     const worldsim::sim::EntityId household{20};
 
-    spawn_giver(world, first_actor, 1);
-    spawn_giver(world, second_actor, 1);
-    add_store(world, store);
+    ASSERT_TRUE(spawn_giver(world, first_actor, 1));
+    ASSERT_TRUE(spawn_giver(world, second_actor, 1));
+    ASSERT_TRUE(add_store(world, store));
     ASSERT_TRUE(
         world.add_household(worldsim::sim::HouseholdState{
             .id = household,
@@ -151,7 +147,9 @@ TEST(M3RememberedAid, OutstandingAidSlotIsActorGenericAndDoesNotGetOverwritten) 
     auto state = world.household_state(household);
     ASSERT_TRUE(state.has_value());
     EXPECT_EQ(state->remembered_material_aid_actor, second_actor);
-    EXPECT_TRUE(*world.household_is_short(household));
+    const auto still_short = world.household_is_short(household);
+    ASSERT_TRUE(still_short.has_value());
+    EXPECT_TRUE(*still_short);
 
     const auto first_gift = world.gift_household_grain(first_actor, household);
     ASSERT_TRUE(first_gift.has_value());
@@ -167,8 +165,8 @@ TEST(M3RememberedAid, RefusedGiftCannotCreateRememberedAid) {
     const worldsim::sim::EntityId store{10};
     const worldsim::sim::EntityId household{20};
 
-    spawn_giver(world, giver, 1, 101);
-    add_store(world, store);
+    ASSERT_TRUE(spawn_giver(world, giver, 1, 101));
+    ASSERT_TRUE(add_store(world, store));
     ASSERT_TRUE(
         world.add_household(worldsim::sim::HouseholdState{
             .id = household,
@@ -191,8 +189,8 @@ TEST(M3RememberedAid, SnapshotRestorePreservesMemoryAndRejectsInvalidReferences)
     const worldsim::sim::EntityId store{10};
     const worldsim::sim::EntityId household{20};
 
-    spawn_giver(source, giver, 1);
-    add_store(source, store);
+    ASSERT_TRUE(spawn_giver(source, giver, 1));
+    ASSERT_TRUE(add_store(source, store));
     ASSERT_TRUE(
         source.add_household(worldsim::sim::HouseholdState{
             .id = household,
@@ -239,7 +237,7 @@ TEST(M3RememberedAid, CompositionRejectsInvalidOrUnknownRememberedActor) {
     const worldsim::sim::EntityId store{10};
 
     worldsim::sim::World invalid{worldsim::sim::WorldSeed{86}};
-    add_store(invalid, store);
+    ASSERT_TRUE(add_store(invalid, store));
     const auto invalid_before = invalid.snapshot();
     const auto invalid_result = invalid.add_household(worldsim::sim::HouseholdState{
         .id = worldsim::sim::EntityId{20},
@@ -254,7 +252,7 @@ TEST(M3RememberedAid, CompositionRejectsInvalidOrUnknownRememberedActor) {
     EXPECT_EQ(invalid.snapshot(), invalid_before);
 
     worldsim::sim::World unknown{worldsim::sim::WorldSeed{87}};
-    add_store(unknown, store);
+    ASSERT_TRUE(add_store(unknown, store));
     const auto unknown_before = unknown.snapshot();
     const auto unknown_result = unknown.add_household(worldsim::sim::HouseholdState{
         .id = worldsim::sim::EntityId{20},
