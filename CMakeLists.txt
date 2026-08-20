@@ -38,6 +38,7 @@ target_sources(
     sim_core
     PRIVATE
         src/sim/grounded_locomotion.cpp
+        src/sim/household_resource.cpp
         src/sim/living_need.cpp
         src/sim/npc_locomotion.cpp
         src/sim/world.cpp
@@ -88,6 +89,7 @@ if(WORLD_SIM_BUILD_TESTS)
         sim_core_tests
         tests/sim/composition_test.cpp
         tests/sim/grounded_locomotion_test.cpp
+        tests/sim/household_resource_test.cpp
         tests/sim/living_need_test.cpp
         tests/sim/locomotion_capability_test.cpp
         tests/sim/npc_locomotion_test.cpp
