@@ -29,6 +29,8 @@ python tools/dev.py play --scenario smoke --locale ru
 python tools/dev.py play --scenario smoke --locale en
 python tools/dev.py play --scenario shortage --locale ru
 python tools/dev.py play --scenario shortage --locale en
+python tools/dev.py play --scenario gift --locale ru
+python tools/dev.py play --scenario gift --locale en
 python tools/dev.py play --scenario offscreen --locale ru
 python tools/dev.py play --scenario rest_interference --locale ru
 ```
@@ -40,6 +42,7 @@ Use only the subset required by the change, but do not claim a gate that did not
 - `dev` additionally builds the GDExtension development graph.
 - `play --scenario smoke` launches the real Godot project and validates the ordinary boundary/screenshot evidence.
 - `play --scenario shortage` proves the first Milestone 2 vertical path from authoritative household discovery through autonomous post-movement Consume to localized shortage feedback without a player economic command.
+- `play --scenario gift` proves the controlled actor draws rule-defined grain from its own store, later gifts the entire carry at the short household's store, changes authoritative carry/stock through semantic commands, and preserves the existing RestNeed interference at that shared place.
 - `play --scenario offscreen` proves an observed living-need NPC can lose its Godot node, continue receiving authoritative movement while absent, and rematerialize from fresh observation plus a later authoritative sample.
 - `play --scenario rest_interference` proves the real client observes the first need as `traveling`, creates a `blocked` outcome through ordinary controlled locomotion, renders localized blocked feedback, then removes the obstruction through the same movement path and observes later `satisfied` feedback.
 
@@ -70,6 +73,8 @@ The target graph should make ownership visible:
 - mechanic-specific detailed assertions live next to the mechanic tests rather than in this document.
 
 For the first Living Need, native evidence owns the actual satisfaction/blocking world-law assertions. Protocol evidence additionally proves the purpose-built `LivingNeedProjection` is derived from the authoritative NPC and tracks current tick/revision without becoming mutable need state.
+
+For the first player resource intervention, native evidence owns carry/conservation/refusal/overflow law. Protocol evidence proves carry/member-household state is read from Core, Draw/Deposit/Gift accept no client-authored amount, accepted commands report the authoritative moved quantity and revision-only result, and a resource revision between locomotion ticks does not poison the next movement batch.
 
 Use behavior-oriented test names. Prefer direct domain values/state over mock-heavy tests when practical.
 
@@ -123,6 +128,24 @@ It must prove on one bounded run that:
 - presentation retains the movement revision for controlled spatial state while its latest observed world revision reconciles to the post-Consume resource revision.
 
 This scenario proves autonomous scarcity can become player-visible through the real boundary. It does not prove recurring meal cadence, production, carry, gifting, work or markets.
+
+### Gift shortage relief
+
+The `gift` scenario is the M2.6 controlled-actor intervention checkpoint. It uses the ordinary acceptance village, locomotion path, existing autonomous Consume policy and M2.5 World transfer laws; it has no stock setter, teleport or client-supplied grain amount.
+
+It must prove on one bounded RU/EN run that:
+
+- controlled carry/member-household projection starts on the same unchanged startup revision as village resource discovery;
+- Draw at the controlled actor's own store moves the authoritative rule-defined amount into carry and commits exactly one revision without advancing simulation time;
+- the neighbour household becomes short through the already-proven autonomous Consume path before the player approaches it;
+- the controlled actor reaches the receiving household's exact store tolerance through ordinary authoritative locomotion;
+- Gift targets a discovered other household identity, transfers the entire authoritative carry, clears carry, increases receiving stock by exactly the moved quantity, and changes `WorldRevision` exactly once without changing `SimulationTick`;
+- the short household becomes adequate in the bounded fixture after the transfer;
+- the living-need projection is `blocked` at the Gift location because the receiving store shares the M1 rest footprint and occupancy is intentionally non-exclusive;
+- the movement batch immediately before Gift remains the controlled spatial revision while the post-Gift read/presentation reconciles to the later resource revision;
+- RU and EN render localized carry/action/scenario feedback plus the authoritative post-Gift household status and capture the standard screenshot artifact.
+
+This proves one real player intervention path using the same Core laws as ordinary actors. It does not introduce amount selection, trade, Work/production, standing pledges, market state or a general inventory system.
 
 ### Offscreen continuation
 
@@ -185,7 +208,7 @@ Unexpected engine `ERROR` lines should still be investigated; the pass/fail cont
 
 ## Godot smoke CI lane
 
-The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs RU and EN baseline smoke, runs the bounded RU and EN autonomous-shortage checkpoint, runs the bounded RU offscreen continuation scenario, runs the bounded RU rest-interference/help scenario, and uploads `.cache/play` evidence even on failure.
+The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs RU and EN baseline smoke, runs the bounded RU and EN autonomous-shortage checkpoint, runs the bounded RU and EN Gift checkpoint, runs the bounded RU offscreen continuation scenario, runs the bounded RU rest-interference/help scenario, and uploads `.cache/play` evidence even on failure.
 
 Documentation-only changes are excluded. The lane remains deliberately bounded: no narrow-layout matrix, interactive input-feel automation, performance thresholds or cross-platform GPU matrix without a demonstrated need.
 
