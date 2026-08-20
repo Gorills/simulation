@@ -43,6 +43,30 @@ namespace {
     };
 }
 
+[[nodiscard]] worldsim::protocol::ControlledActorMoveIntent intent_toward(
+    const worldsim::protocol::ControlledActorSpatialProjection &actor,
+    const worldsim::protocol::FieldWorkProjection &field
+) {
+    const auto dx = field.work_x_mm - actor.x_mm;
+    const auto dz = field.work_z_mm - actor.z_mm;
+    const auto tolerance = field.work_axis_tolerance_mm;
+
+    const auto x = std::abs(dx) <= tolerance ? 0 : (dx < 0 ? -1 : 1);
+    const auto z = std::abs(dz) <= tolerance ? 0 : (dz < 0 ? -1 : 1);
+    if (x != 0 && z != 0) {
+        return worldsim::protocol::ControlledActorMoveIntent{
+            .x = x * 707,
+            .z = z * 707,
+            .pace = worldsim::protocol::ControlledActorLocomotionPace::run,
+        };
+    }
+    return worldsim::protocol::ControlledActorMoveIntent{
+        .x = x * worldsim::protocol::kPlanarMoveIntentScale,
+        .z = z * worldsim::protocol::kPlanarMoveIntentScale,
+        .pace = worldsim::protocol::ControlledActorLocomotionPace::walk,
+    };
+}
+
 TEST(ResourceProtocol, ControlledCarryProjectionSharesAuthoritativeStartupRevision) {
     worldsim::protocol::Simulation simulation{42};
 
@@ -59,7 +83,6 @@ TEST(ResourceProtocol, ControlledCarryProjectionSharesAuthoritativeStartupRevisi
     EXPECT_EQ(carry.tick, resources.tick);
     EXPECT_EQ(carry.revision, resources.revision);
     EXPECT_EQ(carry.protocol_version, worldsim::protocol::kProtocolVersion);
-    EXPECT_EQ(carry.protocol_version, 8U);
 }
 
 TEST(ResourceProtocol, DrawAndDepositAreSemanticRevisionOnlyCommands) {
@@ -213,6 +236,93 @@ TEST(ResourceProtocol, GiftChangesAuthoritativeStockAndPreservesM1RestInterferen
     ASSERT_TRUE(next_movement.has_value());
     EXPECT_EQ(next_movement->tick, gift_result.tick + 1);
     EXPECT_GT(next_movement->revision, gift_result.revision);
+}
+
+TEST(ResourceProtocol, WorkUsesAuthoritativeFieldContentAndExhaustsOneCompletion) {
+    worldsim::protocol::Simulation simulation{42};
+    const auto initial_field = simulation.field_work_projection();
+    const auto initial_resources = simulation.village_household_resource_projection();
+
+    EXPECT_EQ(initial_field.work_place_id, 12);
+    EXPECT_EQ(initial_field.destination_household_id, 21);
+    EXPECT_EQ(initial_field.yield_grain_units, 2);
+    EXPECT_EQ(initial_field.remaining_work_completions, 1);
+    EXPECT_EQ(initial_field.tick, initial_resources.tick);
+    EXPECT_EQ(initial_field.revision, initial_resources.revision);
+    EXPECT_EQ(initial_field.protocol_version, worldsim::protocol::kProtocolVersion);
+
+    bool worked = false;
+    worldsim::protocol::ControlledActorWorkResult work_result{};
+    worldsim::protocol::FieldWorkProjection before_work{};
+    worldsim::protocol::VillageHouseholdResourceProjection resources_before_work{};
+
+    for (int opportunity = 0; opportunity < 480; ++opportunity) {
+        const auto spatial = simulation.controlled_actor_spatial_projection();
+        ASSERT_TRUE(simulation.submit_controlled_actor_move_intent(
+            intent_toward(spatial, initial_field)
+        ).has_value());
+        const auto movement = simulation.advance_locomotion_tick();
+        ASSERT_TRUE(movement.has_value());
+
+        before_work = simulation.field_work_projection();
+        resources_before_work = simulation.village_household_resource_projection();
+        const auto attempt = simulation.controlled_actor_complete_field_work();
+        if (!attempt.has_value()) {
+            ASSERT_EQ(attempt.error(), worldsim::protocol::ControlledActorWorkError::outside_field);
+            continue;
+        }
+
+        worked = true;
+        work_result = *attempt;
+        break;
+    }
+
+    ASSERT_TRUE(worked);
+    const auto *destination_before = find_household(
+        resources_before_work,
+        before_work.destination_household_id
+    );
+    ASSERT_NE(destination_before, nullptr);
+
+    EXPECT_EQ(work_result.entity_id, 1);
+    EXPECT_EQ(work_result.work_place_id, before_work.work_place_id);
+    EXPECT_EQ(work_result.destination_household_id, before_work.destination_household_id);
+    EXPECT_EQ(work_result.produced_grain_units, before_work.yield_grain_units);
+    EXPECT_EQ(
+        work_result.destination_household_grain_stock_units,
+        destination_before->grain_stock_units + work_result.produced_grain_units
+    );
+    EXPECT_EQ(work_result.remaining_work_completions, 0);
+    EXPECT_EQ(work_result.tick, before_work.tick);
+    EXPECT_EQ(work_result.revision, before_work.revision + 1);
+    EXPECT_EQ(work_result.protocol_version, worldsim::protocol::kProtocolVersion);
+
+    const auto after_field = simulation.field_work_projection();
+    const auto after_resources = simulation.village_household_resource_projection();
+    const auto *destination_after = find_household(
+        after_resources,
+        work_result.destination_household_id
+    );
+    ASSERT_NE(destination_after, nullptr);
+    EXPECT_EQ(after_field.work_place_id, before_work.work_place_id);
+    EXPECT_EQ(after_field.destination_household_id, before_work.destination_household_id);
+    EXPECT_EQ(after_field.yield_grain_units, before_work.yield_grain_units);
+    EXPECT_EQ(after_field.remaining_work_completions, 0);
+    EXPECT_EQ(after_field.tick, work_result.tick);
+    EXPECT_EQ(after_field.revision, work_result.revision);
+    EXPECT_EQ(destination_after->grain_stock_units, work_result.destination_household_grain_stock_units);
+
+    const auto exhausted_before = simulation.field_work_projection();
+    const auto exhausted = simulation.controlled_actor_complete_field_work();
+    ASSERT_FALSE(exhausted.has_value());
+    EXPECT_EQ(exhausted.error(), worldsim::protocol::ControlledActorWorkError::work_exhausted);
+    EXPECT_EQ(simulation.field_work_projection(), exhausted_before);
+
+    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
+    const auto next_movement = simulation.advance_locomotion_tick();
+    ASSERT_TRUE(next_movement.has_value());
+    EXPECT_EQ(next_movement->tick, work_result.tick + 1);
+    EXPECT_GT(next_movement->revision, work_result.revision);
 }
 
 } // namespace
