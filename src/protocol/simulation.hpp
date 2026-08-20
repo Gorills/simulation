@@ -20,11 +20,19 @@ public:
         const ControlledActorMoveIntent &intent
     ) noexcept;
     [[nodiscard]] ControlledActorLocomotionTickOutcome advance_locomotion_tick();
+
+    [[nodiscard]] ControlledActorResourceOutcome controlled_actor_draw_household_grain();
+    [[nodiscard]] ControlledActorResourceOutcome controlled_actor_deposit_household_grain();
+    [[nodiscard]] ControlledActorResourceOutcome controlled_actor_gift_household_grain(
+        ProtocolInteger receiving_household_id
+    );
+
     [[nodiscard]] BootstrapActorProjection bootstrap_controlled_actor_projection() const;
     [[nodiscard]] ObservedWorldProjection observed_world_projection() const;
     [[nodiscard]] ControlledActorSpatialProjection controlled_actor_spatial_projection() const;
     [[nodiscard]] LivingNeedProjection living_need_projection() const;
     [[nodiscard]] VillageHouseholdResourceProjection village_household_resource_projection() const;
+    [[nodiscard]] ControlledActorCarryProjection controlled_actor_carry_projection() const;
 
 private:
     sim::World world_;
