@@ -26,6 +26,7 @@ public:
     [[nodiscard]] ControlledActorResourceOutcome controlled_actor_gift_household_grain(
         ProtocolInteger receiving_household_id
     );
+    [[nodiscard]] ControlledActorWorkOutcome controlled_actor_complete_field_work();
 
     [[nodiscard]] BootstrapActorProjection bootstrap_controlled_actor_projection() const;
     [[nodiscard]] ObservedWorldProjection observed_world_projection() const;
@@ -33,6 +34,7 @@ public:
     [[nodiscard]] LivingNeedProjection living_need_projection() const;
     [[nodiscard]] VillageHouseholdResourceProjection village_household_resource_projection() const;
     [[nodiscard]] ControlledActorCarryProjection controlled_actor_carry_projection() const;
+    [[nodiscard]] FieldWorkProjection field_work_projection() const;
 
 private:
     sim::World world_;
