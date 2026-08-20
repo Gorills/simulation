@@ -231,6 +231,16 @@ TEST(M3RememberedAid, SnapshotRestorePreservesMemoryAndRejectsInvalidReferences)
         worldsim::sim::WorldSnapshotError::unknown_remembered_aid_actor
     );
     EXPECT_EQ(restored.snapshot(), restored_before_invalid);
+
+    auto own_member = saved;
+    own_member.households.front().members.push_back(giver);
+    const auto own_member_result = restored.restore(own_member);
+    ASSERT_FALSE(own_member_result.has_value());
+    EXPECT_EQ(
+        own_member_result.error(),
+        worldsim::sim::WorldSnapshotError::invalid_household_social_state
+    );
+    EXPECT_EQ(restored.snapshot(), restored_before_invalid);
 }
 
 TEST(M3RememberedAid, CompositionRejectsInvalidOrUnknownRememberedActor) {
@@ -265,4 +275,22 @@ TEST(M3RememberedAid, CompositionRejectsInvalidOrUnknownRememberedActor) {
         worldsim::sim::WorldError::unknown_remembered_aid_actor
     );
     EXPECT_EQ(unknown.snapshot(), unknown_before);
+
+    worldsim::sim::World own_member{worldsim::sim::WorldSeed{88}};
+    const worldsim::sim::EntityId actor{1};
+    ASSERT_TRUE(spawn_giver(own_member, actor));
+    ASSERT_TRUE(add_store(own_member, store));
+    const auto own_member_before = own_member.snapshot();
+    const auto own_member_result = own_member.add_household(worldsim::sim::HouseholdState{
+        .id = worldsim::sim::EntityId{20},
+        .members = {actor},
+        .store_place = store,
+        .remembered_material_aid_actor = actor,
+    });
+    ASSERT_FALSE(own_member_result.has_value());
+    EXPECT_EQ(
+        own_member_result.error(),
+        worldsim::sim::WorldError::invalid_household_social_state
+    );
+    EXPECT_EQ(own_member.snapshot(), own_member_before);
 }

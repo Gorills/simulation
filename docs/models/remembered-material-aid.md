@@ -23,7 +23,8 @@ Canonical whole-milestone outcome: [`../milestones/m3-playable-social-consequenc
 - `EntityId{0}` — no outstanding remembered personal aid;
 - positive actor id — this household remembers one qualifying material Gift from that actor;
 - negative values are invalid state;
-- a positive reference must resolve to an existing actor when the household is composed or a snapshot is restored.
+- a positive reference must resolve to an existing actor when the household is composed or a snapshot is restored;
+- the remembered actor may not be a member of the remembering household, because the authoritative Gift law rejects gifting to one's own household and such a state cannot represent the qualifying cause this field claims.
 
 The slot is intentionally singular. M3 currently needs one remembered favour in one short vignette, not simultaneous debt accounting for every actor. If a later playable capability requires concurrent household obligations, extend the causal model then rather than prebuilding a generic relationship store now.
 
@@ -80,7 +81,8 @@ Snapshot schema version 10 includes it as part of each `HouseholdState`.
 Restore/composition reject:
 
 - negative remembered actor ids as invalid household social state;
-- positive remembered actor ids that do not resolve to an existing actor.
+- positive remembered actor ids that do not resolve to an existing actor;
+- a remembered actor who is also a member of that household, because this bounded state specifically represents a qualifying inter-household Gift that Core would reject for an own-household member.
 
 `EntityId{0}` remains the canonical empty state.
 
@@ -120,6 +122,6 @@ Native proof for this subset must demonstrate:
 - refused Gift is fully non-mutating;
 - any equivalent actor can become the remembered actor;
 - an existing remembered actor is not overwritten by later Gifts;
-- snapshot/restore preserves the state and rejects malformed/dangling references.
+- snapshot/restore preserves the state and rejects malformed, dangling, and own-household-member remembered-aid references.
 
 This Core subset alone does **not** satisfy whole Milestone 3 acceptance because there is not yet a reciprocal opportunity or ordinary-play presentation.
