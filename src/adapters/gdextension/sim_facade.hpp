@@ -21,6 +21,10 @@ public:
     [[nodiscard]] godot::Dictionary controlled_actor_spatial_projection() const;
     [[nodiscard]] godot::Dictionary living_need_projection() const;
     [[nodiscard]] godot::Dictionary village_household_resource_projection() const;
+    [[nodiscard]] godot::Dictionary controlled_actor_carry_projection() const;
+    [[nodiscard]] godot::Dictionary controlled_actor_draw_grain();
+    [[nodiscard]] godot::Dictionary controlled_actor_deposit_grain();
+    [[nodiscard]] godot::Dictionary controlled_actor_gift_grain(std::int64_t receiving_household_id);
     [[nodiscard]] godot::Dictionary controlled_actor_submit_move_intent(
         std::int32_t x,
         std::int32_t z,
@@ -46,6 +50,12 @@ private:
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::VillageHouseholdResourceProjection &projection
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::ControlledActorCarryProjection &projection
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::ControlledActorResourceResult &result
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::AuthoritativeMovementSampleBatch &batch
