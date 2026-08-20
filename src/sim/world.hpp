@@ -370,8 +370,19 @@ struct HouseholdState final {
             && standing_transfer_pledge.remaining_grain_units >= 0;
     }
 
-    [[nodiscard]] constexpr bool has_valid_social_state() const noexcept {
-        return remembered_material_aid_actor.value >= 0;
+    [[nodiscard]] bool has_valid_social_state() const noexcept {
+        if (remembered_material_aid_actor.value < 0) {
+            return false;
+        }
+        if (!remembered_material_aid_actor.is_valid()) {
+            return true;
+        }
+        for (const auto member : members) {
+            if (member == remembered_material_aid_actor) {
+                return false;
+            }
+        }
+        return true;
     }
 
     bool operator==(const HouseholdState &) const = default;
