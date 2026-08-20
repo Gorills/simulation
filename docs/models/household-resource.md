@@ -173,7 +173,7 @@ For bounded autonomous application, one call to `protocol::Simulation::advance_l
 6. each accepted Consume is an ordinary revision-only World transition and therefore may make a later resource read report the same tick with a greater revision;
 7. an ordinary Consume refusal cannot retroactively fail or rewrite the successful movement batch.
 
-The current acceptance content permits at most one autonomous Consume because only the short-household NPC has a positive remaining budget. This prevents one locomotion call from becoming an unbounded resource burst while still proving the ordering contract.
+The current acceptance content permits at most one autonomous Consume across the bounded scenario because only the short-household NPC has a positive remaining budget of one. This proves the ordering contract without turning locomotion ticks into a recurring meal cadence; the generic application loop remains bounded by the finite actor set and each household's remaining budget.
 
 This bounded Consume budget proves finite autonomous depletion without inventing a meal cadence or independent economy clock. Recurring consumption over world time requires later time-system admission rather than treating locomotion ticks as meals.
 
@@ -233,6 +233,7 @@ These remain later bounded capabilities and are not implied by the current state
 - [`../MODELING.md`](../MODELING.md) — deterministic quantity, household/economy and historical-source policy.
 - [`../decisions/0008-core-snapshot-restore.md`](../decisions/0008-core-snapshot-restore.md) — authoritative snapshot/restore obligations.
 - [`../decisions/0009-simulation-authority-and-decision-sources.md`](../decisions/0009-simulation-authority-and-decision-sources.md) — actor parity, time/order admission and composition boundary.
+- [`../decisions/0010-household-resource-composition-and-application-order.md`](../decisions/0010-household-resource-composition-and-application-order.md) — admitted M2 composition owner, generic actor collection and same-tick resource ordering.
 
 ## Falsifiers
 
