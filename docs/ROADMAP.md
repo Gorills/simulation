@@ -12,7 +12,7 @@ The playable/native spine, authoritative world/presentation boundary, historical
 
 **Milestone 2 — Household Resource Loop is accepted.** The village can develop a grain shortage without player intervention; the player can address it through gift, household transfer, and work while every stock change remains authoritative Simulation state. Bounded native, sanitizer, performance, localization, and RU+EN Godot evidence for shortage, gift, work, transfer, offscreen continuation, and unchanged M1 rest interference is recorded in [`VERIFICATION.md`](VERIFICATION.md).
 
-Active development now moves to **Milestone 3 — Social Consequence**. Do not expand RestNeed or the M2 household-resource loop horizontally unless a later capability exposes a concrete defect or missing causal requirement.
+Active development now moves to **Milestone 3 — Playable Social Consequence**. M3 turns the accepted shortage into one coherent vignette in which a material choice toward an identifiable neighbour is remembered and changes a later opportunity. The whole-milestone contract is [`milestones/m3-playable-social-consequence.md`](milestones/m3-playable-social-consequence.md). Do not expand RestNeed or the M2 household-resource loop horizontally unless this vignette exposes a concrete defect or missing causal requirement.
 
 ## Milestone rule
 
@@ -91,18 +91,26 @@ Acceptance evidence is defined in [`VERIFICATION.md`](VERIFICATION.md). Mechanic
 
 Milestone 2 is complete; active work must move to M3 instead of growing a general inventory/economy framework.
 
-## Milestone 3 — Social Consequence — active
+## Milestone 3 — Playable Social Consequence — active
+
+Goal:
+
+> An earlier material choice toward an identifiable neighbour is remembered by authoritative social state and changes a later concrete opportunity in ordinary play.
 
 Minimum scope:
 
-- one useful trust/obligation/reputation dimension;
-- interaction changes a future opportunity or cost;
-- an NPC remembers a relevant event through authoritative state;
-- Godot displays the consequence without owning the relationship.
+- reuse the accepted M2 autonomous shortage as the initiating world problem;
+- one bounded obligation / remembered-material-aid dimension attached to the relevant actor and social counterparty;
+- a real M2 contribution can create the social consequence; refused/no-op actions cannot;
+- one later reciprocal-aid opportunity is available/refused or materially different because of that social state;
+- the rule remains actor-generic and Godot only presents/requests it;
+- the affected household/NPC and the later consequence are understandable with technical diagnostics hidden.
 
 Acceptance:
 
-> A later action becomes available, unavailable or differently costly because of earlier authoritative social state.
+> In one short ordinary-play vignette, the player can identify who has the problem, choose whether/how to help through real world rules, see that the help was remembered, and later encounter a materially different opportunity because of that authoritative social memory. A control path without the qualifying help produces the contrasting later outcome.
+
+Whole-milestone contract: [`milestones/m3-playable-social-consequence.md`](milestones/m3-playable-social-consequence.md). Exact mechanic semantics will live in the relevant model document when implementation introduces the authoritative M3 state/rule; proof obligations/evidence belong in [`VERIFICATION.md`](VERIFICATION.md).
 
 ## Milestone 4 — First Institution / Politics
 
