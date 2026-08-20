@@ -58,6 +58,9 @@ msgstr "Rest place blocked"
 msgid "UI_NEED_SATISFIED"
 msgstr "Rest place available"
 
+msgid "UI_WORLD_REST_TARGET_HINT"
+msgstr "NPC rest place\nStand on the marker to block the place"
+
 msgid "UI_DEBUG_SPATIAL"
 msgstr "SPATIAL"
 

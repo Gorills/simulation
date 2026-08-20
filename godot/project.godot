@@ -10,6 +10,7 @@ config/features=PackedStringArray("4.7")
 
 [autoload]
 Localization="*res://scripts/localization/localization.gd"
+LivingNeedExposure="*res://scripts/presentation/living_need_exposure.gd"
 
 [debug]
 gdscript/warnings/untyped_declaration=1

@@ -58,6 +58,9 @@ msgstr "Место отдыха занято"
 msgid "UI_NEED_SATISFIED"
 msgstr "Место отдыха доступно"
 
+msgid "UI_WORLD_REST_TARGET_HINT"
+msgstr "Место отдыха NPC\nВстаньте на метку, чтобы помешать"
+
 msgid "UI_DEBUG_SPATIAL"
 msgstr "ПРОСТРАНСТВО"
 

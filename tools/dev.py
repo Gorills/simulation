@@ -69,6 +69,7 @@ def main() -> int:
                 args.locale,
             ]
         )
+        run([sys.executable, str(ROOT / "tools" / "check_playtest_stderr.py")])
     elif args.command == "run":
         argv = [sys.executable, str(ROOT / "tools" / "run_game.py")]
         if args.locale is not None:

@@ -6,7 +6,7 @@ Status: IMPLEMENTED — Milestone 1 accepted
 
 Establish the smallest complete causal NPC behavior that is more than locomotion acceptance: an identity-resolved actor has authoritative need state, that state produces a concrete task intention, the task uses the shared movement law, other actors can change the outcome through the same world, presentation lifetime is not a prerequisite for causal progress, and the real client exposes the derived outcome without owning it.
 
-The accepted vertical loop is **need -> task -> travel -> shared-world interference -> offscreen continuation -> read-only client outcome -> bounded interference/help evidence**.
+The accepted vertical loop is **need -> task -> travel -> shared-world interference -> offscreen continuation -> read-only client outcome -> player-readable interaction cue -> bounded interference/help evidence**.
 
 Milestone acceptance follows the evidence contract in [`../VERIFICATION.md`](../VERIFICATION.md); this model owns mechanic semantics rather than CI-run history.
 
@@ -47,6 +47,8 @@ Core exposes only the bounded read-only presence query needed by this condition.
 
 Occupancy is checked only once the NPC itself has reached its assigned tolerance. The rule does not grant long-range occupancy knowledge or pathfinding behavior.
 
+The player must not need repository knowledge or hidden fixture coordinates to use this capability. The ordinary client therefore renders the assigned rest footprint from the read-only authoritative projection and explicitly tells the player that standing on the marker interferes with the NPC. The marker is presentation only; moving onto it remains the same actor-generic locomotion action that changes World state.
+
 ## Application composition
 
 The bounded Milestone 1 acceptance composition uses:
@@ -60,23 +62,25 @@ Each application locomotion tick collects human control and the Core RestNeed de
 
 Because occupancy derives from World spatial state, existing controlled locomotion changes the need outcome; there is no player-only mutation API.
 
-## Read-only outcome projection
+## Read-only outcome and interaction projection
 
-The client needs to distinguish the otherwise visually similar stationary outcomes `blocked` and `satisfied`, but it does not need the internal RestNeed state or mutation authority.
+The client needs to distinguish the otherwise visually similar stationary outcomes `blocked` and `satisfied` and must know the observable location the player can physically occupy. It does not need mutation authority or a general-purpose dump of `RestNeedState`.
 
 `LivingNeedProjection` is therefore a purpose-built read model containing only:
 
 - the living-need NPC `EntityId`;
 - derived status: `traveling`, `blocked` or `satisfied`;
+- the assigned local X/Z target exposed as presentation-space millimeters/meters by the adapter;
+- the current per-axis arrival/occupancy tolerance needed to render the actual interaction footprint;
 - current `SimulationTick`;
 - current `WorldRevision`;
 - protocol version.
 
-The projection is recomputed from the Core RestNeed decision on read. It does not persist a second need state, expose the target/tolerance, or create a generic task/need DTO family.
+The projection is recomputed from authoritative World state on read. It does not persist a second need state, expose mutation commands or create a generic task/need DTO family.
 
-The GDExtension translates the enum into stable presentation strings and Godot renders a localized read-only HUD row. Godot does not calculate whether the place is occupied or whether the need is satisfied.
+The GDExtension translates the projection into presentation types. Godot renders a localized read-only HUD status, a world-space footprint at the authoritative target and a localized world-space cue explaining the available interference action. Godot does not calculate whether the place is occupied, invent the target or decide whether the need is satisfied.
 
-This projection is an additive read on protocol v6. Existing commands/results/projections keep their current shapes, so no incompatible protocol-version bump is introduced.
+This remains an additive read on protocol v6. Existing commands/results keep their current shapes, so no incompatible protocol-version bump is introduced.
 
 ## Offscreen continuation and materialization
 
@@ -101,13 +105,15 @@ The `rest_interference` scenario uses the real Godot -> GDExtension -> protocol 
 
 It proves this causal sequence:
 
-1. `LivingNeedProjection` begins `traveling`;
+1. `LivingNeedProjection` begins `traveling` and exposes the same target/footprint rendered to the player;
 2. the controlled actor moves toward the assigned rest location through the same semantic movement command used by normal control;
 3. when the NPC reaches the place while the controlled actor occupies it, Core derives `blocked`;
 4. Godot displays the localized read-only blocked status and captures rendered evidence;
 5. the controlled actor leaves through ordinary authoritative movement;
 6. the next eligible RestNeed decision becomes `satisfied`;
 7. Godot displays the localized satisfied status and the final evidence aligns need status, world tick/revision and authoritative movement presentation.
+
+The persistent Godot smoke path also requires the living-need presentation exposure to materialize successfully from the authoritative projection. A missing/invalid world cue is therefore a runtime verification failure rather than a silently accepted debug-only mechanic.
 
 The scripted input is only bounded acceptance automation. It does not bypass the normal movement/world-rule path and does not claim subjective keyboard/gamepad feel.
 
@@ -126,6 +132,7 @@ Milestone 1 is accepted with executable evidence for:
 - another actor changing the need outcome through ordinary world movement;
 - causal continuation without an NPC Godot node;
 - authoritative `traveling` / `blocked` / `satisfied` status exposed without client ownership;
+- a player-readable authoritative rest footprint explaining how ordinary movement can interfere;
 - a bounded real-client interference/help loop reaching `blocked` and then `satisfied`.
 
 Acceptance means the first living-need vertical capability is complete. It does **not** imply the current rest-point fixture is a production needs/planning/home framework.
