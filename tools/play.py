@@ -21,6 +21,8 @@ LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
 SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference")
 SMOKE_AUDIO_DRIVER = "Dummy"
+PROTOCOL_VERSION = 7
+OBSERVED_ENTITY_IDS = [1, 2, 3]
 
 
 class PlayLock(AbstractContextManager["PlayLock"]):
@@ -151,32 +153,51 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "x": 1,
         "y": 0,
         "tick": 0,
-        "revision": 3,
         "seed": 1,
-        "protocol_version": 6,
+        "protocol_version": PROTOCOL_VERSION,
     }
     for key, value in expected_bootstrap.items():
         if bootstrap.get(key) != value:
             raise SystemExit(f"unexpected bootstrap projection {key}: expected {value}, got {bootstrap.get(key)}")
+    bootstrap_revision = bootstrap.get("revision")
+    if not isinstance(bootstrap_revision, int):
+        raise SystemExit(f"unexpected bootstrap projection revision: {bootstrap_revision}")
+
+    if movement_stream.get("duplicate_batch_rejected") is not True:
+        raise SystemExit("WorldPresentation did not prove duplicate movement-batch rejection")
+    batch = movement_stream.get("batch")
+    if not isinstance(batch, dict):
+        raise SystemExit("movement stream is missing its authoritative batch")
+    batch_tick = batch.get("tick")
+    batch_revision = batch.get("revision")
+    if not isinstance(batch_tick, int) or not isinstance(batch_revision, int):
+        raise SystemExit("movement batch has invalid temporal header")
+    if batch_tick != 1 or batch_revision != bootstrap_revision + 1:
+        raise SystemExit(
+            "movement batch did not advance one locomotion tick/revision after bootstrap"
+        )
+    if batch.get("protocol_version") != PROTOCOL_VERSION:
+        raise SystemExit(f"unexpected movement batch protocol version: {batch.get('protocol_version')}")
 
     expected_observed = {
         "controlled_actor_id": 1,
-        "tick": 1,
-        "revision": 4,
-        "protocol_version": 6,
+        "tick": batch_tick,
+        "revision": batch_revision,
+        "protocol_version": PROTOCOL_VERSION,
     }
     for key, value in expected_observed.items():
         if observed.get(key) != value:
             raise SystemExit(f"unexpected observed-world {key}: expected {value}, got {observed.get(key)}")
-    if observed.get("entities") != [{"entity_id": 1}, {"entity_id": 2}]:
+    expected_entities = [{"entity_id": entity_id} for entity_id in OBSERVED_ENTITY_IDS]
+    if observed.get("entities") != expected_entities:
         raise SystemExit(f"unexpected observed entities: {observed.get('entities')}")
 
     expected_spatial_scalars = {
         "entity_id": 1,
         "spatial_epoch": 1,
-        "tick": 1,
-        "revision": 4,
-        "protocol_version": 6,
+        "tick": batch_tick,
+        "revision": batch_revision,
+        "protocol_version": PROTOCOL_VERSION,
     }
     for key, value in expected_spatial_scalars.items():
         if spatial.get(key) != value:
@@ -184,27 +205,17 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
     require_close_vector(spatial.get("position_m"), [0.001, 0.0, 0.0], "controlled spatial position")
     require_close_vector(spatial.get("velocity_mps"), [0.1, 0.0, 0.0], "controlled spatial velocity")
 
-    if movement_stream.get("duplicate_batch_rejected") is not True:
-        raise SystemExit("WorldPresentation did not prove duplicate movement-batch rejection")
-    batch = movement_stream.get("batch")
-    if not isinstance(batch, dict):
-        raise SystemExit("movement stream is missing its authoritative batch")
-    expected_batch_header = {"tick": 1, "revision": 4, "protocol_version": 6}
-    for key, value in expected_batch_header.items():
-        if batch.get(key) != value:
-            raise SystemExit(f"unexpected movement batch {key}: expected {value}, got {batch.get(key)}")
     samples = batch.get("samples")
     if (
         not isinstance(samples, list)
-        or len(samples) != 2
-        or not isinstance(samples[0], dict)
-        or not isinstance(samples[1], dict)
+        or len(samples) != 3
+        or not all(isinstance(sample, dict) for sample in samples)
     ):
         raise SystemExit(f"unexpected movement samples: {samples}")
 
-    controlled_sample = samples[0]
-    if controlled_sample.get("entity_id") != 1 or controlled_sample.get("spatial_epoch") != 1:
-        raise SystemExit(f"unexpected controlled movement sample identity/epoch: {controlled_sample}")
+    controlled_sample = movement_sample(batch, 1, "smoke batch")
+    if controlled_sample.get("spatial_epoch") != 1:
+        raise SystemExit(f"unexpected controlled movement sample epoch: {controlled_sample}")
     require_close_vector(
         controlled_sample.get("position_m"),
         [0.001, 0.0, 0.0],
@@ -216,9 +227,9 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "controlled movement sample velocity",
     )
 
-    npc_sample = samples[1]
-    if npc_sample.get("entity_id") != 2 or npc_sample.get("spatial_epoch") != 1:
-        raise SystemExit(f"unexpected NPC movement sample identity/epoch: {npc_sample}")
+    npc_sample = movement_sample(batch, 2, "smoke batch")
+    if npc_sample.get("spatial_epoch") != 1:
+        raise SystemExit(f"unexpected NPC movement sample epoch: {npc_sample}")
     require_close_vector(
         npc_sample.get("position_m"),
         [2.999, 0.0, -3.0],
@@ -230,18 +241,32 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
         "living-need NPC movement sample velocity",
     )
 
+    idle_npc_sample = movement_sample(batch, 3, "smoke batch")
+    if idle_npc_sample.get("spatial_epoch") != 1:
+        raise SystemExit(f"unexpected idle NPC movement sample epoch: {idle_npc_sample}")
+    require_close_vector(
+        idle_npc_sample.get("position_m"),
+        [2.0, 0.0, 2.0],
+        "idle NPC movement sample position",
+    )
+    require_close_vector(
+        idle_npc_sample.get("velocity_mps"),
+        [0.0, 0.0, 0.0],
+        "idle NPC movement sample velocity",
+    )
+
     expected_presentation = {
         "controlled_entity_id": 1,
-        "last_tick": 1,
-        "last_revision": 4,
-        "protocol_version": 6,
-        "observed_entity_ids": [1, 2],
-        "bound_entity_ids": [1, 2],
-        "visible_bound_entity_ids": [1, 2],
+        "last_tick": batch_tick,
+        "last_revision": batch_revision,
+        "protocol_version": PROTOCOL_VERSION,
+        "observed_entity_ids": OBSERVED_ENTITY_IDS,
+        "bound_entity_ids": OBSERVED_ENTITY_IDS,
+        "visible_bound_entity_ids": OBSERVED_ENTITY_IDS,
         "controlled_spatial_initialized": True,
         "controlled_spatial_epoch": 1,
-        "controlled_spatial_tick": 1,
-        "controlled_spatial_revision": 4,
+        "controlled_spatial_tick": batch_tick,
+        "controlled_spatial_revision": batch_revision,
         "movement_batches_applied": 1,
     }
     for key, value in expected_presentation.items():
@@ -343,7 +368,10 @@ def validate_offscreen_artifact(path: Path, expected_locale: str) -> dict[str, o
         raise SystemExit("offscreen movement ticks are not consecutive")
     if absent_revision != first_revision + 1 or final_revision != absent_revision + 1:
         raise SystemExit("offscreen movement revisions are not consecutive")
-    if not all(batch.get("protocol_version") == 6 for batch in (first_batch, absent_batch, final_batch)):
+    if not all(
+        batch.get("protocol_version") == PROTOCOL_VERSION
+        for batch in (first_batch, absent_batch, final_batch)
+    ):
         raise SystemExit("offscreen movement protocol version mismatch")
 
     first_npc = movement_sample(first_batch, 2, "first batch")
@@ -371,9 +399,9 @@ def validate_offscreen_artifact(path: Path, expected_locale: str) -> dict[str, o
         raise SystemExit("living-need NPC did not continue authoritative travel while unmaterialized")
 
     expected_presentation = {
-        "observed_entity_ids": [1, 2],
-        "bound_entity_ids": [1, 2],
-        "visible_bound_entity_ids": [1, 2],
+        "observed_entity_ids": OBSERVED_ENTITY_IDS,
+        "bound_entity_ids": OBSERVED_ENTITY_IDS,
+        "visible_bound_entity_ids": OBSERVED_ENTITY_IDS,
         "last_tick": final_tick,
         "last_revision": final_revision,
         "controlled_spatial_tick": final_tick,
@@ -423,7 +451,10 @@ def validate_rest_interference_artifact(path: Path, expected_locale: str) -> dic
         raise SystemExit(f"unexpected blocked need projection: {blocked}")
     if satisfied.get("entity_id") != 2 or satisfied.get("status") != "satisfied":
         raise SystemExit(f"unexpected satisfied need projection: {satisfied}")
-    if blocked.get("protocol_version") != 6 or satisfied.get("protocol_version") != 6:
+    if (
+        blocked.get("protocol_version") != PROTOCOL_VERSION
+        or satisfied.get("protocol_version") != PROTOCOL_VERSION
+    ):
         raise SystemExit("rest interference need projection protocol mismatch")
 
     blocked_tick = blocked.get("tick")
@@ -482,13 +513,30 @@ def validate_rest_interference_artifact(path: Path, expected_locale: str) -> dic
 
     if living_need.get("entity_id") != 2 or living_need.get("status") != "satisfied":
         raise SystemExit(f"final living-need projection is not satisfied: {living_need}")
+    if living_need.get("protocol_version") != PROTOCOL_VERSION:
+        raise SystemExit("final living-need projection protocol mismatch")
     if living_need.get("tick") != presentation.get("last_tick"):
         raise SystemExit("final need projection tick does not match presented world tick")
-    if living_need.get("revision") != presentation.get("last_revision"):
-        raise SystemExit("final need projection revision does not match presented world revision")
     batch = movement_stream.get("batch")
     if not isinstance(batch, dict) or batch.get("tick") != living_need.get("tick"):
         raise SystemExit("final movement batch does not align with the satisfied need projection")
+    batch_revision = batch.get("revision")
+    presentation_revision = presentation.get("last_revision")
+    living_revision = living_need.get("revision")
+    if not all(
+        isinstance(revision, int)
+        for revision in (batch_revision, presentation_revision, living_revision)
+    ):
+        raise SystemExit("final rest-interference revisions are invalid")
+    assert isinstance(batch_revision, int)
+    assert isinstance(presentation_revision, int)
+    assert isinstance(living_revision, int)
+    if presentation_revision != batch_revision:
+        raise SystemExit("presented world revision does not match the final movement batch")
+    if living_revision not in (batch_revision, batch_revision + 1):
+        raise SystemExit(
+            "final need revision is not aligned with movement or one post-movement resource transition"
+        )
     return evidence
 
 
