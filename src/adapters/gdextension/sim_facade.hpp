@@ -22,9 +22,11 @@ public:
     [[nodiscard]] godot::Dictionary living_need_projection() const;
     [[nodiscard]] godot::Dictionary village_household_resource_projection() const;
     [[nodiscard]] godot::Dictionary controlled_actor_carry_projection() const;
+    [[nodiscard]] godot::Dictionary field_work_projection() const;
     [[nodiscard]] godot::Dictionary controlled_actor_draw_grain();
     [[nodiscard]] godot::Dictionary controlled_actor_deposit_grain();
     [[nodiscard]] godot::Dictionary controlled_actor_gift_grain(std::int64_t receiving_household_id);
+    [[nodiscard]] godot::Dictionary controlled_actor_complete_field_work();
     [[nodiscard]] godot::Dictionary controlled_actor_submit_move_intent(
         std::int32_t x,
         std::int32_t z,
@@ -36,6 +38,8 @@ protected:
     static void _bind_methods();
 
 private:
+    static void bind_work_methods();
+
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::BootstrapActorProjection &projection
     );
@@ -55,7 +59,13 @@ private:
         const protocol::ControlledActorCarryProjection &projection
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::FieldWorkProjection &projection
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::ControlledActorResourceResult &result
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::ControlledActorWorkResult &result
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::AuthoritativeMovementSampleBatch &batch
