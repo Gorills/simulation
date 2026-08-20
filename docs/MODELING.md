@@ -37,6 +37,8 @@ The initial Simulation Core is single-threaded. Parallel execution is not archit
 
 Do not use one counter for both concepts. Schedules, production, recovery and long-horizon systems depend on simulation time; presentation reconciliation depends on ordered revisions.
 
+The bounded Milestone 2 field Work completion is an explicit acceptance-fixture exception to time-based production: its finite immediate transition is owned and constrained by [`models/household-resource.md`](models/household-resource.md), not a precedent for recurring production without `SimulationTick`.
+
 ## Entity identity and player/NPC parity
 
 The player-controlled person is not a separate domain species.
