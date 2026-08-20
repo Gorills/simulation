@@ -4,9 +4,9 @@ Status: DRAFT
 
 ## Gameplay purpose
 
-Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, become short through bounded NPC autonomy, expose that state through the real client, and now move the same conserved grain between household stock and a bounded actor carry slot through native Draw, Deposit and Gift laws.
+Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, become short through bounded NPC autonomy, expose that state through the real client, and move the same conserved grain between household stock and a bounded actor carry slot through Draw, Deposit and Gift laws.
 
-The first Godot checkpoint still exposes shortage only. Carry and transfer commands remain native until the next bounded player-facing increment.
+M2.6 exposes the controlled actor's carry/member-household state and those existing transfer laws through semantic protocol/GDExtension commands plus a minimal localized Godot affordance. The real-client Gift checkpoint proves that player intervention changes authoritative stock/carry and still participates in the existing M1 rest-place interference at the shared short-household store.
 
 This model is deliberately narrower than a general inventory, economy, market, farming or needs framework.
 
@@ -32,14 +32,17 @@ For the current bounded Core/application/vertical subset:
 - protocol decision collection iterates the deterministic Core actor-id view, applies RestNeed movement to actors that have that state, and gives other exact-spatial non-controlled actors an idle locomotion intent;
 - bounded autonomous Consume is considered only for non-controlled actors whose current authoritative state makes the action feasible;
 - locomotion commits first; a successful autonomous Consume may then create a later `WorldRevision` on the same `SimulationTick` while the returned movement batch retains the locomotion commit revision;
-- the next locomotion batch remains consecutive in `SimulationTick` and strictly later in `WorldRevision`;
+- the next locomotion batch remains consecutive in `SimulationTick` and strictly later in `WorldRevision`, including after an explicit controlled resource command creates an intervening revision;
 - actor observation remains actor-scoped, while a separate village household-resource read exposes household membership, store identity/footprint, stock, threshold and derived shortage;
-- the GDExtension translates that existing protocol projection without recomputing shortage or owning resource state;
+- a controlled-actor carry projection exposes authoritative carried grain/capacity plus optional authoritative member-household identity/stock;
+- controlled Draw/Deposit/Gift protocol commands carry no amount; Gift carries only the receiving household identity and every accepted result reports the Core-owned moved/resulting quantities and tick/revision;
+- the GDExtension translates protocol projections/results/errors without recomputing resource law or owning resource state;
 - Godot resolves the tracked acceptance actor, household and shared rest/store position from authoritative projections before scripted runtime advancement instead of carrying fixture EntityIds or coordinates;
-- the Godot HUD renders the protocol-owned `adequate`/`shortage` status with authoritative stock/threshold quantities through localized RU/EN text;
-- the bounded `shortage` playtest advances only ordinary locomotion, submits no player economic command, observes the autonomous adequate-to-shortage transition and proves movement revision `R` followed by resource revision `R+1` on the same tick.
+- the Godot HUD renders protocol/Core-owned shortage, stock and carry quantities through localized RU/EN text and exposes bounded keyboard Draw/Deposit/Gift affordances;
+- the bounded `shortage` playtest advances only ordinary locomotion, submits no player economic command, observes the autonomous adequate-to-shortage transition and proves movement revision `R` followed by resource revision `R+1` on the same tick;
+- the bounded `gift` playtest waits for that autonomous shortage, draws from the controlled actor's own household, reaches the receiving store through ordinary locomotion, Gifts the entire carry, observes authoritative stock/carry conservation and shortage relief, and observes the M1 RestNeed as `blocked` while the player occupies the shared store/rest footprint.
 
-The first vertical M2 checkpoint therefore exposes the same Core/protocol resource truth in the real client; native carry/transfer state extends that truth without introducing a client-side balance, generic inventory or scenario-only stock mutation.
+The current verticals therefore expose the same Core resource truth in the real client without introducing a client-side balance, generic inventory, scenario-only stock mutation or second resource law.
 
 ## Historical baseline and region
 
@@ -93,14 +96,16 @@ Core actor-id view
   -> same SimulationTick, later WorldRevision
 ```
 
-Current first vertical read path:
+Current player intervention path:
 
 ```text
-World household/resource truth
-  -> VillageHouseholdResourceProjection
+World carry + household/resource truth
+  -> ControlledActorCarryProjection + VillageHouseholdResourceProjection
+  -> semantic Draw / Deposit / Gift protocol command
+  -> same actor-generic World law
+  -> authoritative transition result
   -> GDExtension Dictionary translation
-  -> Godot read-only household discovery
-  -> localized HUD status + bounded screenshot/debug evidence
+  -> localized carry/resource HUD reconciliation
 ```
 
 There is no hidden hunger timer, background economy clock, second time stream, Godot-owned stock or client-owned carry balance.
@@ -127,13 +132,15 @@ The current resource place record contains a stable `EntityId`, local X/Z and no
 
 In the acceptance village the short household store intentionally uses the same X/Z/tolerance values as the M1 RestNeed target. That is one content fact shared by two mechanics, not a hidden protocol/Godot coordinate contract. The Godot client verifies this relationship from the two projections before caching the scenario target.
 
+Store occupancy is intentionally non-exclusive. When the controlled actor occupies the short household's store to Gift, the existing M1 other-actor occupancy rule can make the RestNeed actor `blocked`; resource actions do not suppress or special-case that interaction.
+
 ### Actor
 
 Actors carry one authoritative grain quantity and one authoritative grain carry-capacity quantity. Both are non-negative and carried grain cannot exceed capacity. This is a bounded one-staple carry slot, not a generic inventory, container, item-stack or equipment model.
 
 Consume, Draw, Deposit and Gift are ordinary actor-generic World laws. Consume/Draw/Deposit derive the actor's household from authoritative membership. Gift accepts a receiving household identity and refuses the actor's own household so Deposit remains the own-household operation.
 
-The current application policy excludes the controlled actor from autonomous Consume. This is a decision-source policy only; it does not grant NPCs a different World mutation law. Draw/Deposit/Gift have no autonomous application policy yet.
+The current application policy excludes the controlled actor from autonomous Consume. This is a decision-source policy only; it does not grant NPCs a different World mutation law. Draw/Deposit/Gift have no automatic NPC application policy; M2.6 adds an explicit controlled-actor protocol command source over the shared laws.
 
 ## Acceptance composition
 
@@ -145,7 +152,7 @@ The current M2 acceptance village is code-defined Core content, not protocol-own
 - one store place per household;
 - one household aggregate per store.
 
-The short-household RestNeed actor keeps zero carry capacity in the current bounded content because M2.5 only stages the actors required for the next player/NPC Gift parity checkpoint; this is content, not a different actor law.
+The short-household RestNeed actor keeps zero carry capacity in the current bounded content because no current decision policy asks that actor to carry grain; this is content, not a different actor law.
 
 The builder owns concrete acceptance IDs and returns only the controlled-actor session binding. Protocol discovers actors through `World::actor_ids()` and households through `World::household_ids()`; it does not keep a growing list of feature-named NPC IDs. Godot similarly discovers the living-need actor's household/store through projections rather than duplicating those acceptance IDs or coordinates.
 
@@ -199,13 +206,15 @@ None.
 
 ## Inputs
 
-Consume, Draw and Deposit take only the acting `EntityId`. The actor does not supply an amount, stock target, shortage flag or household balance. World derives the actor's household; Consume uses the household's authoritative consume amount, Draw derives the transferable quantity from current stock and free carry capacity, and Deposit uses the entire authoritative carry.
+Consume, Draw and Deposit take only the acting `EntityId` at Core law level. The actor does not supply an amount, stock target, shortage flag or household balance. World derives the actor's household; Consume uses the household's authoritative consume amount, Draw derives the transferable quantity from current stock and free carry capacity, and Deposit uses the entire authoritative carry.
 
 Gift takes the acting `EntityId` plus the receiving household `EntityId`. The caller does not supply a gift amount; World transfers the actor's entire authoritative carry after validating the receiving household/store and rejecting the actor's own household target.
 
+At the M2.6 protocol boundary, controlled Draw and Deposit carry no payload and controlled Gift carries only the receiving household id. `protocol::Simulation` binds the controlled actor and delegates directly to the same World laws; the GDExtension translates the resulting typed outcome without owning mutation rules.
+
 The application layer may propose autonomous Consume only after the ordinary locomotion transition and only when a read-only Core feasibility check says current authoritative state satisfies membership, exact store presence, remaining budget and stock. `World::consume_household_grain()` still revalidates those prerequisites before mutation.
 
-The first vertical Godot shortage scenario submits only a zero controlled locomotion intent while the ordinary NPC decision path advances. It does not submit a resource/economic intent, set stock, set shortage or teleport the NPC. Draw/Deposit/Gift are not yet exposed through protocol/GDExtension/Godot commands.
+The Godot shortage scenario still submits only zero controlled locomotion while ordinary NPC policy advances. The Gift scenario uses the real controlled Draw/Gift commands and ordinary locomotion; it never sets stock/carry, teleports, or supplies a transfer amount.
 
 ## Transitions / scheduling
 
@@ -257,7 +266,7 @@ For bounded autonomous application, one call to `protocol::Simulation::advance_l
 6. each accepted Consume is an ordinary revision-only World transition and therefore may make a later resource read report the same tick with a greater revision;
 7. an ordinary Consume refusal cannot retroactively fail or rewrite the successful movement batch.
 
-M2.5 does not add automatic Draw, Deposit or Gift scheduling. Their decision-source and client command integration belongs to the next bounded vertical increment.
+Draw, Deposit and Gift remain explicit immediate commands rather than automatic schedules. A resource command may create an intervening revision between locomotion ticks; the next locomotion batch advances from that latest world revision rather than rejecting a valid command history.
 
 The current acceptance content permits at most one autonomous Consume across the bounded scenario because only the short-household NPC has a positive remaining budget of one. This proves the ordering contract without turning locomotion ticks into a recurring meal cadence. Recurring consumption over world time requires later time-system admission rather than treating locomotion ticks as meals.
 
@@ -271,22 +280,26 @@ Current direct outputs are:
 - derived shortage state from the resulting household stock;
 - typed transition results carrying actor/household identity, moved quantity, resulting quantities and current tick/revision;
 - unchanged `SimulationTick` and exactly one later `WorldRevision` for each accepted immediate resource transition;
-- a village-scoped household-resource protocol read with authoritative tick/revision/version context for the already exposed shortage vertical;
+- a village-scoped household-resource protocol read with authoritative tick/revision/version context;
+- a controlled-actor carry/member-household projection with authoritative carry/capacity and optional own-household stock;
+- semantic controlled Draw/Deposit/Gift command results with no client-authored quantity;
 - actor-scoped observed-world output computed from the deterministic actor-id view;
-- GDExtension translation of household identity/membership/store/resource/status fields;
-- localized Godot household-resource feedback and bounded RU/EN shortage scenario evidence.
+- GDExtension translation of household/carry/resource result and error fields;
+- localized Godot shortage/carry/action feedback and bounded RU/EN shortage plus Gift scenario evidence.
 
-The movement batch and a resource read taken immediately afterward may therefore deliberately carry different revisions on the same tick. Presentation retains the movement revision for the controlled actor's spatial sample while a later observed-world refresh may reconcile its latest world revision to the post-Consume resource revision.
+The movement batch and a resource read taken immediately afterward may deliberately carry different revisions on the same tick. Presentation retains the movement revision for controlled spatial state while a later observed-world refresh may reconcile its latest world revision to a post-Consume or explicit resource-command revision.
 
 ## Player-facing exposure
 
-The purpose-built village household-resource projection is translated through the GDExtension and read by the Godot client. The client resolves the living-need actor's household and store from authoritative discovery, renders the supplied `adequate`/`shortage` status with stock/threshold quantities in the localized diagnostics HUD, and never calculates or mutates the resource state itself.
+The purpose-built village household-resource projection and controlled carry projection are translated through the GDExtension and read by the Godot client. The client resolves household/store identity from authoritative discovery, renders supplied `adequate`/`shortage` state and carry quantities, and does not calculate or mutate resource state itself.
 
-The bounded `shortage` scenario proves the first real vertical loop: the tracked household starts adequate, the NPC reaches its Core-owned store through ordinary locomotion, application-level autonomous Consume makes the household short, the resource read reports the same tick at one later revision, and RU/EN Godot feedback renders that authoritative result without a player economic command.
+The bounded `shortage` scenario proves the autonomous scarcity vertical: the tracked household starts adequate, the NPC reaches its Core-owned store through ordinary locomotion, application-level autonomous Consume makes the household short, and RU/EN Godot feedback renders that authoritative result without a player economic command.
 
-Actor carry plus Draw/Deposit/Gift are currently **native-only World capabilities**. M2.5 intentionally does not add protocol commands, GDExtension mutation methods, Godot controls or carry UI. The next bounded vertical increment must expose these existing laws rather than duplicate them in the client.
+The bounded `gift` scenario proves the first player intervention vertical over M2.5 laws: the controlled actor draws at its own store, waits for the neighbour to become short, moves through the ordinary controlled locomotion boundary to the discovered receiving store, Gifts its whole carry, observes target stock increase and carry clear on one revision-only transition, and renders the resulting adequate household/carry state in RU and EN. Because that store is also the M1 RestNeed target, the same run observes `blocked` while the player occupies the footprint; Gift does not invent an exclusivity exception.
 
-This is not yet the milestone's multiple-path player intervention acceptance: Gift player/NPC parity, Work/production and standing transfer remain later capabilities.
+The interactive client exposes only the smallest bounded affordance: E Draw, R Deposit and G Gift to the currently discovered tracked neighbour household. This is an acceptance interaction surface, not a general inventory/target-selection UI and not a source of authoritative quantities.
+
+This is not yet the milestone's multiple-path intervention closure: Work/production and standing household transfer remain later capabilities.
 
 ## Uncertainty
 
@@ -304,14 +317,15 @@ Current simplifications include:
 - no processing from grain to food;
 - no prices, currency, credit or market clearing;
 - no household internal allocation rule beyond the current Consume/Draw/Deposit operations;
-- one bounded code-defined acceptance village rather than a general content authoring system.
+- one bounded code-defined acceptance village rather than a general content authoring system;
+- one tracked-neighbour Gift affordance rather than a general household-selection UI.
 
 ## Deliberately not simulated
 
 Not yet represented:
 
 - general inventory, item stacks, containers or equipment;
-- player/NPC Gift decision-source integration and player-facing carry/transfer commands;
+- automatic NPC Gift decision-source policy or scheduling;
 - work/production and field assignment;
 - standing household transfer pledges;
 - wages, rents, tithe, tenure or institutional allocation;
