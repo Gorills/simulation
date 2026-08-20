@@ -391,7 +391,7 @@ TEST(HouseholdResourceSnapshot, RestorePreservesDeterministicConsumeContinuation
         }).has_value()
     );
     const auto saved = source.snapshot();
-    EXPECT_EQ(saved.schema_version, 7U);
+    EXPECT_EQ(saved.schema_version, worldsim::sim::kWorldSnapshotSchemaVersion);
 
     worldsim::sim::World restored{worldsim::sim::WorldSeed{999}};
     ASSERT_TRUE(restored.restore(saved).has_value());
@@ -451,7 +451,7 @@ TEST(HouseholdCarry, CarryInvariantIsValidatedAtSpawnAndRestore) {
         ).has_value()
     );
     const auto saved = source.snapshot();
-    EXPECT_EQ(saved.schema_version, 7U);
+    EXPECT_EQ(saved.schema_version, worldsim::sim::kWorldSnapshotSchemaVersion);
 
     worldsim::sim::World restored{worldsim::sim::WorldSeed{999}};
     ASSERT_TRUE(restored.restore(saved).has_value());
