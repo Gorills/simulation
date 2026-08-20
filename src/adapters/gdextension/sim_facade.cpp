@@ -45,6 +45,40 @@ constexpr double kMillimetersPerMeter = 1000.0;
     return godot::String("unknown_movement_error");
 }
 
+[[nodiscard]] godot::String resource_error_name(
+    const protocol::ControlledActorResourceError error
+) {
+    switch (error) {
+    case protocol::ControlledActorResourceError::protocol_integer_exhausted:
+        return godot::String("protocol_integer_exhausted");
+    case protocol::ControlledActorResourceError::controlled_actor_missing:
+        return godot::String("controlled_actor_missing");
+    case protocol::ControlledActorResourceError::actor_without_household:
+        return godot::String("actor_without_household");
+    case protocol::ControlledActorResourceError::invalid_actor_carry_state:
+        return godot::String("invalid_actor_carry_state");
+    case protocol::ControlledActorResourceError::invalid_household_state:
+        return godot::String("invalid_household_state");
+    case protocol::ControlledActorResourceError::controlled_actor_spatial_state_missing:
+        return godot::String("controlled_actor_spatial_state_missing");
+    case protocol::ControlledActorResourceError::outside_store:
+        return godot::String("outside_store");
+    case protocol::ControlledActorResourceError::carry_full:
+        return godot::String("carry_full");
+    case protocol::ControlledActorResourceError::store_empty:
+        return godot::String("store_empty");
+    case protocol::ControlledActorResourceError::carry_empty:
+        return godot::String("carry_empty");
+    case protocol::ControlledActorResourceError::target_household_missing:
+        return godot::String("target_household_missing");
+    case protocol::ControlledActorResourceError::own_household:
+        return godot::String("own_household");
+    case protocol::ControlledActorResourceError::stock_overflow:
+        return godot::String("stock_overflow");
+    }
+    return godot::String("unknown_resource_error");
+}
+
 [[nodiscard]] godot::String living_need_status_name(const protocol::LivingNeedStatus status) {
     switch (status) {
     case protocol::LivingNeedStatus::traveling:
@@ -136,6 +170,22 @@ void SimFacade::_bind_methods() {
         &SimFacade::village_household_resource_projection
     );
     godot::ClassDB::bind_method(
+        godot::D_METHOD("controlled_actor_carry_projection"),
+        &SimFacade::controlled_actor_carry_projection
+    );
+    godot::ClassDB::bind_method(
+        godot::D_METHOD("controlled_actor_draw_grain"),
+        &SimFacade::controlled_actor_draw_grain
+    );
+    godot::ClassDB::bind_method(
+        godot::D_METHOD("controlled_actor_deposit_grain"),
+        &SimFacade::controlled_actor_deposit_grain
+    );
+    godot::ClassDB::bind_method(
+        godot::D_METHOD("controlled_actor_gift_grain", "receiving_household_id"),
+        &SimFacade::controlled_actor_gift_grain
+    );
+    godot::ClassDB::bind_method(
         godot::D_METHOD("controlled_actor_submit_move_intent", "x", "z", "pace"),
         &SimFacade::controlled_actor_submit_move_intent
     );
@@ -203,6 +253,75 @@ godot::Dictionary SimFacade::village_household_resource_projection() const {
         return to_dictionary(simulation_.village_household_resource_projection());
     } catch (const std::overflow_error &) {
         return protocol_integer_error_dictionary();
+    }
+}
+
+godot::Dictionary SimFacade::controlled_actor_carry_projection() const {
+    try {
+        return to_dictionary(simulation_.controlled_actor_carry_projection());
+    } catch (const std::overflow_error &) {
+        return protocol_integer_error_dictionary();
+    }
+}
+
+godot::Dictionary SimFacade::controlled_actor_draw_grain() {
+    godot::Dictionary response;
+    try {
+        const auto outcome = simulation_.controlled_actor_draw_household_grain();
+        if (!outcome.has_value()) {
+            response["ok"] = false;
+            response["error"] = resource_error_name(outcome.error());
+            return response;
+        }
+        response["ok"] = true;
+        response["result"] = to_dictionary(*outcome);
+        return response;
+    } catch (const std::overflow_error &) {
+        response["ok"] = false;
+        response["error"] = godot::String("protocol_integer_out_of_range");
+        return response;
+    }
+}
+
+godot::Dictionary SimFacade::controlled_actor_deposit_grain() {
+    godot::Dictionary response;
+    try {
+        const auto outcome = simulation_.controlled_actor_deposit_household_grain();
+        if (!outcome.has_value()) {
+            response["ok"] = false;
+            response["error"] = resource_error_name(outcome.error());
+            return response;
+        }
+        response["ok"] = true;
+        response["result"] = to_dictionary(*outcome);
+        return response;
+    } catch (const std::overflow_error &) {
+        response["ok"] = false;
+        response["error"] = godot::String("protocol_integer_out_of_range");
+        return response;
+    }
+}
+
+godot::Dictionary SimFacade::controlled_actor_gift_grain(
+    const std::int64_t receiving_household_id
+) {
+    godot::Dictionary response;
+    try {
+        const auto outcome = simulation_.controlled_actor_gift_household_grain(
+            receiving_household_id
+        );
+        if (!outcome.has_value()) {
+            response["ok"] = false;
+            response["error"] = resource_error_name(outcome.error());
+            return response;
+        }
+        response["ok"] = true;
+        response["result"] = to_dictionary(*outcome);
+        return response;
+    } catch (const std::overflow_error &) {
+        response["ok"] = false;
+        response["error"] = godot::String("protocol_integer_out_of_range");
+        return response;
     }
 }
 
@@ -343,6 +462,42 @@ godot::Dictionary SimFacade::to_dictionary(
     result["revision"] = projection.revision;
     result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
     result["households"] = households;
+    return result;
+}
+
+godot::Dictionary SimFacade::to_dictionary(
+    const protocol::ControlledActorCarryProjection &projection
+) {
+    godot::Dictionary result;
+    result["entity_id"] = projection.entity_id;
+    result["carried_grain_units"] = projection.carried_grain_units;
+    result["grain_carry_capacity_units"] = projection.grain_carry_capacity_units;
+    if (projection.member_household_id.has_value()) {
+        result["member_household_id"] = *projection.member_household_id;
+    }
+    if (projection.member_household_grain_stock_units.has_value()) {
+        result["member_household_grain_stock_units"] =
+            *projection.member_household_grain_stock_units;
+    }
+    result["tick"] = projection.tick;
+    result["revision"] = projection.revision;
+    result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
+    return result;
+}
+
+godot::Dictionary SimFacade::to_dictionary(
+    const protocol::ControlledActorResourceResult &resource
+) {
+    godot::Dictionary result;
+    result["entity_id"] = resource.entity_id;
+    result["affected_household_id"] = resource.affected_household_id;
+    result["moved_grain_units"] = resource.moved_grain_units;
+    result["carried_grain_units"] = resource.carried_grain_units;
+    result["affected_household_grain_stock_units"] =
+        resource.affected_household_grain_stock_units;
+    result["tick"] = resource.tick;
+    result["revision"] = resource.revision;
+    result["protocol_version"] = static_cast<std::int64_t>(resource.protocol_version);
     return result;
 }
 
