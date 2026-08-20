@@ -131,6 +131,26 @@ TEST(ResourceProtocol, GiftChangesAuthoritativeStockAndPreservesM1RestInterferen
     ASSERT_GT(drawn->moved_grain_units, 0);
     EXPECT_EQ(drawn->tick, initial_carry.tick);
 
+    // Match the real-client Gift vertical: the neighbour first becomes short
+    // through ordinary post-movement NPC Consume while the controlled actor
+    // holds position at its own store. This ensures the RestNeed NPC has reached
+    // the shared target/store before the controlled actor approaches to Gift.
+    bool shortage_seen = false;
+    for (int opportunity = 0; opportunity < 480; ++opportunity) {
+        ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
+        const auto movement = simulation.advance_locomotion_tick();
+        ASSERT_TRUE(movement.has_value());
+
+        const auto resources = simulation.village_household_resource_projection();
+        const auto *current_target = find_household(resources, target_id);
+        ASSERT_NE(current_target, nullptr);
+        if (current_target->status == worldsim::protocol::HouseholdResourceStatus::shortage) {
+            shortage_seen = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(shortage_seen);
+
     bool gifted = false;
     worldsim::protocol::ControlledActorResourceResult gift_result{};
     worldsim::protocol::VillageHouseholdResourceProjection before_gift{};
