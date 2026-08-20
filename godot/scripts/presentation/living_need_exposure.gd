@@ -88,7 +88,7 @@ func _bind_scene(scene: Node) -> void:
     _target_label.name = "RestInteractionHint"
     _target_label.position = Vector3(0.0, LABEL_HEIGHT_M, 0.0)
     _target_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    _target_label.fixed_size = true
+    _target_label.fixed_size = false
     _target_label.font_size = 30
     _target_label.outline_size = 8
     _marker_root.add_child(_target_label)
@@ -131,7 +131,7 @@ func _refresh_npc_label(entity_id: int, status: String) -> void:
             _npc_label.name = "LivingNeedStatus"
             _npc_label.position = Vector3(0.0, 2.2, 0.0)
             _npc_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-            _npc_label.fixed_size = true
+            _npc_label.fixed_size = false
             _npc_label.font_size = 26
             _npc_label.outline_size = 8
             _npc_label_parent.add_child(_npc_label)
