@@ -102,6 +102,17 @@ enum class WorldSnapshotError : std::uint8_t {
     actor_already_in_household,
 };
 
+enum class HouseholdConsumeError : std::uint8_t {
+    invalid_entity_id,
+    unknown_actor,
+    actor_without_household,
+    invalid_household_state,
+    missing_spatial_state,
+    outside_store,
+    consume_budget_exhausted,
+    insufficient_stock,
+};
+
 struct GroundedLocomotionContext final {
     GroundedEnvironment environment{};
     UprightCapsule body{};
@@ -223,15 +234,41 @@ struct PlaceState final {
     constexpr bool operator==(const PlaceState &) const = default;
 };
 
-// Household composition is aggregate authoritative state, not an actor class or
-// presentation folder. M2.1 owns only identity, membership and the referenced
-// store place; stock and resource rules are added by the next bounded task.
+// Household state remains one bounded aggregate rather than an actor class or
+// inventory framework. M2.2 adds only the first staple stock, derived-shortage
+// threshold, positive per-consume amount and finite acceptance consume budget.
+// Carry, work and standing transfer state are admitted by later bounded tasks.
 struct HouseholdState final {
     EntityId id{};
     std::vector<EntityId> members{};
     EntityId store_place{};
+    std::int64_t grain_stock_units{};
+    std::int64_t shortage_threshold_units{};
+    std::int64_t consume_amount_units{1};
+    std::uint32_t remaining_consume_budget{};
+
+    [[nodiscard]] constexpr bool has_valid_resource_state() const noexcept {
+        return grain_stock_units >= 0
+            && shortage_threshold_units >= 0
+            && consume_amount_units > 0;
+    }
 
     bool operator==(const HouseholdState &) const = default;
+};
+
+// One accepted immediate household consumption transition. The operation is
+// revision-only: it never advances SimulationTick merely to change stock.
+struct HouseholdConsumeResult final {
+    EntityId actor{};
+    EntityId household{};
+    std::int64_t consumed_grain_units{};
+    std::int64_t remaining_grain_stock_units{};
+    std::uint32_t remaining_consume_budget{};
+    bool shortage{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+
+    constexpr bool operator==(const HouseholdConsumeResult &) const = default;
 };
 
 // Intent carries direction/magnitude plus a semantic pace choice. It never
@@ -267,7 +304,7 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 5;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 6;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
 // protocol envelope versions belong to a later persistence layer. Authoritative
@@ -295,6 +332,13 @@ public:
     );
     [[nodiscard]] std::expected<void, WorldError> add_place(PlaceState place);
     [[nodiscard]] std::expected<void, WorldError> add_household(HouseholdState household);
+
+    // Shared actor-generic M2 consumption rule. Membership, exact-spatial store
+    // occupancy, positive content, remaining budget and stock are revalidated
+    // against current World state. Accepted Consume changes revision exactly once;
+    // refusal changes neither tick nor revision.
+    [[nodiscard]] std::expected<HouseholdConsumeResult, HouseholdConsumeError>
+    consume_household_grain(EntityId actor) noexcept;
 
     // Milestone 0 transport probe only. Production spatial movement must use a
     // real actor-location contract rather than extending this cardinal grid API.
@@ -337,11 +381,20 @@ public:
     [[nodiscard]] std::optional<PlaceState> place_state(EntityId id) const noexcept;
     [[nodiscard]] std::optional<HouseholdState> household_state(EntityId id) const;
 
+    // Shortage remains derived state: unknown/invalid household state has no
+    // readable shortage, and valid state is short exactly when stock < threshold.
+    [[nodiscard]] std::optional<bool> household_is_short(EntityId id) const noexcept;
+
     // Bounded deterministic composition views for protocol observation/decision
     // collection and household discovery. These are derived runtime views, not
     // snapshot truth and not a generic entity registry.
     [[nodiscard]] std::span<const EntityId> actor_ids() const noexcept;
     [[nodiscard]] std::span<const EntityId> household_ids() const noexcept;
+
+    // Resource place occupancy uses exact arrival semantics only: per-axis X/Z
+    // distance must fit the place tolerance. Unlike RestNeed body occupancy this
+    // does not add the actor capsule radius.
+    [[nodiscard]] bool is_actor_inside_place(EntityId actor, EntityId place) const noexcept;
 
     // Bounded exact-spatial presence query for a concrete local causal condition.
     // Another exact-spatial actor occupies the place when its first-playable
