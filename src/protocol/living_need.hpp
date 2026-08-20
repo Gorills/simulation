@@ -24,6 +24,7 @@ struct LivingNeedProjection final {
     ProtocolInteger target_x_mm{};
     ProtocolInteger target_z_mm{};
     ProtocolInteger axis_arrival_tolerance_mm{};
+    ProtocolInteger axis_occupancy_tolerance_mm{};
     ProtocolInteger tick{};
     ProtocolInteger revision{};
     std::uint32_t protocol_version{kProtocolVersion};

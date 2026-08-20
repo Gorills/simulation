@@ -105,10 +105,7 @@ struct GroundedLocomotionContext final {
 // from ActorState + requested pace before each step.
 [[nodiscard]] inline GroundedLocomotionContext make_flat_locomotion_acceptance_context() {
     GroundedLocomotionContext context{
-        .body = UprightCapsule{
-            .radius = Millimeters{380},
-            .height = Millimeters{1800},
-        },
+        .body = kFirstPlayableBody,
         .config = GroundedStepConfig{
             .ticks_per_second = 60,
             .move_speed = MillimetersPerSecond{0},
@@ -291,9 +288,9 @@ public:
     [[nodiscard]] std::optional<RestNeedState> actor_rest_need(EntityId id) const noexcept;
 
     // Bounded exact-spatial presence query for a concrete local causal condition.
-    // It considers only other authoritative actors that currently have exact
-    // SpatialState and uses the caller's per-axis X/Z tolerance. This is not
-    // body collision, navigation, observation policy or a general spatial index.
+    // Another exact-spatial actor occupies the place when its first-playable
+    // planar body overlaps the caller's per-axis X/Z box. This is not
+    // actor-body collision, navigation, observation policy or a spatial index.
     [[nodiscard]] bool is_planar_position_occupied_by_other_actor(
         EntityId excluded_actor,
         Millimeters x,

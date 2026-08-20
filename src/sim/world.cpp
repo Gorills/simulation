@@ -370,14 +370,19 @@ bool World::is_planar_position_occupied_by_other_actor(
         return false;
     }
 
-    const auto tolerance = static_cast<std::uint64_t>(axis_tolerance.value);
+    // Occupancy is body-overlap of the rest box, not a point-in-box test. The
+    // first playable capsule is 380 mm; the rest arrival box is smaller, so a
+    // standing actor covering the place would otherwise fail to occupy it.
+    const auto occupancy_tolerance =
+        static_cast<std::uint64_t>(axis_tolerance.value)
+        + static_cast<std::uint64_t>(kFirstPlayableBody.radius.value);
     for (const auto &actor : actors_) {
         if (actor.id == excluded_actor || !actor.spatial.has_value()) {
             continue;
         }
         if (
-            unsigned_distance(actor.spatial->position.x.value, x.value) <= tolerance &&
-            unsigned_distance(actor.spatial->position.z.value, z.value) <= tolerance
+            unsigned_distance(actor.spatial->position.x.value, x.value) <= occupancy_tolerance &&
+            unsigned_distance(actor.spatial->position.z.value, z.value) <= occupancy_tolerance
         ) {
             return true;
         }

@@ -330,6 +330,8 @@ LivingNeedProjection Simulation::living_need_projection() const {
         .target_x_mm = need->rest_x.value,
         .target_z_mm = need->rest_z.value,
         .axis_arrival_tolerance_mm = need->axis_arrival_tolerance.value,
+        .axis_occupancy_tolerance_mm =
+            need->axis_arrival_tolerance.value + sim::kFirstPlayableBody.radius.value,
         .tick = checked_protocol_integer(world_.tick().value),
         .revision = checked_protocol_integer(world_.revision().value),
         .protocol_version = kProtocolVersion,

@@ -61,6 +61,10 @@ TEST(SimulationProtocol, LivingNeedProjectionExposesObservableRestFootprintAndTr
     EXPECT_EQ(initial.target_x_mm, -3'000);
     EXPECT_EQ(initial.target_z_mm, -3'000);
     EXPECT_EQ(initial.axis_arrival_tolerance_mm, 150);
+    EXPECT_EQ(
+        initial.axis_occupancy_tolerance_mm,
+        150 + worldsim::sim::kFirstPlayableBody.radius.value
+    );
     EXPECT_EQ(initial.tick, 0);
     EXPECT_EQ(initial.revision, 2);
     EXPECT_EQ(initial.protocol_version, worldsim::protocol::kProtocolVersion);
@@ -75,6 +79,7 @@ TEST(SimulationProtocol, LivingNeedProjectionExposesObservableRestFootprintAndTr
     EXPECT_EQ(after_tick.target_x_mm, initial.target_x_mm);
     EXPECT_EQ(after_tick.target_z_mm, initial.target_z_mm);
     EXPECT_EQ(after_tick.axis_arrival_tolerance_mm, initial.axis_arrival_tolerance_mm);
+    EXPECT_EQ(after_tick.axis_occupancy_tolerance_mm, initial.axis_occupancy_tolerance_mm);
     EXPECT_EQ(after_tick.tick, advanced->tick);
     EXPECT_EQ(after_tick.revision, advanced->revision);
     EXPECT_EQ(after_tick.protocol_version, worldsim::protocol::kProtocolVersion);

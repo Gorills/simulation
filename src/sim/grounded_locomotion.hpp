@@ -93,6 +93,13 @@ struct UprightCapsule final {
     constexpr bool operator==(const UprightCapsule &) const = default;
 };
 
+// First playable shell. World-law locomotion and rest-place occupancy currently
+// share this body; it is not per-actor collision or a navigation volume.
+inline constexpr UprightCapsule kFirstPlayableBody{
+    .radius = Millimeters{380},
+    .height = Millimeters{1800},
+};
+
 // Fully resolved inputs for one actor's grounded step. `move_speed`,
 // `acceleration` and `braking` are not universal world constants: the World
 // layer resolves them from authoritative actor capability + requested pace before

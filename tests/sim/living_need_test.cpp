@@ -126,6 +126,120 @@ TEST(LivingNeed, OtherActorOccupancyBlocksRestUntilSharedLocomotionClearsThePlac
     EXPECT_GT(controlled_spatial->position.x.value, -2'850);
 }
 
+TEST(LivingNeed, OtherActorBodyOverlappingRestPlaceBlocksNeed) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{47}};
+    const worldsim::sim::EntityId controlled_actor{1};
+    const worldsim::sim::EntityId npc{2};
+    const auto occupancy_axis =
+        rest_need().axis_arrival_tolerance.value
+        + worldsim::sim::kFirstPlayableBody.radius.value;
+    const auto overlapping_offset = occupancy_axis - 1;
+
+    ASSERT_TRUE(world.spawn_actor(
+        controlled_actor,
+        worldsim::sim::ActorSpawnState{
+            .spatial = spatial_at(-3'000 + overlapping_offset, -3'000),
+        }
+    ).has_value());
+    ASSERT_TRUE(world.spawn_actor(
+        npc,
+        worldsim::sim::ActorSpawnState{
+            .spatial = spatial_at(-2'896, -3'000),
+            .rest_need = rest_need(),
+        }
+    ).has_value());
+
+    const auto blocked = worldsim::sim::decide_npc_rest_need(world, npc);
+    ASSERT_TRUE(blocked.has_value());
+    EXPECT_FALSE(blocked->satisfied);
+    EXPECT_TRUE(blocked->blocked_by_other_actor);
+    EXPECT_EQ(blocked->movement.move, (worldsim::sim::PlanarMoveIntent{}));
+}
+
+TEST(LivingNeed, OtherActorOutsideBodyOccupancyDoesNotBlockRest) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{48}};
+    const worldsim::sim::EntityId controlled_actor{1};
+    const worldsim::sim::EntityId npc{2};
+    const auto occupancy_axis =
+        rest_need().axis_arrival_tolerance.value
+        + worldsim::sim::kFirstPlayableBody.radius.value;
+
+    ASSERT_TRUE(world.spawn_actor(
+        controlled_actor,
+        worldsim::sim::ActorSpawnState{
+            .spatial = spatial_at(-3'000 + occupancy_axis + 1, -3'000),
+        }
+    ).has_value());
+    ASSERT_TRUE(world.spawn_actor(
+        npc,
+        worldsim::sim::ActorSpawnState{
+            .spatial = spatial_at(-2'896, -3'000),
+            .rest_need = rest_need(),
+        }
+    ).has_value());
+
+    const auto decision = worldsim::sim::decide_npc_rest_need(world, npc);
+    ASSERT_TRUE(decision.has_value());
+    EXPECT_TRUE(decision->satisfied);
+    EXPECT_FALSE(decision->blocked_by_other_actor);
+    EXPECT_EQ(decision->movement.move, (worldsim::sim::PlanarMoveIntent{}));
+}
+
+TEST(LivingNeed, OccupiedRestKeepsNpcTravelingUntilBodyWouldEnterFootprint) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{49}};
+    const worldsim::sim::EntityId controlled_actor{1};
+    const worldsim::sim::EntityId npc{2};
+    const auto keep_out =
+        rest_need().axis_arrival_tolerance.value
+        + 2 * worldsim::sim::kFirstPlayableBody.radius.value;
+
+    ASSERT_TRUE(world.spawn_actor(
+        controlled_actor,
+        worldsim::sim::ActorSpawnState{.spatial = spatial_at(-3'000, -3'000)}
+    ).has_value());
+    ASSERT_TRUE(world.spawn_actor(
+        npc,
+        worldsim::sim::ActorSpawnState{
+            .spatial = spatial_at(-3'000 + keep_out + 1, -3'000),
+            .rest_need = rest_need(),
+        }
+    ).has_value());
+
+    const auto decision = worldsim::sim::decide_npc_rest_need(world, npc);
+    ASSERT_TRUE(decision.has_value());
+    EXPECT_FALSE(decision->satisfied);
+    EXPECT_FALSE(decision->blocked_by_other_actor);
+    EXPECT_EQ(decision->movement.move, (worldsim::sim::PlanarMoveIntent{.x = -1000, .z = 0}));
+}
+
+TEST(LivingNeed, OccupiedRestBlocksNpcFromWalkingOntoOccupiedFootprint) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{50}};
+    const worldsim::sim::EntityId controlled_actor{1};
+    const worldsim::sim::EntityId npc{2};
+    const auto keep_out =
+        rest_need().axis_arrival_tolerance.value
+        + 2 * worldsim::sim::kFirstPlayableBody.radius.value;
+
+    ASSERT_TRUE(world.spawn_actor(
+        controlled_actor,
+        worldsim::sim::ActorSpawnState{.spatial = spatial_at(-3'000, -3'000)}
+    ).has_value());
+    ASSERT_TRUE(world.spawn_actor(
+        npc,
+        worldsim::sim::ActorSpawnState{
+            .spatial = spatial_at(-3'000 + keep_out, -3'000),
+            .rest_need = rest_need(),
+        }
+    ).has_value());
+
+    const auto blocked = worldsim::sim::decide_npc_rest_need(world, npc);
+    ASSERT_TRUE(blocked.has_value());
+    EXPECT_FALSE(blocked->satisfied);
+    EXPECT_TRUE(blocked->blocked_by_other_actor);
+    EXPECT_EQ(blocked->movement.move, (worldsim::sim::PlanarMoveIntent{}));
+    EXPECT_EQ(blocked->movement.pace, worldsim::sim::LocomotionPace::walk);
+}
+
 TEST(LivingNeed, RestNeedSurvivesSnapshotRestoreAsCausalActorState) {
     worldsim::sim::World source{worldsim::sim::WorldSeed{43}};
     const worldsim::sim::EntityId npc{2};

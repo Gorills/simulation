@@ -128,7 +128,7 @@ It must use the ordinary controlled movement boundary — no scenario-only world
 
 - the purpose-built need projection begins `traveling`;
 - the controlled actor enters the NPC's assigned rest tolerance through authoritative locomotion;
-- Core later derives `blocked` while the NPC is at its rest location and the controlled actor occupies it;
+- Core later derives `blocked` when the controlled actor occupies the rest footprint and the NPC would otherwise walk onto it;
 - the blocked projection carries current identity/tick/revision/version context;
 - Godot renders localized blocked feedback and captures `blocked.png`;
 - the controlled actor then leaves through the same authoritative movement path;

@@ -17,9 +17,9 @@ Milestone acceptance follows the evidence contract in [`../VERIFICATION.md`](../
 The NPC is eligible to satisfy the need when its authoritative `SpatialState.position` is inside that X/Z tolerance. Satisfaction is derived from two authoritative facts:
 
 1. the NPC is inside its assigned rest tolerance;
-2. no **other** actor with exact `SpatialState` is inside the same tolerance.
+2. no **other** actor with exact `SpatialState` has a first-playable planar body overlapping the same tolerance box.
 
-There is no stored `is_satisfied` or `is_blocked` flag. Current World state determines the result on every decision. An authoritative actor without exact spatial state does not occupy a microscopic local rest point merely by existing elsewhere in the simulation.
+There is no stored `is_satisfied` or `is_blocked` flag. Current World state determines the result on every decision. An authoritative actor without exact spatial state does not occupy a microscopic local rest point merely by existing elsewhere in the simulation. Occupancy uses the shared first playable `UprightCapsule` radius so a standing actor covering the rest place occupies it; this is still not actor-body collision or exclusive reservation.
 
 This is a first causal fixture, not a complete fatigue/sleep/home system. It does not model fatigue accumulation, sleep duration, health effects, beds, household ownership, schedules, time-of-day preference or alternate rest opportunities.
 
@@ -31,21 +31,21 @@ It requires an existing actor with valid `RestNeedState` and exact `SpatialState
 
 It reports:
 
-- `satisfied=true` only when the NPC is inside the assigned tolerance and no other exact-spatial actor occupies it;
-- `blocked_by_other_actor=true` when the NPC has reached the tolerance but another exact-spatial actor currently occupies it;
-- ordinary travel intent while the NPC is still approaching the point.
+- `satisfied=true` only when the NPC is inside the assigned tolerance and no other exact-spatial actor's body occupies the rest place;
+- `blocked_by_other_actor=true` when another exact-spatial actor occupies the rest place and this NPC's body would overlap the occupied stand-here footprint;
+- ordinary travel intent while the NPC is still approaching, including while the place is occupied but the NPC has not yet reached that keep-out.
 
-A blocked decision emits zero movement but remains unsatisfied. If the other actor leaves through ordinary authoritative movement, the next read-only decision can become satisfied without an unblock command or stored reservation state.
+A blocked decision emits zero movement but remains unsatisfied. The NPC therefore does not walk onto an occupied rest marker. If the other actor leaves through ordinary authoritative movement, the next read-only decision can resume travel or become satisfied without an unblock command or stored reservation state.
 
 The decision does not choose numeric movement speed, mutate position, resolve collision, access Godot, perform pathfinding, generate a schedule or introduce an NPC-specific movement law.
 
 ## Shared player interference/help
 
-The controlled actor is an ordinary authoritative exact-spatial actor and already moves through `World::advance_grounded_locomotion_tick()`. Therefore entering the NPC's assigned tolerance can obstruct satisfaction, and leaving it can remove the obstruction. The same rule applies to any other exact-spatial actor.
+The controlled actor is an ordinary authoritative exact-spatial actor and already moves through `World::advance_grounded_locomotion_tick()`. Therefore covering the NPC's assigned rest box with an ordinary character body can obstruct satisfaction, and leaving that overlap can remove the obstruction. The same rule applies to any other exact-spatial actor.
 
 Core exposes only the bounded read-only presence query needed by this condition. It does not expose actor storage, create actor-body collision, introduce a reservation/place manager or establish a production spatial index.
 
-Occupancy is checked only once the NPC itself has reached its assigned tolerance. The rule does not grant long-range occupancy knowledge or pathfinding behavior.
+Occupancy is consulted on every rest decision. The query expands arrival tolerance by the first playable planar body radius so standing on the rendered rest footprint occupies it. If the place is occupied, the approaching NPC stops when its own body would overlap that footprint; it does not walk onto the marker and does not satisfy the need. This is still not actor-body collision, exclusive reservation, long-range pathfinding or a place manager.
 
 The player must not need repository knowledge or hidden fixture coordinates to use this capability. The ordinary client therefore renders the assigned rest footprint from the read-only authoritative projection and explicitly tells the player that standing on the marker interferes with the NPC. The marker is presentation only; moving onto it remains the same actor-generic locomotion action that changes World state.
 
@@ -71,7 +71,8 @@ The client needs to distinguish the otherwise visually similar stationary outcom
 - the living-need NPC `EntityId`;
 - derived status: `traveling`, `blocked` or `satisfied`;
 - the assigned local X/Z target exposed as presentation-space millimeters/meters by the adapter;
-- the current per-axis arrival/occupancy tolerance needed to render the actual interaction footprint;
+- the current per-axis arrival tolerance;
+- the derived per-axis occupancy envelope (`arrival + first playable body radius`) needed to render the actual stand-here footprint;
 - current `SimulationTick`;
 - current `WorldRevision`;
 - protocol version.
@@ -107,7 +108,7 @@ It proves this causal sequence:
 
 1. `LivingNeedProjection` begins `traveling` and exposes the same target/footprint rendered to the player;
 2. the controlled actor moves toward the assigned rest location through the same semantic movement command used by normal control;
-3. when the NPC reaches the place while the controlled actor occupies it, Core derives `blocked`;
+3. when the NPC would walk onto the occupied rest footprint, Core derives `blocked` and stops outside the marker;
 4. Godot displays the localized read-only blocked status and captures rendered evidence;
 5. the controlled actor leaves through ordinary authoritative movement;
 6. the next eligible RestNeed decision becomes `satisfied`;

@@ -97,16 +97,18 @@ func _bind_scene(scene: Node) -> void:
 func _apply_projection(projection: Dictionary) -> bool:
     var entity_id := int(projection.get("entity_id", 0))
     var target_value = projection.get("target_position_m", null)
-    var tolerance := float(projection.get("axis_arrival_tolerance_m", -1.0))
+    var arrival_tolerance := float(projection.get("axis_arrival_tolerance_m", -1.0))
+    var occupancy_value = projection.get("axis_occupancy_tolerance_m", arrival_tolerance)
+    var occupancy_tolerance := float(occupancy_value)
     var status := str(projection.get("status", "unknown"))
-    if entity_id <= 0 or typeof(target_value) != TYPE_VECTOR3 or tolerance < 0.0:
+    if entity_id <= 0 or typeof(target_value) != TYPE_VECTOR3 or occupancy_tolerance < 0.0:
         return false
     if _marker_root == null or _footprint_mesh == null or _target_label == null or _controls_hint == null:
         return false
 
     var target: Vector3 = target_value
     _marker_root.position = Vector3(target.x, FOOTPRINT_HEIGHT_M * 0.5, target.z)
-    var footprint_size: float = maxf(tolerance * 2.0, 0.05)
+    var footprint_size: float = maxf(occupancy_tolerance * 2.0, 0.05)
     _footprint_mesh.size = Vector3(footprint_size, FOOTPRINT_HEIGHT_M, footprint_size)
     _target_label.text = tr(&"UI_WORLD_REST_TARGET_HINT")
     _controls_hint.text = "%s\n%s" % [
