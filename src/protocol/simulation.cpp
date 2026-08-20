@@ -86,6 +86,24 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
     return std::nullopt;
 }
 
+[[nodiscard]] std::optional<sim::HouseholdState> household_for_actor(
+    const sim::World &world,
+    const sim::EntityId actor
+) {
+    for (const auto household_id : world.household_ids()) {
+        const auto household = world.household_state(household_id);
+        if (!household.has_value()) {
+            continue;
+        }
+        for (const auto member : household->members) {
+            if (member == actor) {
+                return household;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 [[nodiscard]] sim::WorldSeed checked_world_seed(const ProtocolInteger seed) {
     if (seed < 0) {
         throw std::invalid_argument("protocol seed must be non-negative");
@@ -125,6 +143,83 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
     return ControlledActorMovementError::world_rejected;
 }
 
+[[nodiscard]] ControlledActorResourceError map_draw_error(
+    const sim::HouseholdDrawError error
+) noexcept {
+    switch (error) {
+    case sim::HouseholdDrawError::invalid_entity_id:
+    case sim::HouseholdDrawError::unknown_actor:
+        return ControlledActorResourceError::controlled_actor_missing;
+    case sim::HouseholdDrawError::actor_without_household:
+        return ControlledActorResourceError::actor_without_household;
+    case sim::HouseholdDrawError::invalid_actor_grain_carry_state:
+        return ControlledActorResourceError::invalid_actor_carry_state;
+    case sim::HouseholdDrawError::invalid_household_state:
+        return ControlledActorResourceError::invalid_household_state;
+    case sim::HouseholdDrawError::missing_spatial_state:
+        return ControlledActorResourceError::controlled_actor_spatial_state_missing;
+    case sim::HouseholdDrawError::outside_store:
+        return ControlledActorResourceError::outside_store;
+    case sim::HouseholdDrawError::carry_full:
+        return ControlledActorResourceError::carry_full;
+    case sim::HouseholdDrawError::store_empty:
+        return ControlledActorResourceError::store_empty;
+    }
+    return ControlledActorResourceError::invalid_household_state;
+}
+
+[[nodiscard]] ControlledActorResourceError map_deposit_error(
+    const sim::HouseholdDepositError error
+) noexcept {
+    switch (error) {
+    case sim::HouseholdDepositError::invalid_entity_id:
+    case sim::HouseholdDepositError::unknown_actor:
+        return ControlledActorResourceError::controlled_actor_missing;
+    case sim::HouseholdDepositError::actor_without_household:
+        return ControlledActorResourceError::actor_without_household;
+    case sim::HouseholdDepositError::invalid_actor_grain_carry_state:
+        return ControlledActorResourceError::invalid_actor_carry_state;
+    case sim::HouseholdDepositError::invalid_household_state:
+        return ControlledActorResourceError::invalid_household_state;
+    case sim::HouseholdDepositError::missing_spatial_state:
+        return ControlledActorResourceError::controlled_actor_spatial_state_missing;
+    case sim::HouseholdDepositError::outside_store:
+        return ControlledActorResourceError::outside_store;
+    case sim::HouseholdDepositError::carry_empty:
+        return ControlledActorResourceError::carry_empty;
+    case sim::HouseholdDepositError::stock_overflow:
+        return ControlledActorResourceError::stock_overflow;
+    }
+    return ControlledActorResourceError::invalid_household_state;
+}
+
+[[nodiscard]] ControlledActorResourceError map_gift_error(
+    const sim::HouseholdGiftError error
+) noexcept {
+    switch (error) {
+    case sim::HouseholdGiftError::unknown_actor:
+        return ControlledActorResourceError::controlled_actor_missing;
+    case sim::HouseholdGiftError::invalid_entity_id:
+    case sim::HouseholdGiftError::unknown_household:
+        return ControlledActorResourceError::target_household_missing;
+    case sim::HouseholdGiftError::invalid_actor_grain_carry_state:
+        return ControlledActorResourceError::invalid_actor_carry_state;
+    case sim::HouseholdGiftError::invalid_household_state:
+        return ControlledActorResourceError::invalid_household_state;
+    case sim::HouseholdGiftError::missing_spatial_state:
+        return ControlledActorResourceError::controlled_actor_spatial_state_missing;
+    case sim::HouseholdGiftError::outside_store:
+        return ControlledActorResourceError::outside_store;
+    case sim::HouseholdGiftError::carry_empty:
+        return ControlledActorResourceError::carry_empty;
+    case sim::HouseholdGiftError::own_household:
+        return ControlledActorResourceError::own_household;
+    case sim::HouseholdGiftError::stock_overflow:
+        return ControlledActorResourceError::stock_overflow;
+    }
+    return ControlledActorResourceError::invalid_household_state;
+}
+
 [[nodiscard]] AuthoritativeMovementSample movement_sample(
     const sim::GroundedLocomotionSample &sample
 ) {
@@ -137,6 +232,51 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
         .velocity_y_mm_per_second = sample.spatial.velocity.y.value,
         .velocity_z_mm_per_second = sample.spatial.velocity.z.value,
         .spatial_epoch = checked_protocol_integer(sample.spatial.epoch.value),
+    };
+}
+
+[[nodiscard]] ControlledActorResourceResult resource_result(
+    const sim::HouseholdDrawResult &result
+) {
+    return ControlledActorResourceResult{
+        .entity_id = result.actor.value,
+        .affected_household_id = result.household.value,
+        .moved_grain_units = result.moved_grain_units,
+        .carried_grain_units = result.carried_grain_units,
+        .affected_household_grain_stock_units = result.remaining_grain_stock_units,
+        .tick = checked_protocol_integer(result.tick.value),
+        .revision = checked_protocol_integer(result.revision.value),
+        .protocol_version = kProtocolVersion,
+    };
+}
+
+[[nodiscard]] ControlledActorResourceResult resource_result(
+    const sim::HouseholdDepositResult &result
+) {
+    return ControlledActorResourceResult{
+        .entity_id = result.actor.value,
+        .affected_household_id = result.household.value,
+        .moved_grain_units = result.deposited_grain_units,
+        .carried_grain_units = result.carried_grain_units,
+        .affected_household_grain_stock_units = result.remaining_grain_stock_units,
+        .tick = checked_protocol_integer(result.tick.value),
+        .revision = checked_protocol_integer(result.revision.value),
+        .protocol_version = kProtocolVersion,
+    };
+}
+
+[[nodiscard]] ControlledActorResourceResult resource_result(
+    const sim::HouseholdGiftResult &result
+) {
+    return ControlledActorResourceResult{
+        .entity_id = result.actor.value,
+        .affected_household_id = result.receiving_household.value,
+        .moved_grain_units = result.gifted_grain_units,
+        .carried_grain_units = result.carried_grain_units,
+        .affected_household_grain_stock_units = result.receiving_grain_stock_units,
+        .tick = checked_protocol_integer(result.tick.value),
+        .revision = checked_protocol_integer(result.revision.value),
+        .protocol_version = kProtocolVersion,
     };
 }
 
@@ -275,6 +415,44 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
     return result;
 }
 
+ControlledActorResourceOutcome Simulation::controlled_actor_draw_household_grain() {
+    if (world_.revision().value >= kMaxProtocolInteger) {
+        return std::unexpected(ControlledActorResourceError::protocol_integer_exhausted);
+    }
+    const auto outcome = world_.draw_household_grain(controlled_actor_);
+    if (!outcome.has_value()) {
+        return std::unexpected(map_draw_error(outcome.error()));
+    }
+    return resource_result(*outcome);
+}
+
+ControlledActorResourceOutcome Simulation::controlled_actor_deposit_household_grain() {
+    if (world_.revision().value >= kMaxProtocolInteger) {
+        return std::unexpected(ControlledActorResourceError::protocol_integer_exhausted);
+    }
+    const auto outcome = world_.deposit_household_grain(controlled_actor_);
+    if (!outcome.has_value()) {
+        return std::unexpected(map_deposit_error(outcome.error()));
+    }
+    return resource_result(*outcome);
+}
+
+ControlledActorResourceOutcome Simulation::controlled_actor_gift_household_grain(
+    const ProtocolInteger receiving_household_id
+) {
+    if (world_.revision().value >= kMaxProtocolInteger) {
+        return std::unexpected(ControlledActorResourceError::protocol_integer_exhausted);
+    }
+    const auto outcome = world_.gift_household_grain(
+        controlled_actor_,
+        sim::EntityId{receiving_household_id}
+    );
+    if (!outcome.has_value()) {
+        return std::unexpected(map_gift_error(outcome.error()));
+    }
+    return resource_result(*outcome);
+}
+
 BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() const {
     const auto position = world_.actor_bootstrap_position(controlled_actor_);
     assert(position.has_value());
@@ -402,6 +580,30 @@ VillageHouseholdResourceProjection Simulation::village_household_resource_projec
         result.households.push_back(std::move(projection));
     }
 
+    return result;
+}
+
+ControlledActorCarryProjection Simulation::controlled_actor_carry_projection() const {
+    const auto carry = world_.actor_grain_carry_state(controlled_actor_);
+    assert(carry.has_value());
+    if (!carry.has_value()) {
+        return {};
+    }
+
+    ControlledActorCarryProjection result{
+        .entity_id = controlled_actor_.value,
+        .carried_grain_units = carry->carried_grain_units,
+        .grain_carry_capacity_units = carry->grain_carry_capacity_units,
+        .tick = checked_protocol_integer(world_.tick().value),
+        .revision = checked_protocol_integer(world_.revision().value),
+        .protocol_version = kProtocolVersion,
+    };
+
+    const auto household = household_for_actor(world_, controlled_actor_);
+    if (household.has_value()) {
+        result.member_household_id = household->id.value;
+        result.member_household_grain_stock_units = household->grain_stock_units;
+    }
     return result;
 }
 
