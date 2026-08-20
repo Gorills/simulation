@@ -57,6 +57,7 @@ void SimFacade::bind_transfer_methods() {
         godot::D_METHOD("controlled_actor_execute_household_transfer_pledge"),
         &SimFacade::controlled_actor_execute_household_transfer_pledge
     );
+    bind_reciprocal_aid_methods();
 }
 
 godot::Dictionary SimFacade::standing_transfer_pledge_projection() const {

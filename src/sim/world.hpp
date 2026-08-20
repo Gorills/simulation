@@ -169,6 +169,20 @@ enum class HouseholdGiftError : std::uint8_t {
     stock_overflow,
 };
 
+enum class HouseholdReciprocalAidError : std::uint8_t {
+    invalid_entity_id,
+    unknown_actor,
+    unknown_household,
+    invalid_actor_grain_carry_state,
+    invalid_household_state,
+    missing_spatial_state,
+    outside_store,
+    no_remembered_aid,
+    remembered_for_other_actor,
+    carry_full,
+    insufficient_surplus,
+};
+
 enum class FieldWorkError : std::uint8_t {
     invalid_entity_id,
     unknown_actor,
@@ -454,8 +468,21 @@ struct HouseholdGiftResult final {
     std::int64_t receiving_grain_stock_units{};
     SimulationTick tick{};
     WorldRevision revision{};
+    bool remembered_aid_created{};
 
     constexpr bool operator==(const HouseholdGiftResult &) const = default;
+};
+
+struct HouseholdReciprocalAidResult final {
+    EntityId actor{};
+    EntityId household{};
+    std::int64_t received_grain_units{};
+    std::int64_t carried_grain_units{};
+    std::int64_t remaining_grain_stock_units{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+
+    constexpr bool operator==(const HouseholdReciprocalAidResult &) const = default;
 };
 
 struct FieldWorkResult final {
@@ -577,6 +604,15 @@ public:
     deposit_household_grain(EntityId actor) noexcept;
     [[nodiscard]] std::expected<HouseholdGiftResult, HouseholdGiftError>
     gift_household_grain(EntityId actor, EntityId receiving_household) noexcept;
+
+    // Shared actor-generic M3 reciprocal aid law. A selected household may repay
+    // only the actor it currently remembers, at that household's store. The
+    // Core-owned amount is capped by both free carry capacity and stock strictly
+    // above the shortage threshold, so repayment cannot itself make the household
+    // short. Success moves grain and clears the remembered favour in the same
+    // revision-only transition; refusal changes neither material nor social state.
+    [[nodiscard]] std::expected<HouseholdReciprocalAidResult, HouseholdReciprocalAidError>
+    request_household_reciprocal_aid(EntityId actor, EntityId household) noexcept;
 
     // Shared actor-generic bounded Work law. The actor supplies no quantity and
     // chooses no destination: authoritative field content owns place, destination,

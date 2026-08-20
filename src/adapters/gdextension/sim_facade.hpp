@@ -24,9 +24,13 @@ public:
     [[nodiscard]] godot::Dictionary controlled_actor_carry_projection() const;
     [[nodiscard]] godot::Dictionary field_work_projection() const;
     [[nodiscard]] godot::Dictionary standing_transfer_pledge_projection() const;
+    [[nodiscard]] godot::Dictionary reciprocal_aid_projection(std::int64_t household_id) const;
     [[nodiscard]] godot::Dictionary controlled_actor_draw_grain();
     [[nodiscard]] godot::Dictionary controlled_actor_deposit_grain();
     [[nodiscard]] godot::Dictionary controlled_actor_gift_grain(std::int64_t receiving_household_id);
+    [[nodiscard]] godot::Dictionary controlled_actor_request_reciprocal_aid(
+        std::int64_t household_id
+    );
     [[nodiscard]] godot::Dictionary controlled_actor_complete_field_work();
     [[nodiscard]] godot::Dictionary controlled_actor_execute_household_transfer_pledge();
     [[nodiscard]] godot::Dictionary controlled_actor_submit_move_intent(
@@ -42,6 +46,7 @@ protected:
 private:
     static void bind_work_methods();
     static void bind_transfer_methods();
+    static void bind_reciprocal_aid_methods();
 
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::BootstrapActorProjection &projection
@@ -68,7 +73,13 @@ private:
         const protocol::StandingTransferPledgeProjection &projection
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::ControlledActorReciprocalAidProjection &projection
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::ControlledActorResourceResult &result
+    );
+    [[nodiscard]] static godot::Dictionary to_dictionary(
+        const protocol::ControlledActorReciprocalAidResult &result
     );
     [[nodiscard]] static godot::Dictionary to_dictionary(
         const protocol::ControlledActorWorkResult &result

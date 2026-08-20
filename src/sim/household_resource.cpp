@@ -330,6 +330,77 @@ World::gift_household_grain(
         .receiving_grain_stock_units = household.grain_stock_units,
         .tick = tick_,
         .revision = revision_,
+        .remembered_aid_created = remember_personal_aid,
+    };
+}
+
+std::expected<HouseholdReciprocalAidResult, HouseholdReciprocalAidError>
+World::request_household_reciprocal_aid(
+    const EntityId actor,
+    const EntityId household_id
+) noexcept {
+    if (!actor.is_valid() || !household_id.is_valid()) {
+        return std::unexpected(HouseholdReciprocalAidError::invalid_entity_id);
+    }
+
+    const auto actor_index_value = actor_index(actor);
+    if (!actor_index_value.has_value()) {
+        return std::unexpected(HouseholdReciprocalAidError::unknown_actor);
+    }
+    const auto household_index_value = household_index(household_id);
+    if (!household_index_value.has_value()) {
+        return std::unexpected(HouseholdReciprocalAidError::unknown_household);
+    }
+
+    auto &actor_state = actors_[*actor_index_value];
+    auto &household = households_[*household_index_value];
+    if (!actor_state.grain_carry.is_valid()) {
+        return std::unexpected(HouseholdReciprocalAidError::invalid_actor_grain_carry_state);
+    }
+    if (!household.has_valid_resource_state() || !household.has_valid_social_state()) {
+        return std::unexpected(HouseholdReciprocalAidError::invalid_household_state);
+    }
+    if (!actor_state.spatial.has_value()) {
+        return std::unexpected(HouseholdReciprocalAidError::missing_spatial_state);
+    }
+    if (!is_actor_inside_place(actor, household.store_place)) {
+        return std::unexpected(HouseholdReciprocalAidError::outside_store);
+    }
+    if (!household.remembered_material_aid_actor.is_valid()) {
+        return std::unexpected(HouseholdReciprocalAidError::no_remembered_aid);
+    }
+    if (household.remembered_material_aid_actor != actor) {
+        return std::unexpected(HouseholdReciprocalAidError::remembered_for_other_actor);
+    }
+    if (
+        actor_state.grain_carry.carried_grain_units
+        == actor_state.grain_carry.grain_carry_capacity_units
+    ) {
+        return std::unexpected(HouseholdReciprocalAidError::carry_full);
+    }
+    if (household.grain_stock_units <= household.shortage_threshold_units) {
+        return std::unexpected(HouseholdReciprocalAidError::insufficient_surplus);
+    }
+
+    const auto free_capacity =
+        actor_state.grain_carry.grain_carry_capacity_units
+        - actor_state.grain_carry.carried_grain_units;
+    const auto surplus = household.grain_stock_units - household.shortage_threshold_units;
+    const auto moved = surplus < free_capacity ? surplus : free_capacity;
+
+    actor_state.grain_carry.carried_grain_units += moved;
+    household.grain_stock_units -= moved;
+    household.remembered_material_aid_actor = EntityId{};
+    ++revision_.value;
+
+    return HouseholdReciprocalAidResult{
+        .actor = actor,
+        .household = household.id,
+        .received_grain_units = moved,
+        .carried_grain_units = actor_state.grain_carry.carried_grain_units,
+        .remaining_grain_stock_units = household.grain_stock_units,
+        .tick = tick_,
+        .revision = revision_,
     };
 }
 

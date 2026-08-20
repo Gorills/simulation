@@ -68,10 +68,19 @@ msgid "UI_RESOURCE_PROMPT_OWN_STORE"
 msgstr "Your store · E draw · R deposit · T send pledged grain"
 
 msgid "UI_RESOURCE_PROMPT_NEIGHBOUR_STORE"
-msgstr "Neighbour store · G gift grain"
+msgstr "Neighbour store · G gift grain · T ask for returned aid"
+
+msgid "UI_RESOURCE_PROMPT_NEIGHBOUR_REMEMBERED"
+msgstr "Neighbour remembers your help · T ask for returned aid"
 
 msgid "UI_RESOURCE_PROMPT_FIELD"
 msgstr "Field · F work"
+
+msgid "UI_RESOURCE_AID_REMEMBERED"
+msgstr "The neighbour remembers that you helped."
+
+msgid "UI_RESOURCE_AID_REPAID"
+msgstr "The neighbour returns the favour with grain."
 
 msgid "UI_DEBUG_STANDING_TRANSFER"
 msgstr "Transfer"
@@ -111,6 +120,15 @@ msgstr "Household stock is insufficient"
 
 msgid "UI_RESOURCE_REFUSAL_STOCK_OVERFLOW"
 msgstr "Household stock would overflow"
+
+msgid "UI_RESOURCE_REFUSAL_NO_REMEMBERED_AID"
+msgstr "The neighbour does not owe you a remembered favour"
+
+msgid "UI_RESOURCE_REFUSAL_OTHER_REMEMBERED_ACTOR"
+msgstr "That remembered favour belongs to someone else"
+
+msgid "UI_RESOURCE_REFUSAL_INSUFFICIENT_SURPLUS"
+msgstr "The neighbour cannot spare grain without becoming short"
 
 msgid "UI_RESOURCE_REFUSAL_UNAVAILABLE"
 msgstr "Action unavailable"

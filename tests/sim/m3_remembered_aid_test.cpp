@@ -33,7 +33,8 @@ namespace {
     worldsim::sim::World &world,
     const worldsim::sim::EntityId actor,
     const std::int64_t carried = 1,
-    const std::int64_t x = 0
+    const std::int64_t x = 0,
+    const std::int64_t capacity = -1
 ) {
     return world.spawn_actor(
         actor,
@@ -41,7 +42,7 @@ namespace {
             .spatial = spatial_at(x, 0),
             .grain_carry = worldsim::sim::ActorGrainCarryState{
                 .carried_grain_units = carried,
-                .grain_carry_capacity_units = carried,
+                .grain_carry_capacity_units = capacity < 0 ? carried : capacity,
             },
         }
     ).has_value();
@@ -73,6 +74,7 @@ TEST(M3RememberedAid, ShortHouseholdGiftCommitsMaterialAndSocialStateTogether) {
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->gifted_grain_units, 2);
     EXPECT_EQ(result->receiving_grain_stock_units, 3);
+    EXPECT_TRUE(result->remembered_aid_created);
     EXPECT_EQ(result->tick, tick_before);
     EXPECT_EQ(
         result->revision,
@@ -113,6 +115,7 @@ TEST(M3RememberedAid, GiftToNonShortHouseholdDoesNotCreatePersonalAidMemory) {
 
     const auto result = world.gift_household_grain(giver, household);
     ASSERT_TRUE(result.has_value());
+    EXPECT_FALSE(result->remembered_aid_created);
 
     const auto state = world.household_state(household);
     ASSERT_TRUE(state.has_value());
@@ -293,4 +296,159 @@ TEST(M3RememberedAid, CompositionRejectsInvalidOrUnknownRememberedActor) {
         worldsim::sim::WorldError::invalid_household_social_state
     );
     EXPECT_EQ(own_member.snapshot(), own_member_before);
+}
+
+TEST(M3RememberedAid, QualifyingGiftCanBeRepaidWithoutRecreatingShortage) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{89}};
+    const worldsim::sim::EntityId actor{1};
+    const worldsim::sim::EntityId store{10};
+    const worldsim::sim::EntityId household{20};
+
+    ASSERT_TRUE(spawn_giver(world, actor, 2, 0, 2));
+    ASSERT_TRUE(add_store(world, store));
+    ASSERT_TRUE(
+        world.add_household(worldsim::sim::HouseholdState{
+            .id = household,
+            .store_place = store,
+            .grain_stock_units = 1,
+            .shortage_threshold_units = 2,
+        }).has_value()
+    );
+
+    const auto gift = world.gift_household_grain(actor, household);
+    ASSERT_TRUE(gift.has_value());
+    ASSERT_TRUE(gift->remembered_aid_created);
+    ASSERT_EQ(gift->receiving_grain_stock_units, 3);
+
+    const auto revision_before_aid = world.revision();
+    const auto tick_before_aid = world.tick();
+    const auto aid = world.request_household_reciprocal_aid(actor, household);
+    ASSERT_TRUE(aid.has_value());
+    EXPECT_EQ(aid->received_grain_units, 1);
+    EXPECT_EQ(aid->carried_grain_units, 1);
+    EXPECT_EQ(aid->remaining_grain_stock_units, 2);
+    EXPECT_EQ(aid->tick, tick_before_aid);
+    EXPECT_EQ(
+        aid->revision,
+        (worldsim::sim::WorldRevision{revision_before_aid.value + 1U})
+    );
+
+    const auto state = world.household_state(household);
+    const auto carry = world.actor_grain_carry_state(actor);
+    const auto shortage = world.household_is_short(household);
+    ASSERT_TRUE(state.has_value());
+    ASSERT_TRUE(carry.has_value());
+    ASSERT_TRUE(shortage.has_value());
+    EXPECT_EQ(state->remembered_material_aid_actor, worldsim::sim::EntityId{});
+    EXPECT_EQ(carry->carried_grain_units, 1);
+    EXPECT_FALSE(*shortage);
+
+    const auto after = world.snapshot();
+    const auto second = world.request_household_reciprocal_aid(actor, household);
+    ASSERT_FALSE(second.has_value());
+    EXPECT_EQ(second.error(), worldsim::sim::HouseholdReciprocalAidError::no_remembered_aid);
+    EXPECT_EQ(world.snapshot(), after);
+}
+
+TEST(M3RememberedAid, MateriallyFeasibleControlWithoutMemoryRefusesForSocialReason) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{90}};
+    const worldsim::sim::EntityId actor{1};
+    const worldsim::sim::EntityId store{10};
+    const worldsim::sim::EntityId household{20};
+
+    ASSERT_TRUE(spawn_giver(world, actor, 0, 0, 2));
+    ASSERT_TRUE(add_store(world, store));
+    ASSERT_TRUE(
+        world.add_household(worldsim::sim::HouseholdState{
+            .id = household,
+            .store_place = store,
+            .grain_stock_units = 5,
+            .shortage_threshold_units = 2,
+        }).has_value()
+    );
+
+    const auto before = world.snapshot();
+    const auto aid = world.request_household_reciprocal_aid(actor, household);
+    ASSERT_FALSE(aid.has_value());
+    EXPECT_EQ(aid.error(), worldsim::sim::HouseholdReciprocalAidError::no_remembered_aid);
+    EXPECT_EQ(world.snapshot(), before);
+}
+
+TEST(M3RememberedAid, MaterialRefusalPreservesOutstandingFavour) {
+    const worldsim::sim::EntityId actor{1};
+    const worldsim::sim::EntityId store{10};
+    const worldsim::sim::EntityId household{20};
+
+    worldsim::sim::World full{worldsim::sim::WorldSeed{91}};
+    ASSERT_TRUE(spawn_giver(full, actor, 2, 0, 2));
+    ASSERT_TRUE(add_store(full, store));
+    ASSERT_TRUE(
+        full.add_household(worldsim::sim::HouseholdState{
+            .id = household,
+            .store_place = store,
+            .grain_stock_units = 5,
+            .shortage_threshold_units = 2,
+            .remembered_material_aid_actor = actor,
+        }).has_value()
+    );
+    const auto full_before = full.snapshot();
+    const auto full_result = full.request_household_reciprocal_aid(actor, household);
+    ASSERT_FALSE(full_result.has_value());
+    EXPECT_EQ(full_result.error(), worldsim::sim::HouseholdReciprocalAidError::carry_full);
+    EXPECT_EQ(full.snapshot(), full_before);
+
+    worldsim::sim::World no_surplus{worldsim::sim::WorldSeed{92}};
+    ASSERT_TRUE(spawn_giver(no_surplus, actor, 0, 0, 2));
+    ASSERT_TRUE(add_store(no_surplus, store));
+    ASSERT_TRUE(
+        no_surplus.add_household(worldsim::sim::HouseholdState{
+            .id = household,
+            .store_place = store,
+            .grain_stock_units = 2,
+            .shortage_threshold_units = 2,
+            .remembered_material_aid_actor = actor,
+        }).has_value()
+    );
+    const auto surplus_before = no_surplus.snapshot();
+    const auto surplus_result = no_surplus.request_household_reciprocal_aid(actor, household);
+    ASSERT_FALSE(surplus_result.has_value());
+    EXPECT_EQ(
+        surplus_result.error(),
+        worldsim::sim::HouseholdReciprocalAidError::insufficient_surplus
+    );
+    EXPECT_EQ(no_surplus.snapshot(), surplus_before);
+}
+
+TEST(M3RememberedAid, FavourCannotBeConsumedByAnotherActor) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{93}};
+    const worldsim::sim::EntityId remembered_actor{1};
+    const worldsim::sim::EntityId other_actor{2};
+    const worldsim::sim::EntityId store{10};
+    const worldsim::sim::EntityId household{20};
+
+    ASSERT_TRUE(spawn_giver(world, remembered_actor, 0, 0, 2));
+    ASSERT_TRUE(spawn_giver(world, other_actor, 0, 0, 2));
+    ASSERT_TRUE(add_store(world, store));
+    ASSERT_TRUE(
+        world.add_household(worldsim::sim::HouseholdState{
+            .id = household,
+            .store_place = store,
+            .grain_stock_units = 5,
+            .shortage_threshold_units = 2,
+            .remembered_material_aid_actor = remembered_actor,
+        }).has_value()
+    );
+
+    const auto before = world.snapshot();
+    const auto wrong_actor = world.request_household_reciprocal_aid(other_actor, household);
+    ASSERT_FALSE(wrong_actor.has_value());
+    EXPECT_EQ(
+        wrong_actor.error(),
+        worldsim::sim::HouseholdReciprocalAidError::remembered_for_other_actor
+    );
+    EXPECT_EQ(world.snapshot(), before);
+
+    const auto right_actor = world.request_household_reciprocal_aid(remembered_actor, household);
+    ASSERT_TRUE(right_actor.has_value());
+    EXPECT_GT(right_actor->received_grain_units, 0);
 }

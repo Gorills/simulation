@@ -68,10 +68,19 @@ msgid "UI_RESOURCE_PROMPT_OWN_STORE"
 msgstr "Ваш склад · E взять · R вернуть · T передать соседу"
 
 msgid "UI_RESOURCE_PROMPT_NEIGHBOUR_STORE"
-msgstr "Склад соседа · G подарить зерно"
+msgstr "Склад соседа · G подарить зерно · T попросить ответную помощь"
+
+msgid "UI_RESOURCE_PROMPT_NEIGHBOUR_REMEMBERED"
+msgstr "Сосед помнит вашу помощь · T попросить ответную помощь"
 
 msgid "UI_RESOURCE_PROMPT_FIELD"
 msgstr "Поле · F работать"
+
+msgid "UI_RESOURCE_AID_REMEMBERED"
+msgstr "Сосед запомнил вашу помощь."
+
+msgid "UI_RESOURCE_AID_REPAID"
+msgstr "Сосед отвечает на вашу помощь зерном."
 
 msgid "UI_DEBUG_STANDING_TRANSFER"
 msgstr "Передача"
@@ -111,6 +120,15 @@ msgstr "В хозяйстве недостаточно зерна"
 
 msgid "UI_RESOURCE_REFUSAL_STOCK_OVERFLOW"
 msgstr "Хранилище не вмещает зерно"
+
+msgid "UI_RESOURCE_REFUSAL_NO_REMEMBERED_AID"
+msgstr "Сосед не должен вам ответную услугу"
+
+msgid "UI_RESOURCE_REFUSAL_OTHER_REMEMBERED_ACTOR"
+msgstr "Эта ответная услуга обещана другому"
+
+msgid "UI_RESOURCE_REFUSAL_INSUFFICIENT_SURPLUS"
+msgstr "Сосед не может отдать зерно, не создав нехватку"
 
 msgid "UI_RESOURCE_REFUSAL_UNAVAILABLE"
 msgstr "Действие недоступно"

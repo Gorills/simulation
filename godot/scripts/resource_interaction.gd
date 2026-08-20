@@ -30,6 +30,7 @@ var _field_work_projection: Dictionary = {}
 var _village_projection: Dictionary = {}
 var _carry_projection: Dictionary = {}
 var _spatial_projection: Dictionary = {}
+var _reciprocal_aid_projection: Dictionary = {}
 
 
 func configure(
@@ -73,13 +74,18 @@ func refresh() -> void:
 
 
 func show_command_outcome(response: Dictionary) -> void:
-    if bool(response.get("ok", false)):
-        _show_refusal("")
+    var accepted := bool(response.get("ok", false))
+    if accepted:
         resource_state_changed.emit()
-    else:
-        _show_refusal(str(response.get("error", "unknown")))
     _refresh_field_work_projection()
     _refresh_all_hud()
+    if accepted:
+        if _target_remembers_controlled_actor():
+            _show_status(tr(&"UI_RESOURCE_AID_REMEMBERED"))
+        else:
+            _show_refusal("")
+    else:
+        _show_refusal(str(response.get("error", "unknown")))
 
 
 func carry_hud_text() -> String:
@@ -118,6 +124,7 @@ func _unhandled_input(event: InputEvent) -> void:
         return
 
     var response: Dictionary = {}
+    var requested_reciprocal_aid := false
     if event.is_action_pressed(&"resource_draw"):
         response = _sim.controlled_actor_draw_grain()
     elif event.is_action_pressed(&"resource_deposit"):
@@ -129,17 +136,28 @@ func _unhandled_input(event: InputEvent) -> void:
     elif event.is_action_pressed(&"resource_work"):
         response = _sim.controlled_actor_complete_field_work()
     elif event.is_action_pressed(&"resource_transfer"):
-        response = _sim.controlled_actor_execute_household_transfer_pledge()
+        if _target_household_id > 0 and _occupies_target_store():
+            requested_reciprocal_aid = true
+            response = _sim.controlled_actor_request_reciprocal_aid(_target_household_id)
+        else:
+            response = _sim.controlled_actor_execute_household_transfer_pledge()
     else:
         return
 
-    if bool(response.get("ok", false)):
-        _show_refusal("")
+    var accepted := bool(response.get("ok", false))
+    if accepted:
         resource_state_changed.emit()
-    else:
-        _show_refusal(str(response.get("error", "unknown")))
     _refresh_field_work_projection()
     _refresh_all_hud()
+    if accepted:
+        if requested_reciprocal_aid:
+            _show_status(tr(&"UI_RESOURCE_AID_REPAID"))
+        elif _target_remembers_controlled_actor():
+            _show_status(tr(&"UI_RESOURCE_AID_REMEMBERED"))
+        else:
+            _show_refusal("")
+    else:
+        _show_refusal(str(response.get("error", "unknown")))
     get_viewport().set_input_as_handled()
 
 
@@ -153,12 +171,33 @@ func _refresh_all_hud() -> void:
     _carry_projection = _sim.controlled_actor_carry_projection()
     _village_projection = _sim.village_household_resource_projection()
     _spatial_projection = _sim.controlled_actor_spatial_projection()
+    _refresh_reciprocal_aid_projection()
     _refresh_carry_hud()
     _refresh_work_hud()
     _refresh_pledge_hud()
     _refresh_field_cue()
     _refresh_place_cues()
     _refresh_interaction_prompt()
+
+
+func _refresh_reciprocal_aid_projection() -> void:
+    _reciprocal_aid_projection = {}
+    if _sim == null or _target_household_id <= 0:
+        return
+    var response: Dictionary = _sim.reciprocal_aid_projection(_target_household_id)
+    if not bool(response.get("ok", false)):
+        return
+    var projection_value = response.get("projection", null)
+    if typeof(projection_value) != TYPE_DICTIONARY:
+        return
+    var projection: Dictionary = projection_value
+    if int(projection.get("household_id", 0)) != _target_household_id:
+        return
+    _reciprocal_aid_projection = projection
+
+
+func _target_remembers_controlled_actor() -> bool:
+    return bool(_reciprocal_aid_projection.get("remembered_for_controlled_actor", false))
 
 
 func _refresh_carry_hud() -> void:
@@ -295,12 +334,39 @@ func _refresh_interaction_prompt() -> void:
         var store: Vector3 = store_value
         if not _occupies(store, tolerance):
             continue
-        if int(household.get("household_id", 0)) == member_household_id:
+        var household_id := int(household.get("household_id", 0))
+        if household_id == member_household_id:
             _prompt_label.text = tr(&"UI_RESOURCE_PROMPT_OWN_STORE")
+        elif household_id == _target_household_id and _target_remembers_controlled_actor():
+            _prompt_label.text = tr(&"UI_RESOURCE_PROMPT_NEIGHBOUR_REMEMBERED")
         else:
             _prompt_label.text = tr(&"UI_RESOURCE_PROMPT_NEIGHBOUR_STORE")
         return
     _prompt_label.text = tr(&"UI_RESOURCE_PROMPT_SEEK")
+
+
+func _target_store_projection() -> Dictionary:
+    var households_value = _village_projection.get("households", null)
+    if typeof(households_value) != TYPE_ARRAY:
+        return {}
+    for household_value in households_value:
+        if typeof(household_value) != TYPE_DICTIONARY:
+            continue
+        var household: Dictionary = household_value
+        if int(household.get("household_id", 0)) == _target_household_id:
+            return household
+    return {}
+
+
+func _occupies_target_store() -> bool:
+    var household := _target_store_projection()
+    if household.is_empty():
+        return false
+    var store_value = household.get("store_position_m", null)
+    var tolerance := float(household.get("store_axis_tolerance_m", -1.0))
+    if typeof(store_value) != TYPE_VECTOR3 or tolerance < 0.0:
+        return false
+    return _occupies(store_value, tolerance)
 
 
 func _occupies(center: Vector3, tolerance: float) -> bool:
@@ -425,6 +491,13 @@ func _refresh_field_work_projection() -> bool:
     return true
 
 
+func _show_status(text: String) -> void:
+    if _refusal_label == null:
+        return
+    _refusal_label.text = text
+    _refusal_label.visible = not text.is_empty()
+
+
 func _show_refusal(error: String) -> void:
     if _refusal_label == null:
         return
@@ -458,6 +531,12 @@ func _refusal_text(error: String) -> String:
             return tr(&"UI_RESOURCE_REFUSAL_INSUFFICIENT_STOCK")
         "stock_overflow":
             return tr(&"UI_RESOURCE_REFUSAL_STOCK_OVERFLOW")
+        "no_remembered_aid":
+            return tr(&"UI_RESOURCE_REFUSAL_NO_REMEMBERED_AID")
+        "remembered_for_other_actor":
+            return tr(&"UI_RESOURCE_REFUSAL_OTHER_REMEMBERED_ACTOR")
+        "insufficient_surplus":
+            return tr(&"UI_RESOURCE_REFUSAL_INSUFFICIENT_SURPLUS")
         _:
             return tr(&"UI_RESOURCE_REFUSAL_UNAVAILABLE")
 

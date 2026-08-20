@@ -98,6 +98,8 @@ jobs:
           cmake --build --preset smoke-ci
           python tools/check_localization.py
           ccache --show-stats
+      - name: Verify reciprocal aid Godot bridge branches
+        run: xvfb-run -a "$GODOT_BIN" --headless --path godot --script res://scripts/playtest/m3_reciprocal_aid_bridge_test.gd
       - name: Verify Russian Godot smoke
         run: xvfb-run -a python tools/dev.py play --scenario smoke --locale ru
       - name: Verify English Godot smoke

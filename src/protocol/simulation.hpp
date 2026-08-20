@@ -6,6 +6,7 @@
 #include "protocol/living_need.hpp"
 #include "protocol/movement.hpp"
 #include "protocol/observed_world.hpp"
+#include "protocol/reciprocal_aid.hpp"
 #include "protocol/spatial.hpp"
 #include "sim/world.hpp"
 
@@ -26,6 +27,9 @@ public:
     [[nodiscard]] ControlledActorResourceOutcome controlled_actor_gift_household_grain(
         ProtocolInteger receiving_household_id
     );
+    [[nodiscard]] ControlledActorReciprocalAidOutcome controlled_actor_request_reciprocal_aid(
+        ProtocolInteger household_id
+    );
     [[nodiscard]] ControlledActorWorkOutcome controlled_actor_complete_field_work();
     [[nodiscard]] ControlledActorTransferOutcome controlled_actor_execute_household_transfer_pledge();
 
@@ -35,6 +39,9 @@ public:
     [[nodiscard]] LivingNeedProjection living_need_projection() const;
     [[nodiscard]] VillageHouseholdResourceProjection village_household_resource_projection() const;
     [[nodiscard]] ControlledActorCarryProjection controlled_actor_carry_projection() const;
+    [[nodiscard]] ControlledActorReciprocalAidProjectionOutcome reciprocal_aid_projection(
+        ProtocolInteger household_id
+    ) const;
     [[nodiscard]] FieldWorkProjection field_work_projection() const;
     [[nodiscard]] StandingTransferPledgeProjection standing_transfer_pledge_projection() const;
 

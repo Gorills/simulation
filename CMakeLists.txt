@@ -67,6 +67,7 @@ target_sources(
     sim_protocol
     PRIVATE
         src/protocol/simulation.cpp
+        src/protocol/simulation_reciprocal_aid.cpp
         src/protocol/simulation_work.cpp
         src/protocol/simulation_transfer.cpp
     PUBLIC
@@ -78,6 +79,7 @@ target_sources(
             src/protocol/household_resource.hpp
             src/protocol/movement.hpp
             src/protocol/observed_world.hpp
+            src/protocol/reciprocal_aid.hpp
             src/protocol/spatial.hpp
             src/protocol/simulation.hpp
 )
@@ -117,6 +119,7 @@ if(WORLD_SIM_BUILD_TESTS)
         protocol_tests
         tests/protocol/household_resource_action_test.cpp
         tests/protocol/m2_performance_test.cpp
+        tests/protocol/m3_reciprocal_aid_test.cpp
         tests/protocol/simulation_test.cpp
         tests/protocol/movement_test.cpp
     )
@@ -146,6 +149,7 @@ if(WORLD_SIM_BUILD_GDEXTENSION)
         PRIVATE
             src/adapters/gdextension/register_types.cpp
             src/adapters/gdextension/sim_facade.cpp
+            src/adapters/gdextension/sim_facade_reciprocal_aid.cpp
             src/adapters/gdextension/sim_facade_work.cpp
             src/adapters/gdextension/sim_facade_transfer.cpp
             src/adapters/gdextension/sim_facade.hpp
