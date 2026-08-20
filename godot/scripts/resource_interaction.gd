@@ -134,9 +134,10 @@ func _install_field_cue() -> void:
     var position_value = _field_work_projection.get("work_position_m", null)
     if typeof(position_value) != TYPE_VECTOR3:
         return
+    var position: Vector3 = position_value
     _field_label = Label3D.new()
     _field_label.name = "FieldWorkCue"
-    _field_label.position = position_value + Vector3(0.0, 0.8, 0.0)
+    _field_label.position = position + Vector3(0.0, 0.8, 0.0)
     _field_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     _field_label.font_size = 32
     _field_label.outline_size = 8
