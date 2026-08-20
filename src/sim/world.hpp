@@ -29,15 +29,6 @@ enum class LocomotionPace : std::uint8_t {
     return false;
 }
 
-// Authoritative base capability for ordinary grounded locomotion. These values
-// are deliberately actor state rather than a global controller profile. Future
-// causal state such as wounds, carried load, progression or concrete magical
-// effects can alter the limits resolved by World without changing intent or
-// creating a player/NPC-specific movement law.
-//
-// The current numbers are first project feel baselines, not biological claims:
-// ordinary walk 1.0 m/s, run 3.0 m/s, sprint 5.8 m/s, with deterministic
-// acceleration/braking. They remain playtest-tunable through actor/content state.
 struct ActorLocomotionCapability final {
     MillimetersPerSecond walk_speed{1'000};
     MillimetersPerSecond run_speed{3'000};
@@ -169,6 +160,20 @@ enum class HouseholdGiftError : std::uint8_t {
     stock_overflow,
 };
 
+enum class HouseholdReciprocalAidError : std::uint8_t {
+    invalid_entity_id,
+    unknown_actor,
+    unknown_household,
+    invalid_actor_grain_carry_state,
+    invalid_household_state,
+    missing_spatial_state,
+    outside_store,
+    no_remembered_aid,
+    remembered_for_other_actor,
+    carry_full,
+    insufficient_surplus,
+};
+
 enum class FieldWorkError : std::uint8_t {
     invalid_entity_id,
     unknown_actor,
@@ -208,9 +213,6 @@ struct GroundedLocomotionContext final {
     }
 };
 
-// Temporary Stage C2/Milestone 1 integration context. It owns shared world-law
-// fixture data only. Per-actor speed/acceleration/braking are resolved by World
-// from ActorState + requested pace before each step.
 [[nodiscard]] inline GroundedLocomotionContext make_flat_locomotion_acceptance_context() {
     GroundedLocomotionContext context{
         .body = kFirstPlayableBody,
@@ -263,10 +265,6 @@ struct GroundedLocomotionContinuation final {
     constexpr bool operator==(const GroundedLocomotionContinuation &) const = default;
 };
 
-// First Milestone 1 need state. The actor needs to be within the assigned local
-// rest-point tolerance; satisfaction is derived from authoritative SpatialState,
-// so no parallel Boolean completion flag can drift from location truth. This is
-// deliberately not a generic needs/task framework or a production home model.
 struct RestNeedState final {
     Millimeters rest_x{};
     Millimeters rest_z{};
@@ -279,8 +277,6 @@ struct RestNeedState final {
     constexpr bool operator==(const RestNeedState &) const = default;
 };
 
-// One authoritative carried staple slot. This is intentionally not a generic
-// inventory/item abstraction: M2 has one grain quantity and one actor-owned bound.
 struct ActorGrainCarryState final {
     std::int64_t carried_grain_units{};
     std::int64_t grain_carry_capacity_units{};
@@ -295,8 +291,6 @@ struct ActorGrainCarryState final {
 };
 
 struct ActorSpawnState final {
-    // Milestone 0 transport probe only. Production spatial movement must not
-    // depend on this grid position.
     GridPosition bootstrap_position{};
     std::optional<SpatialState> spatial{};
     ActorLocomotionCapability locomotion_capability{};
@@ -311,18 +305,11 @@ struct ActorState final {
     ActorLocomotionCapability locomotion_capability{};
     std::optional<RestNeedState> rest_need{};
     ActorGrainCarryState grain_carry{};
-    // Hidden fixed-step continuation state. It affects future authoritative
-    // movement and therefore belongs to snapshot truth, but not to presentation
-    // projections.
     GroundedLocomotionContinuation grounded_locomotion{};
 
     constexpr bool operator==(const ActorState &) const = default;
 };
 
-// First Milestone 2 authoritative place record. It is intentionally only the
-// exact local interaction footprint required by household stores and the bounded
-// field work point. Production navigation/physics and a generic place ontology
-// remain out of scope.
 struct PlaceState final {
     EntityId id{};
     Millimeters x{};
@@ -336,9 +323,6 @@ struct PlaceState final {
     constexpr bool operator==(const PlaceState &) const = default;
 };
 
-// One-way standing household transfer pledge. Remaining quantity plus a durable
-// destination household are source-household content, not a live shortage query
-// and not a priced exchange.
 struct StandingTransferPledge final {
     EntityId destination_household{};
     std::int64_t remaining_grain_units{};
@@ -346,12 +330,6 @@ struct StandingTransferPledge final {
     constexpr bool operator==(const StandingTransferPledge &) const = default;
 };
 
-// Household state remains one bounded aggregate rather than an actor class or
-// inventory/relationship framework. M3 adds one optional remembered-aid actor:
-// EntityId{0} means no outstanding personal favour; a positive actor id means
-// this household remembers one qualifying material Gift from that actor. The
-// slot is deliberately singular until a playable capability needs concurrent
-// household obligations toward multiple actors.
 struct HouseholdState final {
     EntityId id{};
     std::vector<EntityId> members{};
@@ -388,10 +366,6 @@ struct HouseholdState final {
     bool operator==(const HouseholdState &) const = default;
 };
 
-// One bounded field/work assignment for M2.7. It is content state, not an entity
-// kind or scheduler: the assignment references an existing work place and a
-// durable destination household, owns one positive fixture yield, and bounds how
-// many revision-only Work transitions may still succeed.
 struct FieldWorkAssignmentState final {
     EntityId work_place{};
     EntityId destination_household{};
@@ -407,8 +381,6 @@ struct FieldWorkAssignmentState final {
     constexpr bool operator==(const FieldWorkAssignmentState &) const = default;
 };
 
-// One accepted immediate household consumption transition. The operation is
-// revision-only: it never advances SimulationTick merely to change stock.
 struct HouseholdConsumeResult final {
     EntityId actor{};
     EntityId household{};
@@ -454,8 +426,21 @@ struct HouseholdGiftResult final {
     std::int64_t receiving_grain_stock_units{};
     SimulationTick tick{};
     WorldRevision revision{};
+    bool remembered_aid_created{};
 
     constexpr bool operator==(const HouseholdGiftResult &) const = default;
+};
+
+struct HouseholdReciprocalAidResult final {
+    EntityId actor{};
+    EntityId household{};
+    std::int64_t received_grain_units{};
+    std::int64_t carried_grain_units{};
+    std::int64_t remaining_grain_stock_units{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+
+    constexpr bool operator==(const HouseholdReciprocalAidResult &) const = default;
 };
 
 struct FieldWorkResult final {
@@ -485,10 +470,6 @@ struct HouseholdTransferResult final {
     constexpr bool operator==(const HouseholdTransferResult &) const = default;
 };
 
-// Intent carries direction/magnitude plus a semantic pace choice. It never
-// carries a requested meters-per-second value: World resolves that from the
-// authoritative actor capability so a client/NPC decision source cannot author
-// the movement outcome directly.
 struct ActorGroundedMoveIntent final {
     EntityId actor{};
     PlanarMoveIntent move{};
@@ -497,9 +478,6 @@ struct ActorGroundedMoveIntent final {
     constexpr bool operator==(const ActorGroundedMoveIntent &) const = default;
 };
 
-// One post-transition authoritative sample produced by a successful locomotion
-// batch. Samples are presentation-neutral Core values and never contain protocol
-// or Godot types.
 struct GroundedLocomotionSample final {
     EntityId actor{};
     SpatialState spatial{};
@@ -507,9 +485,6 @@ struct GroundedLocomotionSample final {
     constexpr bool operator==(const GroundedLocomotionSample &) const = default;
 };
 
-// One successful fixed locomotion transition produces exactly one temporal batch.
-// Every sample shares this post-transition tick/revision. Samples are sorted by
-// ascending EntityId so presentation order is independent of intent-source order.
 struct GroundedLocomotionTickResult final {
     SimulationTick tick{};
     WorldRevision revision{};
@@ -520,10 +495,6 @@ struct GroundedLocomotionTickResult final {
 
 inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 10;
 
-// Core-owned in-memory persistence contract. Serialization format, content and
-// protocol envelope versions belong to a later persistence layer. Authoritative
-// records stay in deterministic insertion order; derived lookup/id-view state is
-// rebuilt on restore and is not persisted.
 struct WorldSnapshot final {
     std::uint32_t schema_version{kWorldSnapshotSchemaVersion};
     WorldSeed seed{};
@@ -551,26 +522,11 @@ public:
         FieldWorkAssignmentState assignment
     );
 
-    // Read-only application eligibility filter. It intentionally mirrors the
-    // actor-generic Consume prerequisites so bounded autonomy can suppress
-    // impossible proposals; consume_household_grain still revalidates authority.
     [[nodiscard]] bool can_consume_household_grain(EntityId actor) const noexcept;
 
-    // Shared actor-generic M2 consumption rule. Membership, exact-spatial store
-    // occupancy, positive content, remaining budget and stock are revalidated
-    // against current World state. Accepted Consume changes revision exactly once;
-    // refusal changes neither tick nor revision.
     [[nodiscard]] std::expected<HouseholdConsumeResult, HouseholdConsumeError>
     consume_household_grain(EntityId actor) noexcept;
 
-    // Shared actor-generic grain carry laws. No operation accepts a quantity from
-    // the caller: Draw fills toward the actor's bound, Deposit moves all carried
-    // grain into the actor's own household, and Gift moves all carried grain into
-    // the explicitly selected receiving household. A Gift to a household that is
-    // short immediately before the transition records the first outstanding
-    // remembered-aid actor in that same authoritative transition. Accepted
-    // operations advance WorldRevision exactly once and never advance
-    // SimulationTick.
     [[nodiscard]] std::expected<HouseholdDrawResult, HouseholdDrawError>
     draw_household_grain(EntityId actor) noexcept;
     [[nodiscard]] std::expected<HouseholdDepositResult, HouseholdDepositError>
@@ -578,33 +534,27 @@ public:
     [[nodiscard]] std::expected<HouseholdGiftResult, HouseholdGiftError>
     gift_household_grain(EntityId actor, EntityId receiving_household) noexcept;
 
-    // Shared actor-generic bounded Work law. The actor supplies no quantity and
-    // chooses no destination: authoritative field content owns place, destination,
-    // yield and remaining completions. Work is revision-only and fails closed.
+    // One bounded M3 reciprocal material-aid transition. Only the actor currently
+    // remembered by the selected household may receive grain, only while standing
+    // in that household's store. The amount is Core-owned and capped by both free
+    // carry capacity and stock strictly above the household shortage threshold, so
+    // repayment cannot itself put the household back into shortage. Success moves
+    // grain and clears the outstanding favour in one revision-only transition;
+    // any refusal leaves material and social state unchanged.
+    [[nodiscard]] std::expected<HouseholdReciprocalAidResult, HouseholdReciprocalAidError>
+    request_household_reciprocal_aid(EntityId actor, EntityId household) noexcept;
+
     [[nodiscard]] std::expected<FieldWorkResult, FieldWorkError>
     complete_field_work(EntityId actor) noexcept;
 
-    // Shared actor-generic standing household transfer. The actor supplies no
-    // quantity and chooses no destination: membership selects the source household
-    // pledge, occupancy of that household's store authorizes execution, and the
-    // entire remaining pledged amount moves all-or-nothing. Revision-only.
     [[nodiscard]] std::expected<HouseholdTransferResult, HouseholdTransferError>
     execute_household_transfer_pledge(EntityId actor) noexcept;
 
-    // Milestone 0 transport probe only. Production spatial movement must use a
-    // real actor-location contract rather than extending this cardinal grid API.
     [[nodiscard]] std::expected<void, WorldError> apply_bootstrap_step(
         EntityId id,
         CardinalDirection direction
     ) noexcept;
 
-    // Applies one fixed authoritative locomotion tick atomically to the supplied
-    // actor intents. One batch advances SimulationTick/WorldRevision once
-    // regardless of actor count, so human and NPC intents share the same world
-    // transition rather than advancing time through player-only calls. World
-    // resolves each actor's capability + requested pace into solver limits before
-    // computing the step. On success samples are post-transition and canonically
-    // ordered by EntityId.
     [[nodiscard]] std::expected<GroundedLocomotionTickResult, GroundedLocomotionTickError>
     advance_grounded_locomotion_tick(
         const GroundedLocomotionContext &context,
@@ -613,15 +563,9 @@ public:
 
     void advance_one_tick() noexcept;
 
-    // Snapshot/restore is intentionally value-based. Derived runtime indexes and
-    // deterministic id views are rebuilt on restore and never persisted as
-    // authoritative state.
     [[nodiscard]] WorldSnapshot snapshot() const;
     [[nodiscard]] std::expected<void, WorldSnapshotError> restore(const WorldSnapshot &snapshot);
 
-    // EntityId is the durable external reference. Queries return values rather
-    // than addresses into World storage so later storage growth cannot invalidate
-    // a caller-held pointer/reference.
     [[nodiscard]] bool contains_actor(EntityId id) const noexcept;
     [[nodiscard]] bool contains_place(EntityId id) const noexcept;
     [[nodiscard]] bool contains_household(EntityId id) const noexcept;
@@ -634,25 +578,13 @@ public:
     [[nodiscard]] std::optional<HouseholdState> household_state(EntityId id) const;
     [[nodiscard]] std::optional<FieldWorkAssignmentState> field_work_assignment() const noexcept;
 
-    // Shortage remains derived state: unknown/invalid household state has no
-    // readable shortage, and valid state is short exactly when stock < threshold.
     [[nodiscard]] std::optional<bool> household_is_short(EntityId id) const noexcept;
 
-    // Bounded deterministic composition views for protocol observation/decision
-    // collection and household discovery. These are derived runtime views, not
-    // snapshot truth and not a generic entity registry.
     [[nodiscard]] std::span<const EntityId> actor_ids() const noexcept;
     [[nodiscard]] std::span<const EntityId> household_ids() const noexcept;
 
-    // Resource place occupancy uses exact arrival semantics only: per-axis X/Z
-    // distance must fit the place tolerance. Unlike RestNeed body occupancy this
-    // does not add the actor capsule radius.
     [[nodiscard]] bool is_actor_inside_place(EntityId actor, EntityId place) const noexcept;
 
-    // Bounded exact-spatial presence query for a concrete local causal condition.
-    // Another exact-spatial actor occupies the place when its first-playable
-    // planar body overlaps the caller's per-axis X/Z box. This is not
-    // actor-body collision, navigation, observation policy or a spatial index.
     [[nodiscard]] bool is_planar_position_occupied_by_other_actor(
         EntityId excluded_actor,
         Millimeters x,
@@ -673,10 +605,6 @@ private:
     [[nodiscard]] std::optional<std::size_t> household_index(EntityId id) const noexcept;
     [[nodiscard]] ActorState *find_actor(EntityId id) noexcept;
 
-    // Authoritative record vectors own deterministic insertion order. Maps and
-    // id-only vectors are derived lookup/read structures and are rebuilt on
-    // restore rather than persisted in WorldSnapshot. The bounded field work
-    // assignment is direct authoritative content, not an index or entity registry.
     std::vector<ActorState> actors_{};
     std::vector<PlaceState> places_{};
     std::vector<HouseholdState> households_{};
