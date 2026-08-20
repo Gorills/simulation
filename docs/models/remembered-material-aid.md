@@ -4,15 +4,15 @@ Status: DRAFT
 
 ## Gameplay purpose
 
-Milestone 3 needs one earlier material choice to alter a later social opportunity. This first social state is deliberately narrower than friendship, trust, reputation or a general relationship graph.
+Milestone 3 needs one earlier material choice to alter a later social opportunity. This social state is deliberately narrower than friendship, trust, reputation or a general relationship graph.
 
-The implemented Core subset gives a household one bounded outstanding memory:
+The implemented model gives a household one bounded outstanding memory:
 
 ```text
 this household remembers that actor X materially helped while we were short
 ```
 
-The current state is only the remembered cause. The reciprocal-aid action that later consumes/changes this state is a subsequent M3 vertical slice.
+That remembered cause now changes one later authoritative opportunity: while the household can safely spare grain, the remembered actor may ask for one reciprocal material favour at that household's store. A successful repayment moves real household grain into the actor's existing carry slot and clears the remembered favour.
 
 Canonical whole-milestone outcome: [`../milestones/m3-playable-social-consequence.md`](../milestones/m3-playable-social-consequence.md).
 
@@ -26,7 +26,7 @@ Canonical whole-milestone outcome: [`../milestones/m3-playable-social-consequenc
 - a positive reference must resolve to an existing actor when the household is composed or a snapshot is restored;
 - the remembered actor may not be a member of the remembering household, because the authoritative Gift law rejects gifting to one's own household and such a state cannot represent the qualifying cause this field claims.
 
-The slot is intentionally singular. M3 currently needs one remembered favour in one short vignette, not simultaneous debt accounting for every actor. If a later playable capability requires concurrent household obligations, extend the causal model then rather than prebuilding a generic relationship store now.
+The slot is intentionally singular. M3 needs one remembered favour in one short vignette, not simultaneous debt accounting for every actor. If a later playable capability requires concurrent household obligations, extend the causal model then rather than prebuilding a generic relationship store now.
 
 ## Qualifying Gift rule
 
@@ -44,9 +44,46 @@ A Gift to a household that was not short remains a real material Gift but create
 
 If the household already has an outstanding remembered-aid actor, another valid Gift remains a normal material Gift and does not overwrite the existing actor. The bounded slot is not a last-writer-wins reputation value.
 
+## Reciprocal aid rule
+
+`World::request_household_reciprocal_aid(actor, household)` is the one bounded future opportunity created by the remembered cause.
+
+The request succeeds only when all of these current authoritative prerequisites hold:
+
+1. actor and selected household exist and their relevant resource/social state is valid;
+2. the actor is physically inside that household's authoritative store footprint;
+3. the household has an outstanding remembered-aid actor;
+4. that remembered actor is the requesting actor;
+5. the actor has positive free grain-carry capacity;
+6. the household has grain strictly above its shortage threshold.
+
+The caller supplies no amount. Core computes:
+
+```text
+free carry = carry capacity - current carry
+safe surplus = household stock - shortage threshold
+received grain = min(free carry, safe surplus)
+```
+
+A successful repayment therefore cannot itself make the household short. It changes existing material truth rather than minting a reward:
+
+```text
+household stock decreases by received grain
+actor carry increases by the same received grain
+remembered_material_aid_actor becomes none
+WorldRevision advances exactly once
+SimulationTick does not advance
+```
+
+The favour is one-shot. After a successful reciprocal transfer, a second request refuses because there is no outstanding remembered aid.
+
+Material inability does **not** erase the obligation. Full carry, no safe household surplus, wrong location, or another ordinary refusal leaves household stock, actor carry, remembered aid, tick and revision unchanged. The actor can try again later if material prerequisites change.
+
+A materially feasible household with no remembered aid refuses for the social reason `no_remembered_aid`. A household remembering another actor refuses `remembered_for_other_actor`. These cases are required to distinguish the M3 consequence from stock/occupancy failure.
+
 ## Atomic causality
 
-Material Gift and newly created social memory share the same authoritative Core transition boundary.
+Material Gift and newly created social memory share one authoritative Core transition boundary.
 
 For a qualifying Gift, one successful `World::gift_household_grain` transition performs all of the following before advancing `WorldRevision` exactly once:
 
@@ -58,25 +95,41 @@ remembered_material_aid_actor changes from none to the acting actor
 
 There is no second application/protocol/Godot call that "adds reputation" after the Gift has already committed.
 
-All Gift validation, including checked destination-stock addition, completes before any of those fields mutate. A refused Gift leaves material state, remembered aid, `SimulationTick` and `WorldRevision` unchanged.
+Reciprocal repayment has the same atomicity requirement in reverse: grain transfer into actor carry and clearing the remembered favour either both commit in one Core transition or neither changes.
 
-This preserves the M3 contract requirement that the world never exposes "gift happened, social memory failed" or "social credit exists without its qualifying material cause".
+All validation completes before material/social mutation. A refused Gift or reciprocal request leaves relevant material state, remembered aid, `SimulationTick` and `WorldRevision` unchanged.
+
+This preserves the M3 contract requirement that the world never exposes social credit without its material cause, a committed qualifying contribution without required memory, or a consumed favour without the material repayment that consumed it.
 
 ## Attribution
 
 The remembered actor is the actor whose accepted `Gift` transition moved their authoritative carried grain into the short household.
 
-This is actor-generic: the Core has no controlled-player branch. Any actor with equivalent state can become the remembered actor.
+This is actor-generic: the Core has no controlled-player branch. Any actor with equivalent state can become the remembered actor and use the same reciprocal-aid World law.
 
-The existing standing household transfer does **not** create this personal aid state. Its grain and pledge are source-household state, so executing that household obligation is not automatically personal credit for the executor.
+The existing standing household transfer does **not** create this personal aid state. Its grain and pledge are source-household state, so executing that household obligation is not automatically personal credit for the executor. This provides the natural M3 control path: the target shortage can be materially relieved without creating personal remembered aid.
 
-Work is also not wired into this state in the current subset. The whole M3 contract allows a future attributable Work path, but adding it now would expand one Core slice without a second player-facing need.
+Work is not wired into this state in the current model. The whole M3 contract allows a future attributable Work path, but adding it now would broaden the social trigger without a second player-facing need.
+
+## Protocol and presentation
+
+Protocol version 11 adds only the semantic surface needed by this vignette:
+
+- a controlled reciprocal-aid command selecting one household and no quantity;
+- a purpose-built projection that reports whether that selected household currently remembers the controlled actor;
+- typed reciprocal-aid success/refusal results.
+
+The projection intentionally does **not** expose the identity of another remembered actor and does not claim that repayment will succeed. Material feasibility remains Core-owned and is revalidated by the command.
+
+GDExtension translates those protocol values. Godot uses the existing neighbour-store interaction context: the same transfer input that executes the controlled actor's own-household standing pledge requests reciprocal aid when the actor occupies the tracked neighbour store. Godot never sets/clears the favour and never computes the repayment quantity.
+
+Ordinary interaction feedback can therefore say that the neighbour remembers a qualifying contribution, invite the player to ask for returned aid, report successful repayment, or explain a social/material refusal without displaying raw actor IDs or relationship variables.
 
 ## Snapshot and validation
 
 The remembered actor changes future authoritative opportunity and is therefore snapshot truth under ADR 0008.
 
-Snapshot schema version 10 includes it as part of each `HouseholdState`.
+Snapshot schema version 10 already includes it as part of each `HouseholdState`; reciprocal aid adds no new authoritative field, so this vertical does not require another snapshot schema bump.
 
 Restore/composition reject:
 
@@ -90,38 +143,46 @@ Snapshot restore preserves the exact remembered actor without advancing tick/rev
 
 ## Determinism and ordering
 
-No randomness or wall-clock state participates in the rule.
+No randomness or wall-clock state participates in either Gift qualification or reciprocal aid.
 
-For equal initial World state and equal Gift command sequence, the remembered-aid result is deterministic.
+For equal initial World state and equal command/step sequence, remembered-aid creation and repayment are deterministic.
 
-The transition remains revision-only: Gift does not advance `SimulationTick`. The material and social consequence share the same post-transition revision.
+Both transitions are revision-only and do not advance `SimulationTick`. Each material/social pair shares one post-transition revision.
 
 ## Explicit non-goals
 
-This subset does not implement:
+This model does not implement:
 
-- reciprocal aid or repayment;
 - multiple simultaneous household creditors;
 - numeric reputation/trust/affection;
 - friendship, kinship, hostility or faction standing;
 - event logs or natural-language memory;
 - a generic relationship graph/index;
-- dialogue, quests or Godot-owned social state;
+- dialogue or quest state;
+- Godot-owned social state;
+- caller-selected reciprocal quantities or reward spawning;
 - household-transfer social credit;
 - Work social credit;
-- protocol/GDExtension/Godot presentation of the memory.
+- timers/cooldowns forcing repayment to occur after an arbitrary delay.
 
-The next M3 slice should consume this exact authoritative cause to create one later opportunity, rather than broadening the social model horizontally.
+A later playable capability may extend only the concrete dimension it needs.
 
 ## Current acceptance boundary
 
-Native proof for this subset must demonstrate:
+Native and protocol proof for this vertical must demonstrate:
 
 - short-household Gift changes grain/carry and creates remembered aid in one revision;
 - non-short Gift changes material state without creating remembered aid;
 - refused Gift is fully non-mutating;
 - any equivalent actor can become the remembered actor;
 - an existing remembered actor is not overwritten by later Gifts;
-- snapshot/restore preserves the state and rejects malformed, dangling, and own-household-member remembered-aid references.
+- snapshot/restore preserves the state and rejects malformed, dangling, and own-household-member remembered-aid references;
+- the remembered actor can receive one Core-owned reciprocal grain amount from safe household surplus, and repayment clears the favour in the same revision;
+- repayment never reduces household stock below its shortage threshold;
+- material refusal preserves the favour;
+- another actor cannot consume the favour;
+- a materially feasible control path without remembered aid refuses for the social reason and is non-mutating;
+- protocol exposes the controlled actor's remembered state without exposing another creditor identity and carries no caller-authored repayment amount;
+- GDExtension/Godot present the semantic command and feedback without owning social/material truth.
 
-This Core subset alone does **not** satisfy whole Milestone 3 acceptance because there is not yet a reciprocal opportunity or ordinary-play presentation.
+This vertical makes the remembered cause actionable in ordinary interaction, but whole Milestone 3 acceptance still additionally requires bounded debug-hidden helped/control play evidence and the milestone's human-readable neighbour/household identity gate.
