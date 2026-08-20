@@ -99,7 +99,7 @@ func _apply_projection(projection: Dictionary) -> bool:
 
     var target: Vector3 = target_value
     _marker_root.position = Vector3(target.x, FOOTPRINT_HEIGHT_M * 0.5, target.z)
-    var footprint_size := max(tolerance * 2.0, 0.05)
+    var footprint_size: float = maxf(tolerance * 2.0, 0.05)
     _footprint_mesh.size = Vector3(footprint_size, FOOTPRINT_HEIGHT_M, footprint_size)
     _target_label.text = tr(&"UI_WORLD_REST_TARGET_HINT")
 
