@@ -38,6 +38,7 @@ target_sources(
     sim_core
     PRIVATE
         src/sim/acceptance_village.cpp
+        src/sim/field_work.cpp
         src/sim/grounded_locomotion.cpp
         src/sim/household_resource.cpp
         src/sim/living_need.cpp
@@ -92,6 +93,7 @@ if(WORLD_SIM_BUILD_TESTS)
         sim_core_tests
         tests/sim/acceptance_village_test.cpp
         tests/sim/composition_test.cpp
+        tests/sim/field_work_test.cpp
         tests/sim/grounded_locomotion_test.cpp
         tests/sim/household_resource_test.cpp
         tests/sim/living_need_test.cpp
