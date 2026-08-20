@@ -86,6 +86,7 @@ if(WORLD_SIM_BUILD_TESTS)
 
     add_executable(
         sim_core_tests
+        tests/sim/composition_test.cpp
         tests/sim/grounded_locomotion_test.cpp
         tests/sim/living_need_test.cpp
         tests/sim/locomotion_capability_test.cpp
