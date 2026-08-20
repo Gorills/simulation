@@ -193,6 +193,7 @@ void SimFacade::_bind_methods() {
         godot::D_METHOD("advance_locomotion_tick"),
         &SimFacade::advance_locomotion_tick
     );
+    bind_work_methods();
 }
 
 godot::Dictionary SimFacade::bootstrap_submit_move(const std::int32_t dx, const std::int32_t dy) {
