@@ -168,7 +168,7 @@ std::expected<void, WorldError> World::add_household(HouseholdState household) {
     if (!household.id.is_valid()) {
         return std::unexpected(WorldError::invalid_entity_id);
     }
-    if (!household.store_place.is_valid()) {
+    if (!household.store_place.is_valid() || !household.has_valid_resource_state()) {
         return std::unexpected(WorldError::invalid_household_state);
     }
     for (const auto member : household.members) {
@@ -441,7 +441,7 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         if (!household.id.is_valid()) {
             return std::unexpected(WorldSnapshotError::invalid_entity_id);
         }
-        if (!household.store_place.is_valid()) {
+        if (!household.store_place.is_valid() || !household.has_valid_resource_state()) {
             return std::unexpected(WorldSnapshotError::invalid_household_state);
         }
         for (const auto member : household.members) {
