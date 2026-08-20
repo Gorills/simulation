@@ -61,6 +61,7 @@ enum class WorldError : std::uint8_t {
     invalid_spatial_state,
     invalid_locomotion_capability,
     invalid_rest_need_state,
+    invalid_actor_grain_carry_state,
     invalid_place_state,
     invalid_household_state,
     duplicate_entity,
@@ -92,6 +93,7 @@ enum class WorldSnapshotError : std::uint8_t {
     invalid_spatial_state,
     invalid_locomotion_capability,
     invalid_rest_need_state,
+    invalid_actor_grain_carry_state,
     invalid_grounded_locomotion_state,
     invalid_place_state,
     invalid_household_state,
@@ -111,6 +113,43 @@ enum class HouseholdConsumeError : std::uint8_t {
     outside_store,
     consume_budget_exhausted,
     insufficient_stock,
+};
+
+enum class HouseholdDrawError : std::uint8_t {
+    invalid_entity_id,
+    unknown_actor,
+    actor_without_household,
+    invalid_actor_grain_carry_state,
+    invalid_household_state,
+    missing_spatial_state,
+    outside_store,
+    carry_full,
+    store_empty,
+};
+
+enum class HouseholdDepositError : std::uint8_t {
+    invalid_entity_id,
+    unknown_actor,
+    actor_without_household,
+    invalid_actor_grain_carry_state,
+    invalid_household_state,
+    missing_spatial_state,
+    outside_store,
+    carry_empty,
+    stock_overflow,
+};
+
+enum class HouseholdGiftError : std::uint8_t {
+    invalid_entity_id,
+    unknown_actor,
+    unknown_household,
+    invalid_actor_grain_carry_state,
+    invalid_household_state,
+    missing_spatial_state,
+    outside_store,
+    carry_empty,
+    own_household,
+    stock_overflow,
 };
 
 struct GroundedLocomotionContext final {
@@ -194,6 +233,21 @@ struct RestNeedState final {
     constexpr bool operator==(const RestNeedState &) const = default;
 };
 
+// One authoritative carried staple slot. This is intentionally not a generic
+// inventory/item abstraction: M2 has one grain quantity and one actor-owned bound.
+struct ActorGrainCarryState final {
+    std::int64_t carried_grain_units{};
+    std::int64_t grain_carry_capacity_units{};
+
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return carried_grain_units >= 0
+            && grain_carry_capacity_units >= 0
+            && carried_grain_units <= grain_carry_capacity_units;
+    }
+
+    constexpr bool operator==(const ActorGrainCarryState &) const = default;
+};
+
 struct ActorSpawnState final {
     // Milestone 0 transport probe only. Production spatial movement must not
     // depend on this grid position.
@@ -201,6 +255,7 @@ struct ActorSpawnState final {
     std::optional<SpatialState> spatial{};
     ActorLocomotionCapability locomotion_capability{};
     std::optional<RestNeedState> rest_need{};
+    ActorGrainCarryState grain_carry{};
 };
 
 struct ActorState final {
@@ -209,6 +264,7 @@ struct ActorState final {
     std::optional<SpatialState> spatial{};
     ActorLocomotionCapability locomotion_capability{};
     std::optional<RestNeedState> rest_need{};
+    ActorGrainCarryState grain_carry{};
     // Hidden fixed-step continuation state. It affects future authoritative
     // movement and therefore belongs to snapshot truth, but not to presentation
     // projections.
@@ -235,9 +291,9 @@ struct PlaceState final {
 };
 
 // Household state remains one bounded aggregate rather than an actor class or
-// inventory framework. M2.2 adds only the first staple stock, derived-shortage
-// threshold, positive per-consume amount and finite acceptance consume budget.
-// Carry, work and standing transfer state are admitted by later bounded tasks.
+// inventory framework. It owns the first staple stock, derived-shortage threshold,
+// positive per-consume amount and finite acceptance consume budget. Actor carry is
+// separate authoritative actor state; work and standing transfer arrive later.
 struct HouseholdState final {
     EntityId id{};
     std::vector<EntityId> members{};
@@ -269,6 +325,42 @@ struct HouseholdConsumeResult final {
     WorldRevision revision{};
 
     constexpr bool operator==(const HouseholdConsumeResult &) const = default;
+};
+
+struct HouseholdDrawResult final {
+    EntityId actor{};
+    EntityId household{};
+    std::int64_t moved_grain_units{};
+    std::int64_t carried_grain_units{};
+    std::int64_t remaining_grain_stock_units{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+
+    constexpr bool operator==(const HouseholdDrawResult &) const = default;
+};
+
+struct HouseholdDepositResult final {
+    EntityId actor{};
+    EntityId household{};
+    std::int64_t deposited_grain_units{};
+    std::int64_t carried_grain_units{};
+    std::int64_t remaining_grain_stock_units{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+
+    constexpr bool operator==(const HouseholdDepositResult &) const = default;
+};
+
+struct HouseholdGiftResult final {
+    EntityId actor{};
+    EntityId receiving_household{};
+    std::int64_t gifted_grain_units{};
+    std::int64_t carried_grain_units{};
+    std::int64_t receiving_grain_stock_units{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+
+    constexpr bool operator==(const HouseholdGiftResult &) const = default;
 };
 
 // Intent carries direction/magnitude plus a semantic pace choice. It never
@@ -304,7 +396,7 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 6;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 7;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
 // protocol envelope versions belong to a later persistence layer. Authoritative
@@ -345,6 +437,18 @@ public:
     [[nodiscard]] std::expected<HouseholdConsumeResult, HouseholdConsumeError>
     consume_household_grain(EntityId actor) noexcept;
 
+    // Shared actor-generic grain carry laws. No operation accepts a quantity from
+    // the caller: Draw fills toward the actor's bound, Deposit moves all carried
+    // grain into the actor's own household, and Gift moves all carried grain into
+    // the explicitly selected receiving household. Accepted operations advance
+    // WorldRevision exactly once and never advance SimulationTick.
+    [[nodiscard]] std::expected<HouseholdDrawResult, HouseholdDrawError>
+    draw_household_grain(EntityId actor) noexcept;
+    [[nodiscard]] std::expected<HouseholdDepositResult, HouseholdDepositError>
+    deposit_household_grain(EntityId actor) noexcept;
+    [[nodiscard]] std::expected<HouseholdGiftResult, HouseholdGiftError>
+    gift_household_grain(EntityId actor, EntityId receiving_household) noexcept;
+
     // Milestone 0 transport probe only. Production spatial movement must use a
     // real actor-location contract rather than extending this cardinal grid API.
     [[nodiscard]] std::expected<void, WorldError> apply_bootstrap_step(
@@ -383,6 +487,7 @@ public:
     [[nodiscard]] std::optional<SpatialState> actor_spatial_state(EntityId id) const noexcept;
     [[nodiscard]] std::optional<ActorLocomotionCapability> actor_locomotion_capability(EntityId id) const noexcept;
     [[nodiscard]] std::optional<RestNeedState> actor_rest_need(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<ActorGrainCarryState> actor_grain_carry_state(EntityId id) const noexcept;
     [[nodiscard]] std::optional<PlaceState> place_state(EntityId id) const noexcept;
     [[nodiscard]] std::optional<HouseholdState> household_state(EntityId id) const;
 
@@ -419,6 +524,7 @@ public:
 private:
     [[nodiscard]] bool entity_id_in_use(EntityId id) const noexcept;
     [[nodiscard]] bool actor_belongs_to_household(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<std::size_t> actor_household_index(EntityId id) const noexcept;
     [[nodiscard]] std::optional<std::size_t> actor_index(EntityId id) const noexcept;
     [[nodiscard]] std::optional<std::size_t> place_index(EntityId id) const noexcept;
     [[nodiscard]] std::optional<std::size_t> household_index(EntityId id) const noexcept;
