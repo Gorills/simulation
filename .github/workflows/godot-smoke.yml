@@ -106,6 +106,10 @@ jobs:
         run: xvfb-run -a python tools/dev.py play --scenario shortage --locale ru
       - name: Verify English autonomous shortage
         run: xvfb-run -a python tools/dev.py play --scenario shortage --locale en
+      - name: Verify Russian Gift vertical
+        run: xvfb-run -a python tools/dev.py play --scenario gift --locale ru
+      - name: Verify English Gift vertical
+        run: xvfb-run -a python tools/dev.py play --scenario gift --locale en
       - name: Verify offscreen continuation
         run: xvfb-run -a python tools/dev.py play --scenario offscreen --locale ru
       - name: Verify rest interference loop
