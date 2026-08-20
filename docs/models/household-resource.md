@@ -4,13 +4,13 @@ Status: DRAFT
 
 ## Gameplay purpose
 
-Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, become short through bounded NPC autonomy, and expose that state through a purpose-built protocol read without a player-authored mutation.
+Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, become short through bounded NPC autonomy, expose that state through a purpose-built protocol read, and render localized feedback in the real Godot client without a player-authored economic mutation.
 
 This model is deliberately narrower than a general inventory, economy, market, farming or needs framework.
 
 ## Observable patterns / fit-for-purpose criteria
 
-For the current bounded Core/application subset:
+For the current bounded Core/application/vertical subset:
 
 - household grain stock is authoritative `World` state;
 - shortage is derived as `stock < shortage_threshold` and is never stored separately;
@@ -24,9 +24,13 @@ For the current bounded Core/application subset:
 - bounded autonomous Consume is considered only for non-controlled actors whose current authoritative state makes the action feasible;
 - locomotion commits first; a successful autonomous Consume may then create a later `WorldRevision` on the same `SimulationTick` while the returned movement batch retains the locomotion commit revision;
 - the next locomotion batch remains consecutive in `SimulationTick` and strictly later in `WorldRevision`;
-- actor observation remains actor-scoped, while a separate village household-resource read exposes household membership, store identity/footprint, stock, threshold and derived shortage.
+- actor observation remains actor-scoped, while a separate village household-resource read exposes household membership, store identity/footprint, stock, threshold and derived shortage;
+- the GDExtension translates that existing protocol projection without recomputing shortage or owning resource state;
+- Godot resolves the tracked acceptance actor, household and shared rest/store position from authoritative projections before scripted runtime advancement instead of carrying fixture EntityIds or coordinates;
+- the Godot HUD renders the protocol-owned `adequate`/`shortage` status with authoritative stock/threshold quantities through localized RU/EN text;
+- the bounded `shortage` playtest advances only ordinary locomotion, submits no player economic command, observes the autonomous adequate-to-shortage transition and proves movement revision `R` followed by resource revision `R+1` on the same tick.
 
-Player-visible Godot resource feedback is intentionally not part of this application-only increment; the first vertical M2 checkpoint will expose this same protocol state rather than introduce a client-side duplicate.
+The first vertical M2 checkpoint therefore exposes the same Core/protocol resource truth in the real client; it does not introduce a client-side balance, shortage calculation or scenario-only stock mutation.
 
 ## Historical baseline and region
 
@@ -64,6 +68,16 @@ Core actor-id view
   -> same SimulationTick, later WorldRevision
 ```
 
+Current first vertical read path:
+
+```text
+World household/resource truth
+  -> VillageHouseholdResourceProjection
+  -> GDExtension Dictionary translation
+  -> Godot read-only household discovery
+  -> localized HUD status + bounded screenshot/debug evidence
+```
+
 There is no hidden hunger timer, background economy clock, second time stream or Godot-owned stock.
 
 ## Entities / state / scales
@@ -86,7 +100,7 @@ An actor belongs to at most one household. Household membership lists are author
 
 The current resource place record contains a stable `EntityId`, local X/Z and non-negative per-axis tolerance. Resource occupancy uses exact arrival semantics: the actor's authoritative X/Z must fall within the stored tolerance on each axis. Unlike the M1 rest-body occupancy query, this check does not add actor body radius.
 
-In the acceptance village the short household store intentionally uses the same X/Z/tolerance values as the M1 RestNeed target. That is one content fact shared by two mechanics, not a hidden protocol/Godot coordinate contract.
+In the acceptance village the short household store intentionally uses the same X/Z/tolerance values as the M1 RestNeed target. That is one content fact shared by two mechanics, not a hidden protocol/Godot coordinate contract. The Godot client verifies this relationship from the two projections before caching the scenario target.
 
 ### Actor
 
@@ -104,7 +118,7 @@ The current M2 acceptance village is code-defined Core content, not protocol-own
 - one store place per household;
 - one household aggregate per store.
 
-The builder owns concrete acceptance IDs and returns only the controlled-actor session binding. Protocol discovers actors through `World::actor_ids()` and households through `World::household_ids()`; it does not keep a growing list of feature-named NPC IDs.
+The builder owns concrete acceptance IDs and returns only the controlled-actor session binding. Protocol discovers actors through `World::actor_ids()` and households through `World::household_ids()`; it does not keep a growing list of feature-named NPC IDs. Godot similarly discovers the living-need actor's household/store through projections rather than duplicating those acceptance IDs or coordinates.
 
 This is deliberately not an ECS, entity registry, scenario DSL or data-driven content framework.
 
@@ -149,6 +163,8 @@ Current semantic mutation input is the acting `EntityId` for Consume. The actor 
 
 The application layer may propose autonomous Consume only after the ordinary locomotion transition and only when a read-only Core feasibility check says current authoritative state satisfies membership, exact store presence, remaining budget and stock. `World::consume_household_grain()` still revalidates those prerequisites before mutation.
 
+The first vertical Godot shortage scenario submits only a zero controlled locomotion intent while the ordinary NPC decision path advances. It does not submit a resource/economic intent, set stock, set shortage or teleport the NPC.
+
 ## Transitions / scheduling
 
 Consume is an immediate authoritative transition, not a simulation-time schedule.
@@ -187,13 +203,19 @@ Current direct outputs are:
 - unchanged `SimulationTick` for the Consume transition;
 - one later `WorldRevision` on successful Consume;
 - a village-scoped household-resource protocol read with authoritative tick/revision/version context;
-- actor-scoped observed-world output computed from the deterministic actor-id view.
+- actor-scoped observed-world output computed from the deterministic actor-id view;
+- GDExtension translation of household identity/membership/store/resource/status fields;
+- localized Godot household-resource feedback and bounded RU/EN shortage scenario evidence.
 
-The movement batch and a resource read taken immediately afterward may therefore deliberately carry different revisions on the same tick.
+The movement batch and a resource read taken immediately afterward may therefore deliberately carry different revisions on the same tick. Presentation retains the movement revision for the controlled actor's spatial sample while a later observed-world refresh may reconcile its latest world revision to the post-Consume resource revision.
 
 ## Player-facing exposure
 
-The protocol now has a purpose-built village household-resource discovery/read, but the GDExtension and Godot UI do not expose it yet. M2.4 is responsible for adapting this state, resolving the player-facing household/store identity from authoritative discovery and rendering localized shortage feedback. Godot must not calculate or mutate stock/shortage itself.
+The purpose-built village household-resource projection is now translated through the GDExtension and read by the Godot client. The client resolves the living-need actor's household and store from authoritative discovery, renders the supplied `adequate`/`shortage` status with stock/threshold quantities in the localized diagnostics HUD, and never calculates or mutates the resource state itself.
+
+The bounded `shortage` scenario proves the first real vertical loop: the tracked household starts adequate, the NPC reaches its Core-owned store through ordinary locomotion, application-level autonomous Consume makes the household short, the resource read reports the same tick at one later revision, and RU/EN Godot feedback renders that authoritative result without a player economic command.
+
+This is the first M2 player-visible checkpoint. It is not yet the milestone's multiple-path player intervention acceptance: carry, Gift, Work/production and standing transfer remain later capabilities.
 
 ## Uncertainty
 
