@@ -66,6 +66,7 @@ target_sources(
     sim_protocol
     PRIVATE
         src/protocol/simulation.cpp
+        src/protocol/simulation_work.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS src
@@ -139,6 +140,7 @@ if(WORLD_SIM_BUILD_GDEXTENSION)
         PRIVATE
             src/adapters/gdextension/register_types.cpp
             src/adapters/gdextension/sim_facade.cpp
+            src/adapters/gdextension/sim_facade_work.cpp
             src/adapters/gdextension/sim_facade.hpp
     )
     target_compile_features(world_sim_gdextension PRIVATE cxx_std_23)
