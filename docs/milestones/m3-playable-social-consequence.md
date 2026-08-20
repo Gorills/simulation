@@ -34,7 +34,7 @@ The bounded M3 vignette is built on the M2 acceptance village.
 2. The player can see which household is affected and can distinguish the relevant neighbour from the other villagers without reading entity IDs or opening technical diagnostics.
 3. The player may help through at least one existing M2 material path. Gift, field work, and the standing household transfer remain valid M2 paths; M3 must not create a fake social-only "help" button that bypasses them.
 4. A real accepted material contribution records a bounded social consequence for the contributing actor. A refused or impossible action does not create social credit.
-5. The player can also leave the shortage unresolved or otherwise reach the later check without earning the relevant social state. This negative/control path is part of the vignette, not only a native test fixture.
+5. A control path also exists in which the actor reaches the later social check without earning the relevant remembered aid. Verification must keep the later material prerequisites comparable enough that the contrasting outcome cannot be explained by stock, occupancy, or another non-social failure.
 6. Later, the player can ask the previously affected household for one bounded reciprocal aid opportunity. The request succeeds only when the authoritative social condition is present and all material prerequisites are still valid; otherwise it is refused without mutation.
 7. The successful reciprocal aid must change existing authoritative world state through a shared actor-generic rule. The client may request the action and present the result, but it may not own the relationship or manufacture the reward.
 
@@ -115,7 +115,7 @@ Do not land several independent "relationship foundation" tasks that leave `main
 
 ## Acceptance
 
-Milestone 3 is accepted only when one short ordinary-play session can demonstrate both branches of the social consequence:
+Milestone 3 is accepted only when bounded ordinary-play evidence demonstrates both branches of the social consequence, normally as two clean short runs from controlled initial state.
 
 ### Helped branch
 
@@ -129,8 +129,9 @@ Milestone 3 is accepted only when one short ordinary-play session can demonstrat
 
 ### Control branch
 
-- the player reaches the same later opportunity without the qualifying remembered aid;
+- the actor reaches the same later opportunity without the qualifying remembered aid;
 - the reciprocal request is unavailable/refused or otherwise materially different for the social reason defined by the mechanic contract;
+- verification proves the material prerequisites are otherwise satisfiable, so the differing outcome is not merely caused by empty stock, wrong occupancy, exhausted content, or another unrelated refusal;
 - the refusal leaves authoritative state unchanged.
 
 ### Experience gate
