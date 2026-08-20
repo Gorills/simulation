@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/controls/player_controls.gd" id="2_controls"]
@@ -8,6 +8,9 @@
 [ext_resource type="Script" path="res://scripts/controls/third_person_camera_rig.gd" id="6_camera"]
 [ext_resource type="Script" path="res://scripts/presentation/world_presentation.gd" id="7_world_presentation"]
 [ext_resource type="Script" path="res://scripts/presentation/entity_binding.gd" id="8_entity_binding"]
+[ext_resource type="Script" path="res://scripts/presentation/living_need_exposure.gd" id="9_living_need"]
+[ext_resource type="Script" path="res://scripts/resource_interaction.gd" id="10_resource"]
+[ext_resource type="Script" path="res://scripts/playtest/m2_resource_playtests.gd" id="11_playtests"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape_player"]
 radius = 0.38
@@ -105,6 +108,25 @@ mesh = SubResource("BoxMesh_obstacle")
 rotation_degrees = Vector3(-55, -35, 0)
 shadow_enabled = true
 
+[node name="LivingNeedExposure" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("9_living_need")
+
+[node name="ResourceInteraction" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("10_resource")
+
+[node name="M2ResourcePlaytests" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("11_playtests")
+
+[node name="FieldWorkCue" type="Label3D" parent="."]
+unique_name_in_owner = true
+billboard = 1
+font_size = 30
+outline_size = 8
+text = "UI_FIELD_WORK_CUE"
+
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="ScreenMargin" type="MarginContainer" parent="HUD"]
@@ -122,361 +144,183 @@ mouse_filter = 2
 theme_type_variation = &"DsRow"
 
 [node name="HUDStack" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow"]
-custom_minimum_size = Vector2(700, 0)
+custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
+size_flags_horizontal = 0
 mouse_filter = 2
 theme_type_variation = &"DsStack"
 
-[node name="DebugPanel" type="PanelContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
+[node name="InteractionPanel" type="PanelContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsHudPanel"
 
-[node name="DebugStack" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel"]
+[node name="InteractionPrompt" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/InteractionPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsBodyLabel"
+text = "UI_RESOURCE_PROMPT_SEEK"
+autowrap_mode = 3
+
+[node name="StatusPanel" type="PanelContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsHudPanel"
+
+[node name="StatusStack" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsStack"
 
-[node name="Header" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+[node name="DebugLivingNeedStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel/StatusStack"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+autowrap_mode = 3
+
+[node name="DebugHouseholdResourceStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel/StatusStack"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+autowrap_mode = 3
+
+[node name="DebugCarryStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel/StatusStack"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+autowrap_mode = 3
+
+[node name="DebugWorkStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel/StatusStack"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+autowrap_mode = 3
+
+[node name="DebugPledgeStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel/StatusStack"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+autowrap_mode = 3
+
+[node name="DebugResourceRefusal" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel/StatusStack"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = ""
+autowrap_mode = 3
+
+[node name="ControlsHint" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/StatusPanel/StatusStack"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "UI_DEBUG_CONTROLS_HINT"
+autowrap_mode = 3
+
+[node name="DebugToggleHint" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsCaptionLabel"
+text = "UI_DEBUG_TOGGLE_SHOW"
+autowrap_mode = 3
+
+[node name="DebugPanel" type="PanelContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DsHudPanel"
+
+[node name="DebugOuterStack" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsStack"
 
-[node name="Eyebrow" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/Header"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsAccentLabel"
-text = "UI_DEBUG_EYEBROW"
-
-[node name="Title" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/Header"]
+[node name="Title" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsSectionTitleLabel"
 text = "UI_DEBUG_TITLE"
 
-[node name="HeaderDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
+[node name="DebugScroll" type="ScrollContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack"]
+unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 0
 mouse_filter = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 2
 
-[node name="RuntimeMetrics" type="HBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsRow"
-
-[node name="FpsMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
+[node name="DebugStack" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack/DebugScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
+theme_type_variation = &"DsStack"
 
-[node name="FpsCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/FpsMetric"]
+[node name="DebugRuntimeSummary" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack/DebugScroll/DebugStack"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+autowrap_mode = 3
+
+[node name="DebugInput" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack/DebugScroll/DebugStack"]
+unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"DsCaptionLabel"
-text = "UI_DEBUG_FPS"
-
-[node name="DebugFps" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/FpsMetric"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
 text = "—"
+autowrap_mode = 3
 
-[node name="ProcessMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
-[node name="ProcessCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/ProcessMetric"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsCaptionLabel"
-text = "UI_DEBUG_PROCESS"
-
-[node name="DebugProcess" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/ProcessMetric"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-
-[node name="PhysicsMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
-[node name="PhysicsCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/PhysicsMetric"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsCaptionLabel"
-text = "UI_DEBUG_PHYSICS"
-
-[node name="DebugPhysics" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/PhysicsMetric"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-
-[node name="InputMetric" type="VBoxContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
-[node name="InputCaption" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/InputMetric"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsCaptionLabel"
-text = "UI_DEBUG_INPUT"
-
-[node name="DebugInput" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/RuntimeMetrics/InputMetric"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-autowrap_mode = 2
-
-[node name="AuthorityDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="AuthorityTitle" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsAccentLabel"
-text = "UI_DEBUG_AUTHORITY"
-
-[node name="AuthorityGrid" type="GridContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsGrid"
-columns = 2
-
-[node name="EntityLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_ENTITY"
-
-[node name="DebugEntity" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="TickLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_TICK"
-
-[node name="DebugTick" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+[node name="DebugWorldSummary" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack/DebugScroll/DebugStack"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsBodyLabel"
 text = "—"
-horizontal_alignment = 2
+autowrap_mode = 3
 
-[node name="RevisionLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_REVISION"
-
-[node name="DebugRevision" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+[node name="DebugSpatialSummary" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack/DebugScroll/DebugStack"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_type_variation = &"DsBodyLabel"
 text = "—"
-horizontal_alignment = 2
+autowrap_mode = 3
 
-[node name="ProtocolLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_PROTOCOL"
-
-[node name="DebugProtocol" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+[node name="DebugScenario" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugOuterStack/DebugScroll/DebugStack"]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
-size_flags_horizontal = 3
 mouse_filter = 2
-theme_type_variation = &"DsBodyLabel"
 text = "—"
-horizontal_alignment = 2
-
-[node name="SeedLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_SEED"
-
-[node name="DebugSeed" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsBodyLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="ScenarioLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_SCENARIO"
-
-[node name="DebugScenario" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsBodyLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="LivingNeedLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_LIVING_NEED"
-
-[node name="DebugLivingNeedStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="HouseholdResourceLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_HOUSEHOLD_RESOURCE"
-
-[node name="DebugHouseholdResourceStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="SpatialDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="SpatialTitle" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsAccentLabel"
-text = "UI_DEBUG_SPATIAL"
-
-[node name="SpatialGrid" type="GridContainer" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsGrid"
-columns = 2
-
-[node name="AuthoritativePositionLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_AUTHORITATIVE_POSITION"
-
-[node name="DebugAuthorityPosition" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="EpochLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_EPOCH"
-
-[node name="DebugEpoch" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsBodyLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="PresentationPositionLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_PRESENTATION_POSITION"
-
-[node name="DebugPresentationPosition" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsBodyLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="DivergenceLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsMutedLabel"
-text = "UI_DEBUG_PRESENTATION_DELTA"
-
-[node name="DebugDivergence" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/SpatialGrid"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_type_variation = &"DsInfoLabel"
-text = "—"
-horizontal_alignment = 2
-
-[node name="TransportNote" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsCaptionLabel"
-text = "UI_DEBUG_TRANSPORT_NOTE"
-autowrap_mode = 2
-
-[node name="ControlsDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="ControlsHint" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DsCaptionLabel"
-text = "UI_DEBUG_CONTROLS_HINT"
-autowrap_mode = 2
 
 [node name="VerticalSpacer" type="Control" parent="HUD/ScreenMargin/HUDRow/HUDStack"]
 layout_mode = 2

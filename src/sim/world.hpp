@@ -71,6 +71,9 @@ enum class WorldError : std::uint8_t {
     unknown_store_place,
     unknown_work_place,
     unknown_work_destination_household,
+    unknown_pledge_destination_household,
+    pledge_destination_is_self,
+    invalid_standing_transfer_pledge,
     duplicate_household_member,
     actor_already_in_household,
     field_work_assignment_already_exists,
@@ -107,6 +110,9 @@ enum class WorldSnapshotError : std::uint8_t {
     unknown_store_place,
     unknown_work_place,
     unknown_work_destination_household,
+    unknown_pledge_destination_household,
+    pledge_destination_is_self,
+    invalid_standing_transfer_pledge,
     duplicate_household_member,
     actor_already_in_household,
 };
@@ -170,6 +176,21 @@ enum class FieldWorkError : std::uint8_t {
     missing_spatial_state,
     outside_field,
     work_exhausted,
+    stock_overflow,
+};
+
+enum class HouseholdTransferError : std::uint8_t {
+    invalid_entity_id,
+    unknown_actor,
+    actor_without_household,
+    invalid_household_state,
+    invalid_pledge_state,
+    unknown_destination_household,
+    self_destination,
+    missing_spatial_state,
+    outside_store,
+    pledge_zero,
+    insufficient_stock,
     stock_overflow,
 };
 
@@ -311,10 +332,20 @@ struct PlaceState final {
     constexpr bool operator==(const PlaceState &) const = default;
 };
 
+// One-way standing household transfer pledge. Remaining quantity plus a durable
+// destination household are source-household content, not a live shortage query
+// and not a priced exchange.
+struct StandingTransferPledge final {
+    EntityId destination_household{};
+    std::int64_t remaining_grain_units{};
+
+    constexpr bool operator==(const StandingTransferPledge &) const = default;
+};
+
 // Household state remains one bounded aggregate rather than an actor class or
 // inventory framework. It owns the first staple stock, derived-shortage threshold,
-// positive per-consume amount and finite acceptance consume budget. Actor carry is
-// separate authoritative actor state; standing transfer arrives later.
+// positive per-consume amount, finite acceptance consume budget, and optional
+// standing transfer pledge. Actor carry is separate authoritative actor state.
 struct HouseholdState final {
     EntityId id{};
     std::vector<EntityId> members{};
@@ -323,11 +354,13 @@ struct HouseholdState final {
     std::int64_t shortage_threshold_units{};
     std::int64_t consume_amount_units{1};
     std::uint32_t remaining_consume_budget{};
+    StandingTransferPledge standing_transfer_pledge{};
 
     [[nodiscard]] constexpr bool has_valid_resource_state() const noexcept {
         return grain_stock_units >= 0
             && shortage_threshold_units >= 0
-            && consume_amount_units > 0;
+            && consume_amount_units > 0
+            && standing_transfer_pledge.remaining_grain_units >= 0;
     }
 
     bool operator==(const HouseholdState &) const = default;
@@ -416,6 +449,20 @@ struct FieldWorkResult final {
     constexpr bool operator==(const FieldWorkResult &) const = default;
 };
 
+struct HouseholdTransferResult final {
+    EntityId actor{};
+    EntityId source_household{};
+    EntityId destination_household{};
+    std::int64_t transferred_grain_units{};
+    std::int64_t source_grain_stock_units{};
+    std::int64_t destination_grain_stock_units{};
+    std::int64_t remaining_pledge_grain_units{};
+    SimulationTick tick{};
+    WorldRevision revision{};
+
+    constexpr bool operator==(const HouseholdTransferResult &) const = default;
+};
+
 // Intent carries direction/magnitude plus a semantic pace choice. It never
 // carries a requested meters-per-second value: World resolves that from the
 // authoritative actor capability so a client/NPC decision source cannot author
@@ -449,7 +496,7 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 8;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 9;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
 // protocol envelope versions belong to a later persistence layer. Authoritative
@@ -511,6 +558,13 @@ public:
     // yield and remaining completions. Work is revision-only and fails closed.
     [[nodiscard]] std::expected<FieldWorkResult, FieldWorkError>
     complete_field_work(EntityId actor) noexcept;
+
+    // Shared actor-generic standing household transfer. The actor supplies no
+    // quantity and chooses no destination: membership selects the source household
+    // pledge, occupancy of that household's store authorizes execution, and the
+    // entire remaining pledged amount moves all-or-nothing. Revision-only.
+    [[nodiscard]] std::expected<HouseholdTransferResult, HouseholdTransferError>
+    execute_household_transfer_pledge(EntityId actor) noexcept;
 
     // Milestone 0 transport probe only. Production spatial movement must use a
     // real actor-location contract rather than extending this cardinal grid API.

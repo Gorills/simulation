@@ -1,13 +1,12 @@
+class_name LivingNeedExposure
 extends Node
 
 const TEST_VALIDATION_FRAME_LIMIT := 120
 const FOOTPRINT_HEIGHT_M := 0.04
 const LABEL_HEIGHT_M := 1.25
-const CONTROLS_HINT_PATH := NodePath("HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/ControlsHint")
 
-var _scene: Node = null
-var _sim = null
-var _world_presentation: Node = null
+var _sim: SimFacade = null
+var _world_presentation: WorldPresentation = null
 var _controls_hint: Label = null
 var _marker_root: Node3D = null
 var _footprint: MeshInstance3D = null
@@ -18,50 +17,23 @@ var _npc_label_parent: Node3D = null
 var _test_scenario := false
 var _test_validated := false
 var _validation_frames := 0
+var _bound := false
 
 
-func _ready() -> void:
-    _test_scenario = _scenario_name() in ["smoke", "offscreen", "rest_interference"]
-
-
-func _process(_delta: float) -> void:
-    var current_scene := get_tree().current_scene
-    if current_scene != _scene:
-        _bind_scene(current_scene)
-
-    if _scene == null or _sim == null or _world_presentation == null or _controls_hint == null:
-        _record_validation_wait()
-        return
-
-    var projection_value = _sim.living_need_projection()
-    if typeof(projection_value) != TYPE_DICTIONARY:
-        _record_validation_wait()
-        return
-    var projection: Dictionary = projection_value
-    if not _apply_projection(projection):
-        _record_validation_wait()
-        return
-
-    if _test_scenario:
-        _test_validated = true
-
-
-func _bind_scene(scene: Node) -> void:
+func configure(
+    sim_facade: SimFacade,
+    presentation: WorldPresentation,
+    controls_hint: Label,
+    world_root: Node3D
+) -> void:
     _clear_runtime_nodes()
-    _scene = scene
-    _sim = null
-    _world_presentation = null
-    _controls_hint = null
+    _sim = sim_facade
+    _world_presentation = presentation
+    _controls_hint = controls_hint
+    _test_scenario = _scenario_name() in ["smoke", "offscreen", "rest_interference"]
     _validation_frames = 0
     _test_validated = false
-
-    if _scene == null:
-        return
-
-    _sim = _scene.get("sim")
-    _world_presentation = _scene.get_node_or_null("WorldPresentation")
-    _controls_hint = _scene.get_node_or_null(CONTROLS_HINT_PATH) as Label
-    if _sim == null or _world_presentation == null or _controls_hint == null:
+    if _sim == null or _world_presentation == null or _controls_hint == null or world_root == null:
         if _test_scenario:
             push_error("living-need exposure could not bind the ordinary gameplay scene")
             get_tree().quit(12)
@@ -69,7 +41,7 @@ func _bind_scene(scene: Node) -> void:
 
     _marker_root = Node3D.new()
     _marker_root.name = "LivingNeedRestExposure"
-    _scene.add_child(_marker_root)
+    world_root.add_child(_marker_root)
 
     _footprint = MeshInstance3D.new()
     _footprint.name = "AuthoritativeRestFootprint"
@@ -92,6 +64,25 @@ func _bind_scene(scene: Node) -> void:
     _target_label.font_size = 30
     _target_label.outline_size = 8
     _marker_root.add_child(_target_label)
+    _bound = true
+
+
+func _process(_delta: float) -> void:
+    if not _bound or _sim == null or _world_presentation == null or _controls_hint == null:
+        _record_validation_wait()
+        return
+
+    var projection_value = _sim.living_need_projection()
+    if typeof(projection_value) != TYPE_DICTIONARY:
+        _record_validation_wait()
+        return
+    var projection: Dictionary = projection_value
+    if not _apply_projection(projection):
+        _record_validation_wait()
+        return
+
+    if _test_scenario:
+        _test_validated = true
 
 
 func _apply_projection(projection: Dictionary) -> bool:
@@ -121,8 +112,7 @@ func _apply_projection(projection: Dictionary) -> bool:
 
 
 func _refresh_npc_label(entity_id: int, status: String) -> void:
-    var presentation_value = _world_presentation.call("presentation_for", entity_id)
-    var presentation := presentation_value as Node3D
+    var presentation := _world_presentation.presentation_for(entity_id)
     if presentation != _npc_label_parent:
         if _npc_label != null and is_instance_valid(_npc_label):
             _npc_label.queue_free()
@@ -172,7 +162,7 @@ func _clear_runtime_nodes() -> void:
     _target_label = null
     _npc_label = null
     _npc_label_parent = null
-    _controls_hint = null
+    _bound = false
 
 
 func _scenario_name() -> String:

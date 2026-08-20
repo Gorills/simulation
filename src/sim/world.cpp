@@ -83,6 +83,40 @@ resolve_grounded_step_config(
     return resolved;
 }
 
+[[nodiscard]] std::optional<WorldError> standing_transfer_composition_error(
+    const HouseholdState &household,
+    const bool destination_exists
+) noexcept {
+    const auto &pledge = household.standing_transfer_pledge;
+    if (pledge.remaining_grain_units < 0) {
+        return WorldError::invalid_standing_transfer_pledge;
+    }
+    if (!pledge.destination_household.is_valid()) {
+        if (pledge.remaining_grain_units != 0) {
+            return WorldError::invalid_standing_transfer_pledge;
+        }
+        return std::nullopt;
+    }
+    if (pledge.destination_household == household.id) {
+        return WorldError::pledge_destination_is_self;
+    }
+    if (!destination_exists) {
+        return WorldError::unknown_pledge_destination_household;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] WorldSnapshotError snapshot_pledge_error(const WorldError error) noexcept {
+    switch (error) {
+    case WorldError::pledge_destination_is_self:
+        return WorldSnapshotError::pledge_destination_is_self;
+    case WorldError::unknown_pledge_destination_household:
+        return WorldSnapshotError::unknown_pledge_destination_household;
+    default:
+        return WorldSnapshotError::invalid_standing_transfer_pledge;
+    }
+}
+
 } // namespace
 
 World::World(const WorldSeed seed) noexcept : seed_(seed) {}
@@ -191,6 +225,13 @@ std::expected<void, WorldError> World::add_household(HouseholdState household) {
         if (actor_belongs_to_household(member)) {
             return std::unexpected(WorldError::actor_already_in_household);
         }
+    }
+    if (const auto pledge_error = standing_transfer_composition_error(
+            household,
+            contains_household(household.standing_transfer_pledge.destination_household)
+        );
+        pledge_error.has_value()) {
+        return std::unexpected(*pledge_error);
     }
 
     const auto [index_entry, inserted] = household_index_by_id_.emplace(
@@ -464,6 +505,15 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
             if (restored.actor_belongs_to_household(member)) {
                 return std::unexpected(WorldSnapshotError::actor_already_in_household);
             }
+        }
+        if (const auto pledge_error = standing_transfer_composition_error(
+                household,
+                restored.contains_household(
+                    household.standing_transfer_pledge.destination_household
+                )
+            );
+            pledge_error.has_value()) {
+            return std::unexpected(snapshot_pledge_error(*pledge_error));
         }
 
         restored.household_index_by_id_.emplace(

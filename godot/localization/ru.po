@@ -7,56 +7,38 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-msgid "UI_DEBUG_EYEBROW"
-msgstr "СИМУЛЯЦИЯ МИРА / HUD ТОЛЬКО ДЛЯ ЧТЕНИЯ"
-
 msgid "UI_DEBUG_TITLE"
-msgstr "Диагностика выполнения"
+msgstr "Техническая диагностика"
 
-msgid "UI_DEBUG_FPS"
-msgstr "FPS"
+msgid "UI_DEBUG_TOGGLE_SHOW"
+msgstr "F3 — показать техническую диагностику"
 
-msgid "UI_DEBUG_PROCESS"
-msgstr "ПРОЦЕСС"
+msgid "UI_DEBUG_TOGGLE_HIDE"
+msgstr "F3 — скрыть техническую диагностику"
 
-msgid "UI_DEBUG_PHYSICS"
-msgstr "ФИЗИКА"
+msgid "UI_DEBUG_RUNTIME_SUMMARY"
+msgstr "%d FPS · %.1f мс процесс · %.1f мс физика"
+
+msgid "UI_DEBUG_WORLD_SUMMARY"
+msgstr "Сущность #%d · тик %d · ревизия %d · протокол %d · сид %d"
+
+msgid "UI_DEBUG_SPATIAL_SUMMARY"
+msgstr "Сим (%.1f, %.1f, %.1f) · вид (%.1f, %.1f, %.1f) · Δ%.2f м · эпоха %d"
 
 msgid "UI_DEBUG_INPUT"
 msgstr "ВВОД"
 
-msgid "UI_DEBUG_AUTHORITY"
-msgstr "АВТОРИТЕТНОЕ СОСТОЯНИЕ"
-
-msgid "UI_DEBUG_ENTITY"
-msgstr "Управляемая сущность"
-
-msgid "UI_DEBUG_TICK"
-msgstr "Тик симуляции"
-
-msgid "UI_DEBUG_REVISION"
-msgstr "Ревизия мира"
-
-msgid "UI_DEBUG_PROTOCOL"
-msgstr "Протокол"
-
-msgid "UI_DEBUG_SEED"
-msgstr "Сид мира"
-
-msgid "UI_DEBUG_SCENARIO"
-msgstr "Сценарий"
-
 msgid "UI_DEBUG_LIVING_NEED"
-msgstr "Потребность NPC в отдыхе"
+msgstr "Отдых NPC"
 
 msgid "UI_DEBUG_HOUSEHOLD_RESOURCE"
-msgstr "Зерно соседнего хозяйства"
+msgstr "Зерно соседа"
 
 msgid "UI_DEBUG_GRAIN_CARRY"
-msgstr "Переносимое зерно"
+msgstr "Несёте"
 
 msgid "UI_DEBUG_FIELD_WORK"
-msgstr "Работа в поле"
+msgstr "Поле"
 
 msgid "UI_NEED_TRAVELING"
 msgstr "Идёт к месту отдыха"
@@ -73,35 +55,68 @@ msgstr "Запас достаточен"
 msgid "UI_RESOURCE_SHORTAGE"
 msgstr "Нехватка"
 
-msgid "UI_RESOURCE_ACTION_HINT"
-msgstr "E взять · R вернуть · G подарить"
+msgid "UI_STORE_OWN_CUE"
+msgstr "Своё хранилище"
 
-msgid "UI_WORK_ACTION_HINT"
-msgstr "F работать"
+msgid "UI_STORE_NEIGHBOUR_CUE"
+msgstr "Хранилище соседа"
+
+msgid "UI_RESOURCE_PROMPT_SEEK"
+msgstr "Жёлтая площадка — ваш склад. Зелёная — сосед (подарить зерно). Коричневая — поле."
+
+msgid "UI_RESOURCE_PROMPT_OWN_STORE"
+msgstr "Ваш склад · E взять · R вернуть · T передать соседу"
+
+msgid "UI_RESOURCE_PROMPT_NEIGHBOUR_STORE"
+msgstr "Склад соседа · G подарить зерно"
+
+msgid "UI_RESOURCE_PROMPT_FIELD"
+msgstr "Поле · F работать"
+
+msgid "UI_DEBUG_STANDING_TRANSFER"
+msgstr "Передача"
+
+msgid "UI_DEBUG_RESOURCE_REFUSAL"
+msgstr "Отказ"
 
 msgid "UI_FIELD_WORK_CUE"
 msgstr "Поле для работы"
 
+msgid "UI_RESOURCE_REFUSAL_OUTSIDE_STORE"
+msgstr "Нет у хранилища"
+
+msgid "UI_RESOURCE_REFUSAL_CARRY_FULL"
+msgstr "Нести больше нельзя"
+
+msgid "UI_RESOURCE_REFUSAL_STORE_EMPTY"
+msgstr "В хранилище нет зерна"
+
+msgid "UI_RESOURCE_REFUSAL_CARRY_EMPTY"
+msgstr "Нет зерна с собой"
+
+msgid "UI_RESOURCE_REFUSAL_OWN_HOUSEHOLD"
+msgstr "Нельзя дарить своему хозяйству"
+
+msgid "UI_RESOURCE_REFUSAL_OUTSIDE_FIELD"
+msgstr "Нет на поле"
+
+msgid "UI_RESOURCE_REFUSAL_WORK_EXHAUSTED"
+msgstr "Работа на поле исчерпана"
+
+msgid "UI_RESOURCE_REFUSAL_PLEDGE_ZERO"
+msgstr "Нет зерна по обязательству"
+
+msgid "UI_RESOURCE_REFUSAL_INSUFFICIENT_STOCK"
+msgstr "В хозяйстве недостаточно зерна"
+
+msgid "UI_RESOURCE_REFUSAL_STOCK_OVERFLOW"
+msgstr "Хранилище не вмещает зерно"
+
+msgid "UI_RESOURCE_REFUSAL_UNAVAILABLE"
+msgstr "Действие недоступно"
+
 msgid "UI_WORLD_REST_TARGET_HINT"
 msgstr "Место отдыха NPC\nВстаньте на метку, чтобы помешать"
-
-msgid "UI_DEBUG_SPATIAL"
-msgstr "ПРОСТРАНСТВО"
-
-msgid "UI_DEBUG_AUTHORITATIVE_POSITION"
-msgstr "Позиция симуляции"
-
-msgid "UI_DEBUG_EPOCH"
-msgstr "Пространственная эпоха"
-
-msgid "UI_DEBUG_PRESENTATION_POSITION"
-msgstr "Позиция отображения"
-
-msgid "UI_DEBUG_PRESENTATION_DELTA"
-msgstr "Расхождение отображения"
-
-msgid "UI_DEBUG_TRANSPORT_NOTE"
-msgstr "Bootstrap-зонд сохраняется только в smoke evidence и не считается авторитетным пространственным состоянием."
 
 msgid "UI_DEBUG_CONTROLS_HINT"
 msgstr "WASD / стик — движение  ·  Shift — спринт  ·  мышь / правый стик — обзор  ·  Esc — курсор"
@@ -129,3 +144,6 @@ msgstr "Помощь зерном"
 
 msgid "UI_SCENARIO_WORK"
 msgstr "Помощь работой"
+
+msgid "UI_SCENARIO_TRANSFER"
+msgstr "Помощь передачей"

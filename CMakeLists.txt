@@ -41,6 +41,7 @@ target_sources(
         src/sim/field_work.cpp
         src/sim/grounded_locomotion.cpp
         src/sim/household_resource.cpp
+        src/sim/household_transfer.cpp
         src/sim/living_need.cpp
         src/sim/npc_locomotion.cpp
         src/sim/world.cpp
@@ -67,6 +68,7 @@ target_sources(
     PRIVATE
         src/protocol/simulation.cpp
         src/protocol/simulation_work.cpp
+        src/protocol/simulation_transfer.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS src
@@ -97,6 +99,8 @@ if(WORLD_SIM_BUILD_TESTS)
         tests/sim/field_work_test.cpp
         tests/sim/grounded_locomotion_test.cpp
         tests/sim/household_resource_test.cpp
+        tests/sim/household_transfer_test.cpp
+        tests/sim/m2_path_permutation_test.cpp
         tests/sim/living_need_test.cpp
         tests/sim/locomotion_capability_test.cpp
         tests/sim/npc_locomotion_test.cpp
@@ -111,6 +115,7 @@ if(WORLD_SIM_BUILD_TESTS)
     add_executable(
         protocol_tests
         tests/protocol/household_resource_action_test.cpp
+        tests/protocol/m2_performance_test.cpp
         tests/protocol/simulation_test.cpp
         tests/protocol/movement_test.cpp
     )
@@ -141,6 +146,7 @@ if(WORLD_SIM_BUILD_GDEXTENSION)
             src/adapters/gdextension/register_types.cpp
             src/adapters/gdextension/sim_facade.cpp
             src/adapters/gdextension/sim_facade_work.cpp
+            src/adapters/gdextension/sim_facade_transfer.cpp
             src/adapters/gdextension/sim_facade.hpp
     )
     target_compile_features(world_sim_gdextension PRIVATE cxx_std_23)

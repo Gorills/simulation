@@ -19,9 +19,26 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
-SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference", "shortage", "gift", "work")
+SUPPORTED_SCENARIOS = (
+    "smoke",
+    "offscreen",
+    "rest_interference",
+    "shortage",
+    "gift",
+    "work",
+    "transfer",
+)
 SMOKE_AUDIO_DRIVER = "Dummy"
-PROTOCOL_VERSION = 9
+PROTOCOL_VERSION = 10
+SCENARIO_TIMEOUT_SECONDS = {
+    "smoke": 30.0,
+    "offscreen": 30.0,
+    "rest_interference": 45.0,
+    "shortage": 45.0,
+    "gift": 60.0,
+    "work": 60.0,
+    "transfer": 60.0,
+}
 OBSERVED_ENTITY_IDS = [1, 2, 3]
 
 
@@ -285,11 +302,11 @@ def validate_smoke_artifact(path: Path, expected_locale: str) -> dict[str, objec
 
     expected_localized_text = {
         "ru": {
-            "hud_title": "Диагностика выполнения",
+            "hud_title": "Техническая диагностика",
             "controls_hint": "WASD / стик — движение  ·  Shift — спринт  ·  мышь / правый стик — обзор  ·  Esc — курсор",
         },
         "en": {
-            "hud_title": "Runtime diagnostics",
+            "hud_title": "Technical diagnostics",
             "controls_hint": "WASD / stick move  ·  Shift sprint  ·  mouse / right stick look  ·  Esc releases pointer",
         },
     }
@@ -486,11 +503,11 @@ def validate_rest_interference_artifact(path: Path, expected_locale: str) -> dic
     assert isinstance(satisfied_position, list)
     if not all(isinstance(value, (int, float)) for value in blocked_position + satisfied_position):
         raise SystemExit("rest interference controlled-actor positions must be numeric")
-    if abs(float(blocked_position[0]) + 3.0) > 0.15 or abs(float(blocked_position[1]) + 3.0) > 0.15:
+    if abs(float(blocked_position[0]) + 3.0) > 1.0 or abs(float(blocked_position[1]) + 3.0) > 1.0:
         raise SystemExit(f"controlled actor was not inside the rest tolerance when blocked: {blocked_position}")
     if (
-        abs(float(satisfied_position[0]) + 3.0) <= 0.15
-        and abs(float(satisfied_position[1]) + 3.0) <= 0.15
+        abs(float(satisfied_position[0]) + 3.0) <= 1.0
+        and abs(float(satisfied_position[1]) + 3.0) <= 1.0
     ):
         raise SystemExit(f"controlled actor did not leave the rest tolerance before satisfaction: {satisfied_position}")
 
@@ -710,6 +727,10 @@ def validate_shortage_artifact(path: Path, expected_locale: str) -> dict[str, ob
         raise SystemExit("shortage scenario did not capture the localized authoritative HUD state")
     if localization.get("scenario_text") != localized[expected_locale]["scenario"]:
         raise SystemExit("localized shortage scenario label is incorrect")
+    if shortage.get("npc_presentation_absent_during_consume") is not True:
+        raise SystemExit("shortage Consume did not occur while the living-need NPC presentation was absent")
+    if shortage.get("npc_observed_during_consume") is not True:
+        raise SystemExit("living-need NPC must remain observed during offscreen Consume")
 
     return evidence
 
@@ -735,6 +756,8 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
     initial_carry = evidence.get("initial_carry")
     initial_header = evidence.get("initial_resource_header")
     draw = evidence.get("draw_result")
+    draw_full = evidence.get("draw_full_refusal")
+    own_household_gift = evidence.get("own_household_gift_refusal")
     shortage = evidence.get("shortage_before_approach")
     shortage_header = evidence.get("shortage_resource_header")
     target_before = evidence.get("target_before_gift")
@@ -743,6 +766,8 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
     target_after = evidence.get("target_after_gift")
     after_header = evidence.get("resource_after_gift")
     carry_after = evidence.get("carry_after_gift")
+    deposit_outside = evidence.get("deposit_outside_refusal")
+    gift_empty = evidence.get("gift_empty_refusal")
     living = evidence.get("living_need_at_gift")
     movement = evidence.get("movement_before_gift")
     localization = evidence.get("localization")
@@ -750,6 +775,8 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
         initial_carry,
         initial_header,
         draw,
+        draw_full,
+        own_household_gift,
         shortage,
         shortage_header,
         target_before,
@@ -758,6 +785,8 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
         target_after,
         after_header,
         carry_after,
+        deposit_outside,
+        gift_empty,
         living,
         movement,
         localization,
@@ -768,6 +797,8 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
     assert isinstance(initial_carry, dict)
     assert isinstance(initial_header, dict)
     assert isinstance(draw, dict)
+    assert isinstance(draw_full, dict)
+    assert isinstance(own_household_gift, dict)
     assert isinstance(shortage, dict)
     assert isinstance(shortage_header, dict)
     assert isinstance(target_before, dict)
@@ -776,6 +807,8 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
     assert isinstance(target_after, dict)
     assert isinstance(after_header, dict)
     assert isinstance(carry_after, dict)
+    assert isinstance(deposit_outside, dict)
+    assert isinstance(gift_empty, dict)
     assert isinstance(living, dict)
     assert isinstance(movement, dict)
     assert isinstance(localization, dict)
@@ -885,21 +918,41 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
     localized = {
         "ru": {
             "scenario": "Помощь зерном",
-            "carry": "Переносимое зерно: 0 / 2 · E взять · R вернуть · G подарить · Помощь зерном",
+            "carry": "Несёте 0/2 · Помощь зерном",
             "adequate": "Запас достаточен",
+            "carry_full": "Отказ: Нести больше нельзя",
+            "own_household": "Отказ: Нельзя дарить своему хозяйству",
+            "outside_store": "Отказ: Нет у хранилища",
+            "carry_empty": "Отказ: Нет зерна с собой",
         },
         "en": {
             "scenario": "Gift shortage relief",
-            "carry": "Carried grain: 0 / 2 · E draw · R deposit · G gift · Gift shortage relief",
+            "carry": "Carrying 0/2 · Gift shortage relief",
             "adequate": "Adequate",
+            "carry_full": "Refused: Carry is full",
+            "own_household": "Refused: Cannot gift to own household",
+            "outside_store": "Refused: Outside the household store",
+            "carry_empty": "Refused: Nothing carried",
         },
     }
+    for label, section, error, hud_key in (
+        ("Draw carry-full refusal", draw_full, "carry_full", "carry_full"),
+        ("own-household Gift refusal", own_household_gift, "own_household", "own_household"),
+        ("Deposit outside-store refusal", deposit_outside, "outside_store", "outside_store"),
+        ("Gift carry-empty refusal", gift_empty, "carry_empty", "carry_empty"),
+    ):
+        if section.get("ok") is not False or section.get("error") != error:
+            raise SystemExit(f"{label} is not the expected player-visible refusal: {section}")
+        if section.get("refusal_hud_text") != localized[expected_locale][hud_key]:
+            raise SystemExit(f"localized {label} HUD did not show the expected reason")
     if localization.get("locale") != expected_locale:
         raise SystemExit(f"unexpected Gift locale: {localization.get('locale')}")
     if localization.get("scenario_text") != localized[expected_locale]["scenario"]:
         raise SystemExit("localized Gift scenario label is incorrect")
     if localization.get("carry_hud_text") != localized[expected_locale]["carry"]:
         raise SystemExit("localized carry/action HUD does not match authoritative zero carry after Gift")
+    if localization.get("refusal_hud_text") != localized[expected_locale]["carry_empty"]:
+        raise SystemExit("localized Gift refusal HUD did not keep the final carry-empty reason")
     expected_household_status = f"{localized[expected_locale]['adequate']} · {after_stock} / {threshold}"
     if localization.get("household_resource_status_text") != expected_household_status:
         raise SystemExit("localized household HUD does not reflect the authoritative post-Gift stock")
@@ -998,7 +1051,7 @@ def validate_work_artifact(path: Path, expected_locale: str) -> dict[str, object
         raise SystemExit(f"unexpected initial field projection: {initial_field}")
     require_close_vector(initial_field.get("work_position_m"), [3.0, 0.0, 3.0], "field position")
     tolerance = initial_field.get("work_axis_tolerance_m")
-    if not isinstance(tolerance, (int, float)) or not math.isclose(float(tolerance), 0.15, abs_tol=1e-5):
+    if not isinstance(tolerance, (int, float)) or not math.isclose(float(tolerance), 1.0, abs_tol=1e-5):
         raise SystemExit(f"unexpected field tolerance: {tolerance}")
     if initial_field.get("tick") != initial_header.get("tick") or initial_field.get("revision") != initial_header.get("revision"):
         raise SystemExit("initial field/resource projections are not one unchanged revision")
@@ -1090,15 +1143,17 @@ def validate_work_artifact(path: Path, expected_locale: str) -> dict[str, object
     localized = {
         "ru": {
             "scenario": "Помощь работой",
-            "work": "Работа в поле: 0 · F работать · Помощь работой",
+            "work": "Поле: 0 · Помощь работой",
             "cue": "Поле для работы",
             "adequate": "Запас достаточен",
+            "refusal": "Отказ: Работа на поле исчерпана",
         },
         "en": {
             "scenario": "Work shortage relief",
-            "work": "Field work: 0 · F work · Work shortage relief",
+            "work": "Field: 0 · Work shortage relief",
             "cue": "Field work",
             "adequate": "Adequate",
+            "refusal": "Refused: Field work is exhausted",
         },
     }
     if localization.get("locale") != expected_locale:
@@ -1109,9 +1164,222 @@ def validate_work_artifact(path: Path, expected_locale: str) -> dict[str, object
         raise SystemExit("localized Work HUD does not reflect exhausted availability")
     if localization.get("field_cue_text") != localized[expected_locale]["cue"]:
         raise SystemExit("localized field cue is incorrect")
+    if localization.get("refusal_hud_text") != localized[expected_locale]["refusal"]:
+        raise SystemExit("localized Work refusal HUD did not show the exhausted reason")
     expected_household_status = f"{localized[expected_locale]['adequate']} · {after_stock} / {threshold}"
     if localization.get("household_resource_status_text") != expected_household_status:
         raise SystemExit("localized household HUD does not reflect authoritative post-Work stock")
+
+    return evidence
+
+
+def validate_transfer_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+    evidence = load_playtest_artifact(path)
+    if evidence.get("scenario") != "transfer":
+        raise SystemExit(f"unexpected household-transfer scenario marker: {evidence.get('scenario')}")
+    if evidence.get("client_supplied_amount") is not False:
+        raise SystemExit("household-transfer scenario must prove that the client supplied no grain amount")
+
+    source_household_id = evidence.get("source_household_id")
+    destination_household_id = evidence.get("destination_household_id")
+    if (
+        not isinstance(source_household_id, int)
+        or source_household_id <= 0
+        or not isinstance(destination_household_id, int)
+        or destination_household_id <= 0
+        or source_household_id == destination_household_id
+    ):
+        raise SystemExit("household-transfer scenario has invalid source/destination household identity")
+
+    initial_pledge = evidence.get("initial_pledge")
+    initial_header = evidence.get("initial_resource_header")
+    shortage = evidence.get("shortage_before_execution")
+    shortage_header = evidence.get("shortage_resource_header")
+    pledge_before = evidence.get("pledge_before")
+    source_before = evidence.get("source_before")
+    destination_before = evidence.get("destination_before")
+    before_header = evidence.get("resource_before")
+    movement = evidence.get("movement_before")
+    transferred = evidence.get("transfer_result")
+    pledge_after = evidence.get("pledge_after")
+    source_after = evidence.get("source_after")
+    destination_after = evidence.get("destination_after")
+    after_header = evidence.get("resource_after")
+    exhausted = evidence.get("exhausted_refusal")
+    pledge_after_refusal = evidence.get("pledge_after_refusal")
+    resource_after_refusal = evidence.get("resource_after_refusal")
+    localization = evidence.get("localization")
+    sections = (
+        initial_pledge,
+        initial_header,
+        shortage,
+        shortage_header,
+        pledge_before,
+        source_before,
+        destination_before,
+        before_header,
+        movement,
+        transferred,
+        pledge_after,
+        source_after,
+        destination_after,
+        after_header,
+        exhausted,
+        pledge_after_refusal,
+        resource_after_refusal,
+        localization,
+    )
+    if not all(isinstance(section, dict) for section in sections):
+        raise SystemExit("household-transfer artifact is missing authoritative pledge/resource/localization evidence")
+
+    assert isinstance(initial_pledge, dict)
+    assert isinstance(initial_header, dict)
+    assert isinstance(shortage, dict)
+    assert isinstance(shortage_header, dict)
+    assert isinstance(pledge_before, dict)
+    assert isinstance(source_before, dict)
+    assert isinstance(destination_before, dict)
+    assert isinstance(before_header, dict)
+    assert isinstance(movement, dict)
+    assert isinstance(transferred, dict)
+    assert isinstance(pledge_after, dict)
+    assert isinstance(source_after, dict)
+    assert isinstance(destination_after, dict)
+    assert isinstance(after_header, dict)
+    assert isinstance(exhausted, dict)
+    assert isinstance(pledge_after_refusal, dict)
+    assert isinstance(resource_after_refusal, dict)
+    assert isinstance(localization, dict)
+
+    for label, section in (
+        ("initial pledge", initial_pledge),
+        ("initial resource", initial_header),
+        ("shortage resource", shortage_header),
+        ("pledge before transfer", pledge_before),
+        ("resource before transfer", before_header),
+        ("movement before transfer", movement),
+        ("transfer result", transferred),
+        ("pledge after transfer", pledge_after),
+        ("resource after transfer", after_header),
+        ("pledge after exhausted refusal", pledge_after_refusal),
+        ("resource after exhausted refusal", resource_after_refusal),
+    ):
+        if section.get("protocol_version") != PROTOCOL_VERSION:
+            raise SystemExit(f"{label} protocol version mismatch: {section.get('protocol_version')}")
+
+    if (
+        initial_pledge.get("source_household_id") != source_household_id
+        or initial_pledge.get("destination_household_id") != destination_household_id
+        or initial_pledge.get("remaining_grain_units") != 4
+    ):
+        raise SystemExit(f"unexpected initial standing-transfer pledge: {initial_pledge}")
+    if initial_pledge.get("tick") != initial_header.get("tick") or initial_pledge.get("revision") != initial_header.get("revision"):
+        raise SystemExit("initial pledge/resource projections are not one unchanged revision")
+
+    if (
+        shortage.get("household_id") != destination_household_id
+        or shortage.get("status") != "shortage"
+    ):
+        raise SystemExit("transfer destination did not become authoritatively short before execution")
+
+    before_stock = destination_before.get("grain_stock_units")
+    after_stock = destination_after.get("grain_stock_units")
+    threshold = destination_before.get("shortage_threshold_units")
+    source_before_stock = source_before.get("grain_stock_units")
+    source_after_stock = source_after.get("grain_stock_units")
+    remaining_before = pledge_before.get("remaining_grain_units")
+    if not all(
+        isinstance(value, int)
+        for value in (before_stock, after_stock, threshold, source_before_stock, source_after_stock, remaining_before)
+    ):
+        raise SystemExit("household-transfer stock/pledge quantities are invalid")
+    assert isinstance(before_stock, int)
+    assert isinstance(after_stock, int)
+    assert isinstance(threshold, int)
+    assert isinstance(source_before_stock, int)
+    assert isinstance(source_after_stock, int)
+    assert isinstance(remaining_before, int)
+    if remaining_before <= 0:
+        raise SystemExit("standing pledge was already zero before execution")
+    if destination_before.get("household_id") != destination_household_id or destination_before.get("status") != "shortage":
+        raise SystemExit("destination was not authoritatively short immediately before household transfer")
+    if source_before.get("household_id") != source_household_id:
+        raise SystemExit("source household identity drifted before household transfer")
+
+    before_tick = before_header.get("tick")
+    before_revision = before_header.get("revision")
+    transfer_tick = transferred.get("tick")
+    transfer_revision = transferred.get("revision")
+    if not all(isinstance(value, int) for value in (before_tick, before_revision, transfer_tick, transfer_revision)):
+        raise SystemExit("household-transfer temporal headers are invalid")
+    assert isinstance(before_tick, int)
+    assert isinstance(before_revision, int)
+    assert isinstance(transfer_tick, int)
+    assert isinstance(transfer_revision, int)
+    if movement.get("tick") != before_tick or movement.get("revision") != before_revision:
+        raise SystemExit("household-transfer precondition does not align with the movement batch")
+    if transfer_tick != before_tick or transfer_revision != before_revision + 1:
+        raise SystemExit("household transfer did not commit exactly one revision without advancing SimulationTick")
+    if (
+        transferred.get("entity_id") != 1
+        or transferred.get("source_household_id") != source_household_id
+        or transferred.get("destination_household_id") != destination_household_id
+        or transferred.get("transferred_grain_units") != remaining_before
+        or transferred.get("remaining_pledge_grain_units") != 0
+        or transferred.get("destination_household_grain_stock_units") != after_stock
+        or transferred.get("source_household_grain_stock_units") != source_after_stock
+    ):
+        raise SystemExit(f"household-transfer result does not match authoritative post-transfer state: {transferred}")
+    if after_stock != before_stock + remaining_before:
+        raise SystemExit("household transfer did not move the entire remaining pledged quantity into the destination")
+    if source_after_stock != source_before_stock - remaining_before:
+        raise SystemExit("household transfer did not decrease source stock by the pledged quantity")
+    if destination_after.get("household_id") != destination_household_id or destination_after.get("status") != "adequate":
+        raise SystemExit("household transfer did not relieve the bounded destination shortage")
+    if destination_after.get("shortage_threshold_units") != threshold:
+        raise SystemExit("household transfer changed the shortage threshold")
+    if (
+        pledge_after.get("remaining_grain_units") != 0
+        or pledge_after.get("destination_household_id") != destination_household_id
+        or pledge_after.get("tick") != transfer_tick
+        or pledge_after.get("revision") != transfer_revision
+    ):
+        raise SystemExit("post-transfer pledge projection does not match the transfer result")
+    if after_header.get("tick") != transfer_tick or after_header.get("revision") != transfer_revision:
+        raise SystemExit("post-transfer resource projection does not match the transfer result")
+
+    if exhausted.get("ok") is not False or exhausted.get("error") != "pledge_zero":
+        raise SystemExit(f"second household transfer did not refuse a zero pledge: {exhausted}")
+    if pledge_after_refusal != pledge_after:
+        raise SystemExit("zero-pledge refusal changed standing-transfer state")
+    if resource_after_refusal != after_header:
+        raise SystemExit("zero-pledge refusal changed resource temporal state")
+
+    localized = {
+        "ru": {
+            "scenario": "Помощь передачей",
+            "pledge": "Передача: 0 · Помощь передачей",
+            "adequate": "Запас достаточен",
+            "refusal": "Отказ: Нет зерна по обязательству",
+        },
+        "en": {
+            "scenario": "Household transfer",
+            "pledge": "Transfer: 0 · Household transfer",
+            "adequate": "Adequate",
+            "refusal": "Refused: No remaining pledged grain",
+        },
+    }
+    if localization.get("locale") != expected_locale:
+        raise SystemExit(f"unexpected household-transfer locale: {localization.get('locale')}")
+    if localization.get("scenario_text") != localized[expected_locale]["scenario"]:
+        raise SystemExit("localized household-transfer scenario label is incorrect")
+    if localization.get("pledge_hud_text") != localized[expected_locale]["pledge"]:
+        raise SystemExit("localized pledge HUD does not reflect a cleared standing transfer")
+    if localization.get("refusal_hud_text") != localized[expected_locale]["refusal"]:
+        raise SystemExit("localized household-transfer refusal HUD did not show the zero-pledge reason")
+    expected_household_status = f"{localized[expected_locale]['adequate']} · {after_stock} / {threshold}"
+    if localization.get("household_resource_status_text") != expected_household_status:
+        raise SystemExit("localized household HUD does not reflect authoritative post-transfer stock")
 
     return evidence
 
@@ -1120,8 +1388,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded Godot playtest owned by this repository")
     parser.add_argument("--scenario", default="smoke", choices=SUPPORTED_SCENARIOS)
     parser.add_argument("--locale", default="ru", choices=SUPPORTED_LOCALES)
-    parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--timeout", type=float, default=None)
     args = parser.parse_args()
+    timeout = (
+        args.timeout
+        if args.timeout is not None
+        else SCENARIO_TIMEOUT_SECONDS.get(args.scenario, 30.0)
+    )
 
     CACHE.mkdir(parents=True, exist_ok=True)
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
@@ -1170,12 +1443,12 @@ def main() -> int:
             popen_kwargs["start_new_session"] = True
         process = subprocess.Popen(command, **popen_kwargs)  # type: ignore[arg-type]
         try:
-            return_code = process.wait(timeout=args.timeout)
+            return_code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             terminate_owned_process(process)
             metadata.update({"status": "timeout", "elapsed_seconds": time.monotonic() - started})
             run_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-            raise SystemExit(f"PLAYTEST TIMEOUT after {args.timeout:.1f}s; artifacts: {artifact_dir}")
+            raise SystemExit(f"PLAYTEST TIMEOUT after {timeout:.1f}s; artifacts: {artifact_dir}")
         finally:
             if process.poll() is None:
                 terminate_owned_process(process)
@@ -1196,6 +1469,8 @@ def main() -> int:
         evidence = validate_gift_artifact(artifact_dir, args.locale)
     elif args.scenario == "work":
         evidence = validate_work_artifact(artifact_dir, args.locale)
+    elif args.scenario == "transfer":
+        evidence = validate_transfer_artifact(artifact_dir, args.locale)
     else:
         evidence = validate_smoke_artifact(artifact_dir, args.locale)
     metadata.update({"status": "passed", "evidence": evidence})

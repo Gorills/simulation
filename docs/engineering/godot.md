@@ -28,6 +28,9 @@ Main
 │   └── PitchPivot
 │       └── SpringArm3D
 │           └── Camera3D
+├── LivingNeedExposure                 # scene-owned rest cue/HUD, not an autoload
+├── ResourceInteraction                # scene-owned store/field occupancy cues, carry/work/pledge UI
+├── M2ResourcePlaytests                # gift/work/transfer automation + artifacts
 ├── environment/demo collision
 └── HUD
 ```
@@ -225,6 +228,8 @@ Do not introduce a global mutable `GameState`/inventory/economy Resource or Auto
 Autoloads are not the default dependency-injection mechanism and must never become a second world authority.
 
 Potential future uses are small genuinely global presentation services such as user settings. Forbidden uses include authoritative `World`, inventory/economy dictionaries or a global event bus that becomes the ownership model for unrelated systems.
+
+The only current autoload is `Localization`. `LivingNeedExposure`, `ResourceInteraction` and `M2ResourcePlaytests` are scene-owned on `main.tscn` and receive explicit `configure(...)` dependencies. Do not reach `main.gd` private state through `get`/`set`/`call`.
 
 ## Anti-patterns
 

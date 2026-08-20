@@ -325,4 +325,86 @@ TEST(ResourceProtocol, WorkUsesAuthoritativeFieldContentAndExhaustsOneCompletion
     EXPECT_GT(next_movement->revision, work_result.revision);
 }
 
+TEST(ResourceProtocol, StandingTransferPledgeIsSemanticRevisionOnlyCommand) {
+    worldsim::protocol::Simulation simulation{42};
+    const auto initial_pledge = simulation.standing_transfer_pledge_projection();
+    const auto initial_carry = simulation.controlled_actor_carry_projection();
+    const auto initial_resources = simulation.village_household_resource_projection();
+
+    EXPECT_EQ(initial_pledge.source_household_id, *initial_carry.member_household_id);
+    EXPECT_EQ(initial_pledge.destination_household_id, 21);
+    EXPECT_EQ(initial_pledge.remaining_grain_units, 4);
+    EXPECT_EQ(initial_pledge.tick, initial_resources.tick);
+    EXPECT_EQ(initial_pledge.revision, initial_resources.revision);
+    EXPECT_EQ(initial_pledge.protocol_version, worldsim::protocol::kProtocolVersion);
+
+    bool shortage_seen = false;
+    for (int opportunity = 0; opportunity < 480; ++opportunity) {
+        ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
+        ASSERT_TRUE(simulation.advance_locomotion_tick().has_value());
+        const auto resources = simulation.village_household_resource_projection();
+        const auto *target = find_household(resources, initial_pledge.destination_household_id);
+        ASSERT_NE(target, nullptr);
+        if (target->status == worldsim::protocol::HouseholdResourceStatus::shortage) {
+            shortage_seen = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(shortage_seen);
+
+    const auto before_pledge = simulation.standing_transfer_pledge_projection();
+    const auto before_resources = simulation.village_household_resource_projection();
+    const auto *source_before = find_household(before_resources, before_pledge.source_household_id);
+    const auto *destination_before = find_household(
+        before_resources,
+        before_pledge.destination_household_id
+    );
+    ASSERT_NE(source_before, nullptr);
+    ASSERT_NE(destination_before, nullptr);
+
+    const auto transferred = simulation.controlled_actor_execute_household_transfer_pledge();
+    ASSERT_TRUE(transferred.has_value());
+    EXPECT_EQ(transferred->entity_id, 1);
+    EXPECT_EQ(transferred->source_household_id, before_pledge.source_household_id);
+    EXPECT_EQ(transferred->destination_household_id, before_pledge.destination_household_id);
+    EXPECT_EQ(transferred->transferred_grain_units, before_pledge.remaining_grain_units);
+    EXPECT_EQ(
+        transferred->source_household_grain_stock_units,
+        source_before->grain_stock_units - transferred->transferred_grain_units
+    );
+    EXPECT_EQ(
+        transferred->destination_household_grain_stock_units,
+        destination_before->grain_stock_units + transferred->transferred_grain_units
+    );
+    EXPECT_EQ(transferred->remaining_pledge_grain_units, 0);
+    EXPECT_EQ(transferred->tick, before_resources.tick);
+    EXPECT_EQ(transferred->revision, before_resources.revision + 1);
+    EXPECT_EQ(transferred->protocol_version, worldsim::protocol::kProtocolVersion);
+
+    const auto after_pledge = simulation.standing_transfer_pledge_projection();
+    const auto after_resources = simulation.village_household_resource_projection();
+    const auto *destination_after = find_household(
+        after_resources,
+        transferred->destination_household_id
+    );
+    ASSERT_NE(destination_after, nullptr);
+    EXPECT_EQ(after_pledge.remaining_grain_units, 0);
+    EXPECT_EQ(after_pledge.destination_household_id, before_pledge.destination_household_id);
+    EXPECT_EQ(after_pledge.tick, transferred->tick);
+    EXPECT_EQ(after_pledge.revision, transferred->revision);
+    EXPECT_EQ(destination_after->status, worldsim::protocol::HouseholdResourceStatus::adequate);
+
+    const auto exhausted = simulation.controlled_actor_execute_household_transfer_pledge();
+    ASSERT_FALSE(exhausted.has_value());
+    EXPECT_EQ(exhausted.error(), worldsim::protocol::ControlledActorTransferError::pledge_zero);
+    EXPECT_EQ(simulation.standing_transfer_pledge_projection(), after_pledge);
+    EXPECT_EQ(simulation.village_household_resource_projection().revision, after_resources.revision);
+
+    ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({}).has_value());
+    const auto next_movement = simulation.advance_locomotion_tick();
+    ASSERT_TRUE(next_movement.has_value());
+    EXPECT_EQ(next_movement->tick, transferred->tick + 1);
+    EXPECT_GT(next_movement->revision, transferred->revision);
+}
+
 } // namespace

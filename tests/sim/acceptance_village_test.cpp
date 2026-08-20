@@ -106,7 +106,30 @@ TEST(AcceptanceVillage, CoreContentOwnsActorsHouseholdsStoresFieldAndControlBind
     ASSERT_TRUE(field.has_value());
     EXPECT_EQ(field->x, (worldsim::sim::Millimeters{3'000}));
     EXPECT_EQ(field->z, (worldsim::sim::Millimeters{3'000}));
-    EXPECT_EQ(field->axis_occupancy_tolerance, (worldsim::sim::Millimeters{150}));
+    EXPECT_EQ(field->axis_occupancy_tolerance, (worldsim::sim::Millimeters{1'000}));
+
+    EXPECT_EQ(controlled_household->standing_transfer_pledge.destination_household, short_household->id);
+    EXPECT_EQ(controlled_household->standing_transfer_pledge.remaining_grain_units, 4);
+    EXPECT_EQ(short_household->standing_transfer_pledge.remaining_grain_units, 0);
+}
+
+TEST(AcceptanceVillage, LatePopulationFailureLeavesCallerWorldUnchanged) {
+    worldsim::sim::World world{worldsim::sim::WorldSeed{42}};
+    ASSERT_TRUE(world.add_place(worldsim::sim::PlaceState{
+        .id = worldsim::sim::EntityId{12},
+        .x = worldsim::sim::Millimeters{500},
+        .z = worldsim::sim::Millimeters{500},
+        .axis_occupancy_tolerance = worldsim::sim::Millimeters{150},
+    }).has_value());
+    const auto before = world.snapshot();
+
+    const auto bindings = worldsim::sim::populate_household_resource_acceptance_village(world);
+    ASSERT_FALSE(bindings.has_value());
+    EXPECT_EQ(bindings.error(), worldsim::sim::WorldError::duplicate_entity);
+    EXPECT_EQ(world.snapshot(), before);
+    EXPECT_EQ(world.actor_ids().size(), 0U);
+    EXPECT_EQ(world.household_ids().size(), 0U);
+    EXPECT_TRUE(world.contains_place(worldsim::sim::EntityId{12}));
 }
 
 } // namespace

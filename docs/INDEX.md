@@ -21,9 +21,10 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | grounded locomotion behavior + neutral acceptance arena | [`models/grounded-locomotion.md`](models/grounded-locomotion.md) | movement solver, collision, slope/step/grounding or first test-arena work |
 | first NPC living need / causal rest task | [`models/living-need.md`](models/living-need.md) | Milestone 1 need/task behavior, NPC rest decision or its presentation evidence |
 | household grain stock, bounded Consume and derived shortage | [`models/household-resource.md`](models/household-resource.md) | Milestone 2 household resource state/rules and their causal semantics |
+| whole Milestone 2 household-resource loop contract | [`milestones/m2-household-resource-loop.md`](milestones/m2-household-resource-loop.md) | gift / household-transfer / work acceptance, naming, and whole-M2 evidence |
 | runtime UI localization, supported locales, translation keys/plurals | [`engineering/localization.md`](engineering/localization.md) | adding/changing player-visible text, locale selection or localization verification |
 | tests, playtest supervisor, evidence, local DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
-| current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target |
+| current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target; Milestone 2 acceptance evidence lives in [`VERIFICATION.md`](VERIFICATION.md) |
 | agent context packaging | [`AGENT_CONTEXT.md`](AGENT_CONTEXT.md) | maintaining AGENTS/Cursor/Claude/Gemini/skills |
 | stack-specific implementation | [`engineering/STACK.md`](engineering/STACK.md) | coding/build work |
 | Godot/GDExtension versions | [`engineering/VERSIONS.md`](engineering/VERSIONS.md) | engine/binding/dependency work |

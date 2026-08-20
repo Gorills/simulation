@@ -16,10 +16,13 @@ inline constexpr Millimeters kShortStoreX{-3'000};
 inline constexpr Millimeters kShortStoreZ{-3'000};
 inline constexpr Millimeters kFieldX{3'000};
 inline constexpr Millimeters kFieldZ{3'000};
-inline constexpr Millimeters kStoreTolerance{150};
-inline constexpr Millimeters kFieldTolerance{150};
+// Per-axis arrival/occupancy fixture, not a historical building footprint.
+// 1000 mm is large enough for a human-controlled capsule to stand on the pad;
+// 150 mm was only reachable by scripted locomotion onto the exact point.
+inline constexpr Millimeters kPlaceAxisTolerance{1'000};
 inline constexpr std::int64_t kAcceptanceCarryCapacity{2};
 inline constexpr std::int64_t kAcceptanceFieldYield{2};
+inline constexpr std::int64_t kAcceptancePledgeQuantity{4};
 inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
 
 [[nodiscard]] std::expected<void, WorldError> add_acceptance_actors(World &world) {
@@ -55,7 +58,7 @@ inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
             .rest_need = RestNeedState{
                 .rest_x = kShortStoreX,
                 .rest_z = kShortStoreZ,
-                .axis_arrival_tolerance = kStoreTolerance,
+                .axis_arrival_tolerance = kPlaceAxisTolerance,
             },
         }
     );
@@ -87,7 +90,7 @@ inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
         .id = kSurplusStore,
         .x = Millimeters{0},
         .z = Millimeters{0},
-        .axis_occupancy_tolerance = kStoreTolerance,
+        .axis_occupancy_tolerance = kPlaceAxisTolerance,
     });
     if (!result.has_value()) {
         return result;
@@ -97,25 +100,12 @@ inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
         .id = kShortStore,
         .x = kShortStoreX,
         .z = kShortStoreZ,
-        .axis_occupancy_tolerance = kStoreTolerance,
+        .axis_occupancy_tolerance = kPlaceAxisTolerance,
     });
 }
 
 [[nodiscard]] std::expected<void, WorldError> add_acceptance_households(World &world) {
     auto result = world.add_household(HouseholdState{
-        .id = kSurplusHousehold,
-        .members = {kControlledActor, kSurplusHouseholdNpc},
-        .store_place = kSurplusStore,
-        .grain_stock_units = 8,
-        .shortage_threshold_units = 2,
-        .consume_amount_units = 1,
-        .remaining_consume_budget = 0,
-    });
-    if (!result.has_value()) {
-        return result;
-    }
-
-    return world.add_household(HouseholdState{
         .id = kShortHousehold,
         .members = {kShortHouseholdActor},
         .store_place = kShortStore,
@@ -124,6 +114,23 @@ inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
         .consume_amount_units = 1,
         .remaining_consume_budget = 1,
     });
+    if (!result.has_value()) {
+        return result;
+    }
+
+    return world.add_household(HouseholdState{
+        .id = kSurplusHousehold,
+        .members = {kControlledActor, kSurplusHouseholdNpc},
+        .store_place = kSurplusStore,
+        .grain_stock_units = 8,
+        .shortage_threshold_units = 2,
+        .consume_amount_units = 1,
+        .remaining_consume_budget = 0,
+        .standing_transfer_pledge = StandingTransferPledge{
+            .destination_household = kShortHousehold,
+            .remaining_grain_units = kAcceptancePledgeQuantity,
+        },
+    });
 }
 
 [[nodiscard]] std::expected<void, WorldError> add_acceptance_field_work(World &world) {
@@ -131,7 +138,7 @@ inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
         .id = kFieldPlace,
         .x = kFieldX,
         .z = kFieldZ,
-        .axis_occupancy_tolerance = kFieldTolerance,
+        .axis_occupancy_tolerance = kPlaceAxisTolerance,
     });
     if (!result.has_value()) {
         return result;
@@ -149,23 +156,25 @@ inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
 
 std::expected<HouseholdResourceAcceptanceVillageBindings, WorldError>
 populate_household_resource_acceptance_village(World &world) {
-    auto result = add_acceptance_actors(world);
+    World candidate = world;
+    auto result = add_acceptance_actors(candidate);
     if (!result.has_value()) {
         return std::unexpected(result.error());
     }
-    result = add_acceptance_stores(world);
+    result = add_acceptance_stores(candidate);
     if (!result.has_value()) {
         return std::unexpected(result.error());
     }
-    result = add_acceptance_households(world);
+    result = add_acceptance_households(candidate);
     if (!result.has_value()) {
         return std::unexpected(result.error());
     }
-    result = add_acceptance_field_work(world);
+    result = add_acceptance_field_work(candidate);
     if (!result.has_value()) {
         return std::unexpected(result.error());
     }
 
+    world = std::move(candidate);
     return HouseholdResourceAcceptanceVillageBindings{
         .controlled_actor = kControlledActor,
     };

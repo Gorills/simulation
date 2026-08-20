@@ -121,7 +121,7 @@ TEST(SimulationProtocol, HouseholdDiscoverySharesUnchangedStartupRevision) {
     EXPECT_EQ(neighbour->member_actor_ids[0], 2);
     EXPECT_EQ(neighbour->store_x_mm, -3'000);
     EXPECT_EQ(neighbour->store_z_mm, -3'000);
-    EXPECT_EQ(neighbour->store_axis_tolerance_mm, 150);
+    EXPECT_EQ(neighbour->store_axis_tolerance_mm, 1'000);
 }
 
 TEST(SimulationProtocol, LivingNeedProjectionKeepsM1MeaningUnderGenericCollection) {
@@ -132,10 +132,10 @@ TEST(SimulationProtocol, LivingNeedProjectionKeepsM1MeaningUnderGenericCollectio
     EXPECT_EQ(initial.status, worldsim::protocol::LivingNeedStatus::traveling);
     EXPECT_EQ(initial.target_x_mm, -3'000);
     EXPECT_EQ(initial.target_z_mm, -3'000);
-    EXPECT_EQ(initial.axis_arrival_tolerance_mm, 150);
+    EXPECT_EQ(initial.axis_arrival_tolerance_mm, 1'000);
     EXPECT_EQ(
         initial.axis_occupancy_tolerance_mm,
-        150 + worldsim::sim::kFirstPlayableBody.radius.value
+        1'000 + worldsim::sim::kFirstPlayableBody.radius.value
     );
     EXPECT_EQ(initial.tick, 0);
     EXPECT_EQ(initial.revision, 9);

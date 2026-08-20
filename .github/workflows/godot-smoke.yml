@@ -22,7 +22,7 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -114,6 +114,10 @@ jobs:
         run: xvfb-run -a python tools/dev.py play --scenario work --locale ru
       - name: Verify English Work vertical
         run: xvfb-run -a python tools/dev.py play --scenario work --locale en
+      - name: Verify Russian household transfer
+        run: xvfb-run -a python tools/dev.py play --scenario transfer --locale ru
+      - name: Verify English household transfer
+        run: xvfb-run -a python tools/dev.py play --scenario transfer --locale en
       - name: Verify offscreen continuation
         run: xvfb-run -a python tools/dev.py play --scenario offscreen --locale ru
       - name: Verify rest interference loop

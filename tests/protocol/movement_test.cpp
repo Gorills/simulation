@@ -213,7 +213,7 @@ TEST(ControlledMovementProtocol, LivingNeedNpcWalksAndBrakesInsideAssignedRestTo
     }
 
     EXPECT_EQ(last.tick, 364);
-    EXPECT_EQ(last.samples[1].x_mm, -2'912);
+    EXPECT_EQ(last.samples[1].x_mm, -2'062);
     EXPECT_EQ(last.samples[1].z_mm, -3'000);
     EXPECT_EQ(last.samples[1].velocity_x_mm_per_second, 0);
     EXPECT_EQ(last.samples[1].velocity_z_mm_per_second, 0);

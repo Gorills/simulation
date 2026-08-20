@@ -140,4 +140,50 @@ struct ControlledActorWorkResult final {
 using ControlledActorWorkOutcome =
     std::expected<ControlledActorWorkResult, ControlledActorWorkError>;
 
+// Purpose-built standing-transfer read for the controlled actor's member household.
+// Remaining quantity and destination are Core content, not shop inventory.
+struct StandingTransferPledgeProjection final {
+    ProtocolInteger source_household_id{};
+    ProtocolInteger destination_household_id{};
+    ProtocolInteger remaining_grain_units{};
+    ProtocolInteger tick{};
+    ProtocolInteger revision{};
+    std::uint32_t protocol_version{kProtocolVersion};
+
+    bool operator==(const StandingTransferPledgeProjection &) const = default;
+};
+
+enum class ControlledActorTransferError : std::uint8_t {
+    protocol_integer_exhausted,
+    controlled_actor_missing,
+    actor_without_household,
+    invalid_household_state,
+    invalid_pledge_state,
+    destination_household_missing,
+    self_destination,
+    controlled_actor_spatial_state_missing,
+    outside_store,
+    pledge_zero,
+    insufficient_stock,
+    stock_overflow,
+};
+
+struct ControlledActorTransferResult final {
+    ProtocolInteger entity_id{};
+    ProtocolInteger source_household_id{};
+    ProtocolInteger destination_household_id{};
+    ProtocolInteger transferred_grain_units{};
+    ProtocolInteger source_household_grain_stock_units{};
+    ProtocolInteger destination_household_grain_stock_units{};
+    ProtocolInteger remaining_pledge_grain_units{};
+    ProtocolInteger tick{};
+    ProtocolInteger revision{};
+    std::uint32_t protocol_version{kProtocolVersion};
+
+    bool operator==(const ControlledActorTransferResult &) const = default;
+};
+
+using ControlledActorTransferOutcome =
+    std::expected<ControlledActorTransferResult, ControlledActorTransferError>;
+
 } // namespace worldsim::protocol

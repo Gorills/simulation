@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <limits>
+#include <optional>
 
 namespace {
 
@@ -854,6 +855,95 @@ TEST(HouseholdCarrySnapshot, RestorePreservesDeterministicDrawGiftContinuation) 
     ASSERT_TRUE(restored_gift.has_value());
     EXPECT_EQ(*restored_gift, *source_gift);
     EXPECT_EQ(restored.snapshot(), source.snapshot());
+}
+
+[[nodiscard]] std::optional<worldsim::sim::World> make_gift_world() {
+    using worldsim::sim::ActorGrainCarryState;
+    using worldsim::sim::ActorSpawnState;
+    using worldsim::sim::EntityId;
+    using worldsim::sim::HouseholdState;
+    using worldsim::sim::Millimeters;
+    using worldsim::sim::PlaceState;
+    using worldsim::sim::World;
+    using worldsim::sim::WorldSeed;
+
+    constexpr EntityId actor_one{1};
+    constexpr EntityId actor_two{2};
+    constexpr EntityId source_store{10};
+    constexpr EntityId receiving_store{11};
+    constexpr EntityId source_household{20};
+    constexpr EntityId receiving_household{21};
+
+    World world{WorldSeed{70}};
+    const ActorSpawnState spawn{
+        .spatial = spatial_at(0, 0),
+        .grain_carry = ActorGrainCarryState{
+            .carried_grain_units = 2,
+            .grain_carry_capacity_units = 2,
+        },
+    };
+    if (!world.spawn_actor(actor_one, spawn).has_value()) {
+        return std::nullopt;
+    }
+    if (!world.spawn_actor(actor_two, spawn).has_value()) {
+        return std::nullopt;
+    }
+    if (!world.add_place(PlaceState{
+            .id = source_store,
+            .x = Millimeters{1'000},
+            .z = Millimeters{1'000},
+            .axis_occupancy_tolerance = Millimeters{100},
+        }).has_value()) {
+        return std::nullopt;
+    }
+    if (!world.add_place(PlaceState{
+            .id = receiving_store,
+            .axis_occupancy_tolerance = Millimeters{100},
+        }).has_value()) {
+        return std::nullopt;
+    }
+    if (!world.add_household(HouseholdState{
+            .id = source_household,
+            .members = {actor_one, actor_two},
+            .store_place = source_store,
+            .grain_stock_units = 5,
+        }).has_value()) {
+        return std::nullopt;
+    }
+    if (!world.add_household(HouseholdState{
+            .id = receiving_household,
+            .store_place = receiving_store,
+            .grain_stock_units = 1,
+            .shortage_threshold_units = 2,
+        }).has_value()) {
+        return std::nullopt;
+    }
+    return world;
+}
+
+TEST(GiftParity, EquivalentActorsUseTheSameWorldRule) {
+    auto first_world = make_gift_world();
+    auto second_world = make_gift_world();
+    ASSERT_TRUE(first_world.has_value());
+    ASSERT_TRUE(second_world.has_value());
+
+    const worldsim::sim::EntityId actor_one{1};
+    const worldsim::sim::EntityId actor_two{2};
+    const worldsim::sim::EntityId receiving_household{21};
+
+    const auto first = first_world->gift_household_grain(actor_one, receiving_household);
+    const auto second = second_world->gift_household_grain(actor_two, receiving_household);
+
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    EXPECT_EQ(first->gifted_grain_units, second->gifted_grain_units);
+    EXPECT_EQ(first->gifted_grain_units, 2);
+    EXPECT_EQ(first->receiving_household, second->receiving_household);
+    EXPECT_EQ(first->carried_grain_units, 0);
+    EXPECT_EQ(second->carried_grain_units, 0);
+    EXPECT_EQ(first->receiving_grain_stock_units, second->receiving_grain_stock_units);
+    EXPECT_EQ(first->receiving_grain_stock_units, 3);
+    EXPECT_EQ(first->tick, second->tick);
 }
 
 } // namespace

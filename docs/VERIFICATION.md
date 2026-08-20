@@ -33,6 +33,8 @@ python tools/dev.py play --scenario gift --locale ru
 python tools/dev.py play --scenario gift --locale en
 python tools/dev.py play --scenario work --locale ru
 python tools/dev.py play --scenario work --locale en
+python tools/dev.py play --scenario transfer --locale ru
+python tools/dev.py play --scenario transfer --locale en
 python tools/dev.py play --scenario offscreen --locale ru
 python tools/dev.py play --scenario rest_interference --locale ru
 ```
@@ -46,6 +48,7 @@ Use only the subset required by the change, but do not claim a gate that did not
 - `play --scenario shortage` proves the first Milestone 2 vertical path from authoritative household discovery through autonomous post-movement Consume to localized shortage feedback without a player economic command.
 - `play --scenario gift` proves the controlled actor draws rule-defined grain from its own store, later gifts the entire carry at the short household's store, changes authoritative carry/stock through semantic commands, and preserves the existing RestNeed interference at that shared place.
 - `play --scenario work` proves the controlled actor discovers the authoritative field, reaches it through ordinary locomotion, completes one amount-less Work command, increases the configured destination stock by the Core-owned yield, exhausts the bounded Work availability, and receives localized field/HUD feedback.
+- `play --scenario transfer` proves the controlled actor executes the surplus household's standing transfer pledge at its own store, moves the entire remaining pledged grain into the durable destination household, clears the pledge, and receives localized pledge/HUD feedback.
 - `play --scenario offscreen` proves an observed living-need NPC can lose its Godot node, continue receiving authoritative movement while absent, and rematerialize from fresh observation plus a later authoritative sample.
 - `play --scenario rest_interference` proves the real client observes the first need as `traveling`, creates a `blocked` outcome through ordinary controlled locomotion, renders localized blocked feedback, then removes the obstruction through the same movement path and observes later `satisfied` feedback.
 
@@ -170,7 +173,23 @@ It must prove on one bounded RU/EN run that:
 - the movement batch immediately before Work remains the controlled spatial revision while presentation/resource reads reconcile to the later Work revision;
 - RU and EN render localized field cue, Work availability/action/scenario feedback and authoritative post-Work household status, with the standard screenshot artifact.
 
-This proves a second player intervention path through the same actor-generic Core Work law. It does not prove labor duration, recurring production, crop calendars, wages, tenure, automatic NPC Work policy or standing household transfers.
+This proves a second player intervention path through the same actor-generic Core Work law. It does not prove labor duration, recurring production, crop calendars, wages, tenure or automatic NPC Work policy.
+
+### Household transfer
+
+The `transfer` scenario is the M2.10 controlled-actor standing-transfer checkpoint. It uses the M2.9 household-transfer law and ordinary locomotion; it has no stock setter, teleport, client-supplied amount or live shortage rebinding.
+
+It must prove on one bounded RU/EN run that:
+
+- pledge discovery exposes remaining pledged grain and the durable destination household from the same startup world state as household-resource discovery;
+- the configured destination household becomes short through the already-proven autonomous Consume path before player execution;
+- the controlled actor occupies its own household store through ordinary presence (the acceptance spawn already places that actor there);
+- one semantic pledge-execution command moves the entire remaining pledged quantity from source stock into the destination household, sets remaining pledge to zero, and advances `WorldRevision` exactly once without changing `SimulationTick`;
+- the destination becomes adequate after the transfer while its shortage threshold stays unchanged;
+- a second execution returns typed `pledge_zero` and changes neither stocks nor revision;
+- RU and EN render localized pledge/inventory/action/scenario feedback plus the authoritative post-transfer household status, with the standard screenshot artifact.
+
+This proves the third player intervention path through the same actor-generic Core transfer law. It is not trade, payment, or a second commodity.
 
 ### Offscreen continuation
 
@@ -219,6 +238,34 @@ Milestone 1 may be marked accepted only when the exact candidate revision has gr
 
 If the candidate fails the interference scenario, M1 remains in progress. Do not weaken the scenario merely to make the milestone green.
 
+### Milestone 2 acceptance gate
+
+Milestone 2 may be marked accepted only when the exact candidate revision has green evidence for:
+
+- native/sanitizer verification including Consume/Draw/Deposit/Gift/Work/HouseholdTransfer validation, empty/full/exhausted/zero-pledge/overflow refusal, snapshot continuation, actor parity, and the Gift/Work/Transfer permutation claim;
+- protocol projection/command verification for village discovery, carry, field work, standing transfer, and revision-only resource commands;
+- architecture check forbidding Godot in `src/sim` / `src/protocol`;
+- localization catalog integrity for new `UI_*` keys;
+- one bounded release-configuration measurement of locomotion-call cost (including post-movement Consume) and bridge/projection cost against [`PERFORMANCE.md`](PERFORMANCE.md) budgets;
+- RU + EN baseline Godot smoke;
+- bounded RU/EN autonomous shortage, including Consume while the living-need NPC Godot node is absent;
+- bounded RU/EN Gift, Work and household-transfer verticals with localized feedback;
+- bounded offscreen continuation and RU rest-interference/help with unchanged M1 semantics.
+
+If any required path is missing or a check did not run, M2 remains in progress. Do not claim acceptance from compile-green or from a Godot-only stock label.
+
+### M2.11 measured performance
+
+Recorded on Linux 6.14.0-37-generic x86_64, Intel Core i7-4770 @ 3.40 GHz (8 logical CPUs), CMake `release` preset (`CMAKE_BUILD_TYPE=Release`), 256 samples after 32 warmup ticks of the acceptance village:
+
+```text
+./build/release/protocol_tests --gtest_filter='M2Performance.*'
+M2 acceptance-village locomotion p99_ms=0.001821 budget_ms=4
+bridge/projection p99_ms=0.001064 budget_ms=1
+```
+
+Both p99 values are inside the [`PERFORMANCE.md`](PERFORMANCE.md) 4 ms locomotion and 1 ms bridge budgets on this machine. This is Core/protocol call cost, not a Godot frame-time measurement.
+
 ## Godot process/environment policy
 
 Metadata import must remain non-interactive and bounded. The ordinary/default path uses Godot headless mode. On the current Linux CI runner, pinned Godot 4.7.1 aborts during this project's `--headless --import`; the persistent smoke lane therefore performs that import under the same Xvfb display already required for screenshot evidence.
@@ -233,7 +280,7 @@ Unexpected engine `ERROR` lines should still be investigated; the pass/fail cont
 
 ## Godot smoke CI lane
 
-The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs RU and EN baseline smoke, bounded RU/EN autonomous shortage, bounded RU/EN Gift, bounded RU/EN Work, bounded RU offscreen continuation and bounded RU rest-interference/help, then uploads `.cache/play` evidence even on failure.
+The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs RU and EN baseline smoke, bounded RU/EN autonomous shortage, bounded RU/EN Gift, bounded RU/EN Work, bounded RU/EN household transfer, bounded RU offscreen continuation and bounded RU rest-interference/help, then uploads `.cache/play` evidence even on failure.
 
 Documentation-only changes are excluded. The lane remains deliberately bounded: no narrow-layout matrix, interactive input-feel automation, performance thresholds or cross-platform GPU matrix without a demonstrated need.
 

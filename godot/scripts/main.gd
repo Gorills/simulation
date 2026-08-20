@@ -1,6 +1,8 @@
 extends Node3D
 
 const DEBUG_REFRESH_INTERVAL_SECONDS := 0.25
+const DEBUG_HUD_WIDTH_PX := 360
+const DEBUG_SCROLL_MAX_HEIGHT_RATIO := 0.4
 const MOVE_INTENT_SCALE := 1000
 const LOCOMOTION_PACE_WALK := 0
 const LOCOMOTION_PACE_RUN := 1
@@ -16,22 +18,21 @@ const SHORTAGE_SCENARIO_LIMIT_TICKS := 480
 @onready var player: ThirdPersonPlayer = %Player
 @onready var player_entity_binding: EntityBinding = %PlayerEntityBinding
 @onready var camera_rig: ThirdPersonCameraRig = %CameraRig
-@onready var debug_fps: Label = %DebugFps
-@onready var debug_process: Label = %DebugProcess
-@onready var debug_physics: Label = %DebugPhysics
+@onready var debug_runtime_summary: Label = %DebugRuntimeSummary
 @onready var debug_input: Label = %DebugInput
-@onready var debug_entity: Label = %DebugEntity
-@onready var debug_tick: Label = %DebugTick
-@onready var debug_revision: Label = %DebugRevision
-@onready var debug_protocol: Label = %DebugProtocol
-@onready var debug_seed: Label = %DebugSeed
+@onready var debug_world_summary: Label = %DebugWorldSummary
+@onready var debug_spatial_summary: Label = %DebugSpatialSummary
 @onready var debug_scenario: Label = %DebugScenario
 @onready var debug_living_need_status: Label = %DebugLivingNeedStatus
 @onready var debug_household_resource_status: Label = %DebugHouseholdResourceStatus
-@onready var debug_authority_position: Label = %DebugAuthorityPosition
-@onready var debug_epoch: Label = %DebugEpoch
-@onready var debug_presentation_position: Label = %DebugPresentationPosition
-@onready var debug_divergence: Label = %DebugDivergence
+@onready var controls_hint: Label = %ControlsHint
+@onready var debug_toggle_hint: Label = %DebugToggleHint
+@onready var debug_panel: PanelContainer = %DebugPanel
+@onready var debug_scroll: ScrollContainer = %DebugScroll
+@onready var hud_stack: VBoxContainer = $HUD/ScreenMargin/HUDRow/HUDStack
+@onready var living_need_exposure: LivingNeedExposure = %LivingNeedExposure
+@onready var resource_interaction: ResourceInteraction = %ResourceInteraction
+@onready var m2_resource_playtests: M2ResourcePlaytests = %M2ResourcePlaytests
 
 var sim := SimFacade.new()
 var _bootstrap_projection: Dictionary = {}
@@ -48,6 +49,7 @@ var _living_need_actor_id := 0
 var _tracked_household_id := 0
 var _rest_target_m := Vector2.ZERO
 var _debug_refresh_elapsed := 0.0
+var _debug_overlay_visible := false
 var _scenario_name := "interactive"
 var _locomotion_runtime_enabled := false
 var _scripted_movement_requested := false
@@ -88,20 +90,46 @@ func _ready() -> void:
     camera_rig.configure(controls, player)
     controls.input_device_changed.connect(_on_input_device_changed)
     Localization.locale_changed.connect(_on_locale_changed)
+    living_need_exposure.configure(sim, world_presentation, controls_hint, self)
+    resource_interaction.configure(
+        sim,
+        _tracked_household_id,
+        %DebugCarryStatus,
+        %DebugWorkStatus,
+        %DebugPledgeStatus,
+        %DebugResourceRefusal,
+        %FieldWorkCue,
+        %InteractionPrompt,
+        self
+    )
+    resource_interaction.resource_state_changed.connect(_on_resource_state_changed)
+    m2_resource_playtests.configure(self, resource_interaction)
     controls.capture_pointer()
 
     _set_bootstrap_projection(sim.bootstrap_debug_projection())
     var scenario := _user_arg_value("--scenario")
     if not scenario.is_empty():
         _scenario_name = scenario
+    _configure_debug_hud_layout()
+    _set_debug_overlay_visible(_scenario_name != "interactive")
     _refresh_debug_hud()
+    call_deferred("_configure_debug_hud_layout")
 
-    if scenario in ["smoke", "offscreen", "rest_interference", "shortage"]:
+    if scenario in [
+        "smoke",
+        "offscreen",
+        "rest_interference",
+        "shortage",
+        "gift",
+        "work",
+        "transfer",
+    ]:
         var artifact_dir := _user_arg_value("--artifact-dir")
         if artifact_dir.is_empty():
             push_error("bounded playtest scenario requires --artifact-dir")
             get_tree().quit(2)
             return
+        resource_interaction.set_interactive(false)
         match scenario:
             "offscreen":
                 call_deferred("_run_offscreen", artifact_dir)
@@ -109,6 +137,8 @@ func _ready() -> void:
                 call_deferred("_run_rest_interference", artifact_dir)
             "shortage":
                 call_deferred("_run_shortage", artifact_dir)
+            "gift", "work", "transfer":
+                call_deferred("_run_m2_resource_playtest", artifact_dir)
             _:
                 call_deferred("_run_smoke", artifact_dir)
         return
@@ -144,12 +174,176 @@ func _process(delta: float) -> void:
     _refresh_debug_hud()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed(&"toggle_debug_overlay"):
+        _set_debug_overlay_visible(not _debug_overlay_visible)
+        get_viewport().set_input_as_handled()
+
+
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_WM_SIZE_CHANGED:
+        _configure_debug_hud_layout()
+
+
+func _set_debug_overlay_visible(visible: bool) -> void:
+    _debug_overlay_visible = visible
+    debug_panel.visible = visible
+    debug_toggle_hint.text = (
+        tr(&"UI_DEBUG_TOGGLE_HIDE") if visible else tr(&"UI_DEBUG_TOGGLE_SHOW")
+    )
+    _configure_debug_hud_layout()
+
+
+func _configure_debug_hud_layout() -> void:
+    var viewport_size := get_viewport().get_visible_rect().size
+    var hud_width := minf(float(DEBUG_HUD_WIDTH_PX), viewport_size.x - 96.0)
+    hud_width = maxf(hud_width, 280.0)
+    hud_stack.custom_minimum_size = Vector2(hud_width, 0.0)
+    hud_stack.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    for label in [
+        %InteractionPrompt,
+        debug_living_need_status,
+        debug_household_resource_status,
+        %DebugCarryStatus,
+        %DebugWorkStatus,
+        %DebugPledgeStatus,
+        %DebugResourceRefusal,
+        controls_hint,
+        debug_toggle_hint,
+        debug_runtime_summary,
+        debug_input,
+        debug_world_summary,
+        debug_spatial_summary,
+    ]:
+        label.custom_minimum_size.x = 0.0
+        label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    if _debug_overlay_visible:
+        debug_scroll.custom_minimum_size = Vector2(hud_width, 96.0)
+        debug_scroll.custom_maximum_size = Vector2(hud_width, viewport_size.y * DEBUG_SCROLL_MAX_HEIGHT_RATIO)
+    else:
+        debug_scroll.custom_minimum_size = Vector2.ZERO
+        debug_scroll.custom_maximum_size = Vector2.ZERO
+
+
 func _on_input_device_changed(_device: int) -> void:
     _refresh_debug_hud()
 
 
 func _on_locale_changed(_locale: String) -> void:
     _refresh_debug_hud()
+
+
+func _on_resource_state_changed() -> void:
+    if not _refresh_village_household_resource_projection():
+        return
+    _refresh_debug_hud()
+
+
+func disable_interactive_locomotion() -> void:
+    _locomotion_runtime_enabled = false
+
+
+func simulation_facade() -> SimFacade:
+    return sim
+
+
+func tracked_neighbour_household_id() -> int:
+    return _tracked_household_id
+
+
+func living_need_actor_id() -> int:
+    return _living_need_actor_id
+
+
+func household_resource_status_text() -> String:
+    return _household_resource_status_text(
+        _household_by_id(_village_household_resource_projection, _tracked_household_id)
+    )
+
+
+func current_scenario_text() -> String:
+    return debug_scenario.text
+
+
+func village_resource_projection() -> Dictionary:
+    return _village_household_resource_projection.duplicate(true)
+
+
+func living_need_projection() -> Dictionary:
+    return _living_need_projection.duplicate(true)
+
+
+func last_authoritative_movement_batch() -> Dictionary:
+    return _last_movement_batch.duplicate(true)
+
+
+func household_by_id(household_id: int) -> Dictionary:
+    return _household_by_id(_village_household_resource_projection, household_id)
+
+
+func refresh_village_resources() -> bool:
+    return _refresh_village_household_resource_projection()
+
+
+func refresh_debug_overlay() -> void:
+    _refresh_debug_hud()
+
+
+func refresh_resource_views() -> bool:
+    if not _refresh_village_household_resource_projection():
+        return false
+    _living_need_projection = sim.living_need_projection()
+    _refresh_debug_hud()
+    return true
+
+
+func apply_latest_resource_projections() -> bool:
+    if not refresh_resource_views():
+        return false
+    _observed_world_projection = sim.observed_world_projection()
+    if not world_presentation.apply_observed_world_projection(
+        _observed_world_projection,
+        player_entity_binding
+    ):
+        push_error("failed to reconcile presentation after a resource command")
+        return false
+    _controlled_actor_spatial_projection = sim.controlled_actor_spatial_projection()
+    _refresh_debug_hud()
+    return true
+
+
+func run_one_scripted_movement(intent: Vector2i, pace: int) -> bool:
+    return await _run_one_scripted_movement(intent, pace)
+
+
+func intent_toward_rest_target() -> Vector2i:
+    return _intent_toward_rest_target()
+
+
+func pace_toward_rest_target() -> int:
+    return _pace_toward_rest_target()
+
+
+func intent_toward_planar_target(target: Vector2) -> Vector2i:
+    var delta := target - _controlled_planar_position()
+    if abs(delta.x) <= REST_HOLD_TOLERANCE_M and abs(delta.y) <= REST_HOLD_TOLERANCE_M:
+        return Vector2i.ZERO
+    if delta.is_zero_approx():
+        return Vector2i.ZERO
+    var direction := delta.normalized()
+    return Vector2i(
+        int(direction.x * MOVE_INTENT_SCALE),
+        int(direction.y * MOVE_INTENT_SCALE)
+    )
+
+
+func pace_toward_planar_target(target: Vector2) -> int:
+    var distance := (target - _controlled_planar_position()).length()
+    return LOCOMOTION_PACE_RUN if distance > REST_RUN_SWITCH_DISTANCE_M else LOCOMOTION_PACE_WALK
+
+
+func movement_batch_evidence(batch: Dictionary) -> Dictionary:
+    return _movement_batch_evidence(batch)
 
 
 func _set_bootstrap_projection(projection: Dictionary) -> void:
@@ -393,43 +587,62 @@ func _pace_toward_rest_target() -> int:
 func _refresh_debug_hud() -> void:
     _living_need_projection = sim.living_need_projection()
     if not _refresh_village_household_resource_projection():
-        debug_household_resource_status.text = "—"
+        debug_household_resource_status.text = "%s: —" % tr(&"UI_DEBUG_HOUSEHOLD_RESOURCE")
     var authoritative_position := world_presentation.controlled_authoritative_position()
     var presentation_position := player.get_global_transform_interpolated().origin
     var fps := int(Performance.get_monitor(Performance.TIME_FPS))
     var process_ms := float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
     var physics_ms := float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
+    var entity_id := world_presentation.controlled_entity_id()
+    var tick := world_presentation.last_tick()
+    var revision := world_presentation.last_revision()
+    var protocol := world_presentation.protocol_version()
+    var seed := int(_bootstrap_projection.get("seed", 0))
+    var spatial_epoch := int(_controlled_actor_spatial_projection.get("spatial_epoch", 0))
+    var divergence := presentation_position.distance_to(authoritative_position)
 
-    debug_fps.text = "%d" % fps
-    debug_process.text = "%.2f ms" % process_ms
-    debug_physics.text = "%.2f ms" % physics_ms
-    debug_input.text = _active_input_device_text()
-
-    debug_entity.text = "#%d" % world_presentation.controlled_entity_id()
-    debug_tick.text = str(world_presentation.last_tick())
-    debug_revision.text = str(world_presentation.last_revision())
-    debug_protocol.text = str(world_presentation.protocol_version())
-    debug_seed.text = str(int(_bootstrap_projection.get("seed", 0)))
-    debug_scenario.text = _scenario_text()
-    debug_living_need_status.text = _living_need_status_text(
-        str(_living_need_projection.get("status", "unknown"))
-    )
-    debug_household_resource_status.text = _household_resource_status_text(
-        _household_by_id(_village_household_resource_projection, _tracked_household_id)
-    )
-
-    debug_authority_position.text = "(%.2f, %.2f, %.2f) m" % [
+    debug_runtime_summary.text = tr(&"UI_DEBUG_RUNTIME_SUMMARY") % [
+        fps,
+        process_ms,
+        physics_ms,
+    ]
+    debug_input.text = "%s: %s" % [tr(&"UI_DEBUG_INPUT"), _active_input_device_text()]
+    debug_world_summary.text = tr(&"UI_DEBUG_WORLD_SUMMARY") % [
+        entity_id,
+        tick,
+        revision,
+        protocol,
+        seed,
+    ]
+    debug_spatial_summary.text = tr(&"UI_DEBUG_SPATIAL_SUMMARY") % [
         authoritative_position.x,
         authoritative_position.y,
         authoritative_position.z,
-    ]
-    debug_epoch.text = str(int(_controlled_actor_spatial_projection.get("spatial_epoch", 0)))
-    debug_presentation_position.text = "(%.2f, %.2f, %.2f) m" % [
         presentation_position.x,
         presentation_position.y,
         presentation_position.z,
+        divergence,
+        spatial_epoch,
     ]
-    debug_divergence.text = "%.2f m" % presentation_position.distance_to(authoritative_position)
+    debug_scenario.text = _scenario_text()
+
+    debug_living_need_status.text = _living_need_hud_text(
+        str(_living_need_projection.get("status", "unknown"))
+    )
+    debug_household_resource_status.text = _household_resource_hud_text(
+        _household_by_id(_village_household_resource_projection, _tracked_household_id)
+    )
+
+
+func _living_need_hud_text(status: String) -> String:
+    return "%s: %s" % [tr(&"UI_DEBUG_LIVING_NEED"), _living_need_status_text(status)]
+
+
+func _household_resource_hud_text(household: Dictionary) -> String:
+    return "%s: %s" % [
+        tr(&"UI_DEBUG_HOUSEHOLD_RESOURCE"),
+        _household_resource_status_text(household),
+    ]
 
 
 func _living_need_status_text(status: String) -> String:
@@ -478,8 +691,18 @@ func _scenario_text() -> String:
             return tr(&"UI_SCENARIO_REST_INTERFERENCE")
         "shortage":
             return tr(&"UI_SCENARIO_SHORTAGE")
+        "gift":
+            return tr(&"UI_SCENARIO_GIFT")
+        "work":
+            return tr(&"UI_SCENARIO_WORK")
+        "transfer":
+            return tr(&"UI_SCENARIO_TRANSFER")
         _:
             return tr(&"UI_SCENARIO_INTERACTIVE")
+
+
+func _run_m2_resource_playtest(artifact_dir: String) -> void:
+    await m2_resource_playtests.run(artifact_dir)
 
 
 func _apply_smoke_bootstrap() -> bool:
@@ -681,7 +904,9 @@ func _run_rest_interference(artifact_dir: String) -> void:
 
     var blocked_position := _controlled_planar_position()
     _refresh_debug_hud()
-    var blocked_hud_text := debug_living_need_status.text
+    var blocked_hud_text := _living_need_status_text(
+        str(blocked_projection.get("status", "unknown"))
+    )
     await RenderingServer.frame_post_draw
     if not _write_named_screenshot(artifact_dir, "blocked.png"):
         get_tree().quit(5)
@@ -750,7 +975,22 @@ func _run_shortage(artifact_dir: String) -> void:
         get_tree().quit(13)
         return
 
+    if not await _run_one_scripted_movement(Vector2i.ZERO, LOCOMOTION_PACE_WALK):
+        get_tree().quit(8)
+        return
+    var initial_npc_presentation := world_presentation.presentation_for(_living_need_actor_id)
+    if initial_npc_presentation == null or not initial_npc_presentation.visible:
+        push_error("shortage scenario requires an initially materialized visible NPC")
+        get_tree().quit(13)
+        return
+    if not world_presentation.dematerialize_observed_non_controlled(_living_need_actor_id):
+        get_tree().quit(13)
+        return
+    await get_tree().process_frame
+
     var shortage_projection: Dictionary = {}
+    var npc_absent_during_consume := false
+    var npc_observed_during_consume := false
     for _tick in range(SHORTAGE_SCENARIO_LIMIT_TICKS):
         if not await _run_one_scripted_movement(Vector2i.ZERO, LOCOMOTION_PACE_WALK):
             get_tree().quit(8)
@@ -767,11 +1007,17 @@ func _run_shortage(artifact_dir: String) -> void:
             get_tree().quit(13)
             return
         if str(household.get("status", "unknown")) == "shortage":
+            npc_absent_during_consume = world_presentation.presentation_for(_living_need_actor_id) == null
+            npc_observed_during_consume = world_presentation.is_observed(_living_need_actor_id)
             shortage_projection = _village_household_resource_projection.duplicate(true)
             break
 
     if shortage_projection.is_empty():
         push_error("autonomous NPC Consume did not produce shortage before the deadline")
+        get_tree().quit(13)
+        return
+    if not npc_absent_during_consume or not npc_observed_during_consume:
+        push_error("autonomous Consume must occur while the living-need NPC presentation is absent")
         get_tree().quit(13)
         return
 
@@ -808,7 +1054,9 @@ func _run_shortage(artifact_dir: String) -> void:
         "movement_revision": int(_last_movement_batch.get("revision", -1)),
         "resource_tick": int(_village_household_resource_projection.get("tick", -1)),
         "resource_revision": int(_village_household_resource_projection.get("revision", -1)),
-        "shortage_hud_text": debug_household_resource_status.text,
+        "shortage_hud_text": _household_resource_status_text(final_household),
+        "npc_presentation_absent_during_consume": npc_absent_during_consume,
+        "npc_observed_during_consume": npc_observed_during_consume,
     }
 
     await RenderingServer.frame_post_draw
@@ -867,8 +1115,12 @@ func _write_debug_artifact(artifact_dir: String) -> bool:
             "supported_locales": Array(Localization.supported_locales()),
             "hud_title": tr(&"UI_DEBUG_TITLE"),
             "controls_hint": tr(&"UI_DEBUG_CONTROLS_HINT"),
-            "living_need_status_text": debug_living_need_status.text,
-            "household_resource_status_text": debug_household_resource_status.text,
+            "living_need_status_text": _living_need_status_text(
+                str(_living_need_projection.get("status", "unknown"))
+            ),
+            "household_resource_status_text": _household_resource_status_text(
+                _household_by_id(_village_household_resource_projection, _tracked_household_id)
+            ),
             "scenario_text": debug_scenario.text,
         },
     }

@@ -27,6 +27,7 @@ public:
         ProtocolInteger receiving_household_id
     );
     [[nodiscard]] ControlledActorWorkOutcome controlled_actor_complete_field_work();
+    [[nodiscard]] ControlledActorTransferOutcome controlled_actor_execute_household_transfer_pledge();
 
     [[nodiscard]] BootstrapActorProjection bootstrap_controlled_actor_projection() const;
     [[nodiscard]] ObservedWorldProjection observed_world_projection() const;
@@ -35,6 +36,7 @@ public:
     [[nodiscard]] VillageHouseholdResourceProjection village_household_resource_projection() const;
     [[nodiscard]] ControlledActorCarryProjection controlled_actor_carry_projection() const;
     [[nodiscard]] FieldWorkProjection field_work_projection() const;
+    [[nodiscard]] StandingTransferPledgeProjection standing_transfer_pledge_projection() const;
 
 private:
     sim::World world_;

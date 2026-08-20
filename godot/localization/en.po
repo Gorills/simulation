@@ -7,56 +7,38 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "UI_DEBUG_EYEBROW"
-msgstr "WORLD SIMULATION / READ-ONLY HUD"
-
 msgid "UI_DEBUG_TITLE"
-msgstr "Runtime diagnostics"
+msgstr "Technical diagnostics"
 
-msgid "UI_DEBUG_FPS"
-msgstr "FPS"
+msgid "UI_DEBUG_TOGGLE_SHOW"
+msgstr "F3 — show technical diagnostics"
 
-msgid "UI_DEBUG_PROCESS"
-msgstr "PROCESS"
+msgid "UI_DEBUG_TOGGLE_HIDE"
+msgstr "F3 — hide technical diagnostics"
 
-msgid "UI_DEBUG_PHYSICS"
-msgstr "PHYSICS"
+msgid "UI_DEBUG_RUNTIME_SUMMARY"
+msgstr "%d FPS · %.1f ms process · %.1f ms physics"
+
+msgid "UI_DEBUG_WORLD_SUMMARY"
+msgstr "Entity #%d · tick %d · revision %d · protocol %d · seed %d"
+
+msgid "UI_DEBUG_SPATIAL_SUMMARY"
+msgstr "Sim (%.1f, %.1f, %.1f) · view (%.1f, %.1f, %.1f) · Δ%.2f m · epoch %d"
 
 msgid "UI_DEBUG_INPUT"
 msgstr "INPUT"
 
-msgid "UI_DEBUG_AUTHORITY"
-msgstr "AUTHORITY"
-
-msgid "UI_DEBUG_ENTITY"
-msgstr "Controlled entity"
-
-msgid "UI_DEBUG_TICK"
-msgstr "Simulation tick"
-
-msgid "UI_DEBUG_REVISION"
-msgstr "World revision"
-
-msgid "UI_DEBUG_PROTOCOL"
-msgstr "Protocol"
-
-msgid "UI_DEBUG_SEED"
-msgstr "World seed"
-
-msgid "UI_DEBUG_SCENARIO"
-msgstr "Scenario"
-
 msgid "UI_DEBUG_LIVING_NEED"
-msgstr "NPC rest need"
+msgstr "NPC rest"
 
 msgid "UI_DEBUG_HOUSEHOLD_RESOURCE"
-msgstr "Neighbour household grain"
+msgstr "Neighbour grain"
 
 msgid "UI_DEBUG_GRAIN_CARRY"
-msgstr "Carried grain"
+msgstr "Carrying"
 
 msgid "UI_DEBUG_FIELD_WORK"
-msgstr "Field work"
+msgstr "Field"
 
 msgid "UI_NEED_TRAVELING"
 msgstr "Traveling to rest"
@@ -73,35 +55,68 @@ msgstr "Adequate"
 msgid "UI_RESOURCE_SHORTAGE"
 msgstr "Shortage"
 
-msgid "UI_RESOURCE_ACTION_HINT"
-msgstr "E draw · R deposit · G gift"
+msgid "UI_STORE_OWN_CUE"
+msgstr "Your household store"
 
-msgid "UI_WORK_ACTION_HINT"
-msgstr "F work"
+msgid "UI_STORE_NEIGHBOUR_CUE"
+msgstr "Neighbour household store"
+
+msgid "UI_RESOURCE_PROMPT_SEEK"
+msgstr "Yellow pad: your store. Green pad: neighbour (gift grain). Brown pad: field (work)."
+
+msgid "UI_RESOURCE_PROMPT_OWN_STORE"
+msgstr "Your store · E draw · R deposit · T send pledged grain"
+
+msgid "UI_RESOURCE_PROMPT_NEIGHBOUR_STORE"
+msgstr "Neighbour store · G gift grain"
+
+msgid "UI_RESOURCE_PROMPT_FIELD"
+msgstr "Field · F work"
+
+msgid "UI_DEBUG_STANDING_TRANSFER"
+msgstr "Transfer"
+
+msgid "UI_DEBUG_RESOURCE_REFUSAL"
+msgstr "Refused"
 
 msgid "UI_FIELD_WORK_CUE"
 msgstr "Field work"
 
+msgid "UI_RESOURCE_REFUSAL_OUTSIDE_STORE"
+msgstr "Outside the household store"
+
+msgid "UI_RESOURCE_REFUSAL_CARRY_FULL"
+msgstr "Carry is full"
+
+msgid "UI_RESOURCE_REFUSAL_STORE_EMPTY"
+msgstr "Store is empty"
+
+msgid "UI_RESOURCE_REFUSAL_CARRY_EMPTY"
+msgstr "Nothing carried"
+
+msgid "UI_RESOURCE_REFUSAL_OWN_HOUSEHOLD"
+msgstr "Cannot gift to own household"
+
+msgid "UI_RESOURCE_REFUSAL_OUTSIDE_FIELD"
+msgstr "Outside the field"
+
+msgid "UI_RESOURCE_REFUSAL_WORK_EXHAUSTED"
+msgstr "Field work is exhausted"
+
+msgid "UI_RESOURCE_REFUSAL_PLEDGE_ZERO"
+msgstr "No remaining pledged grain"
+
+msgid "UI_RESOURCE_REFUSAL_INSUFFICIENT_STOCK"
+msgstr "Household stock is insufficient"
+
+msgid "UI_RESOURCE_REFUSAL_STOCK_OVERFLOW"
+msgstr "Household stock would overflow"
+
+msgid "UI_RESOURCE_REFUSAL_UNAVAILABLE"
+msgstr "Action unavailable"
+
 msgid "UI_WORLD_REST_TARGET_HINT"
 msgstr "NPC rest place\nStand on the marker to block the place"
-
-msgid "UI_DEBUG_SPATIAL"
-msgstr "SPATIAL"
-
-msgid "UI_DEBUG_AUTHORITATIVE_POSITION"
-msgstr "Authoritative position"
-
-msgid "UI_DEBUG_EPOCH"
-msgstr "Spatial epoch"
-
-msgid "UI_DEBUG_PRESENTATION_POSITION"
-msgstr "Presentation position"
-
-msgid "UI_DEBUG_PRESENTATION_DELTA"
-msgstr "Presentation delta"
-
-msgid "UI_DEBUG_TRANSPORT_NOTE"
-msgstr "Bootstrap transport probe is retained in smoke evidence, not presented as authoritative spatial truth."
 
 msgid "UI_DEBUG_CONTROLS_HINT"
 msgstr "WASD / stick move  ·  Shift sprint  ·  mouse / right stick look  ·  Esc releases pointer"
@@ -129,3 +144,6 @@ msgstr "Gift shortage relief"
 
 msgid "UI_SCENARIO_WORK"
 msgstr "Work shortage relief"
+
+msgid "UI_SCENARIO_TRANSFER"
+msgstr "Household transfer"

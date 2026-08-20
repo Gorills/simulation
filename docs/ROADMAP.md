@@ -10,7 +10,9 @@ The playable/native spine, authoritative world/presentation boundary, historical
 
 **Milestone 1 — Living Need is accepted.** The vertical loop contains authoritative need state, Core-owned decision output, actor-generic movement, shared player interference, offscreen continuation, a purpose-built read-only client outcome and a bounded real-client `traveling -> blocked -> satisfied` scenario.
 
-Active development now moves to **Milestone 2 — Household Resource Loop**. Do not expand RestNeed horizontally unless a later capability exposes a concrete defect or missing causal requirement.
+**Milestone 2 — Household Resource Loop is accepted.** The village can develop a grain shortage without player intervention; the player can address it through gift, household transfer, and work while every stock change remains authoritative Simulation state. Bounded native, sanitizer, performance, localization, and RU+EN Godot evidence for shortage, gift, work, transfer, offscreen continuation, and unchanged M1 rest interference is recorded in [`VERIFICATION.md`](VERIFICATION.md).
+
+Active development now moves to **Milestone 3 — Social Consequence**. Do not expand RestNeed or the M2 household-resource loop horizontally unless a later capability exposes a concrete defect or missing causal requirement.
 
 ## Milestone rule
 
@@ -73,30 +75,23 @@ Acceptance evidence is defined in [`VERIFICATION.md`](VERIFICATION.md). Mechanic
 
 Milestone 1 is complete; active work must move to M2 instead of growing a generic need/planner framework.
 
-## Milestone 2 — Household Resource Loop — active
+## Milestone 2 — Household Resource Loop — accepted
 
 Minimum scope:
 
 - household stock;
 - production and consumption;
 - shortage;
-- player/NPC trade, gift or work through shared transaction/world rules;
-- shop/inventory presentation reads projections rather than owning stock or money.
+- player/NPC gift, household transfer, and work through shared transaction/world rules;
+- inventory/pledge presentation reads projections rather than owning stock or money.
 
-Acceptance:
+Priced exchange (`trade` / `buy` / `sell` / `shop`) is deferred until a later milestone that introduces a second good or coin. The M2 third path is a one-way standing household transfer, not a market.
 
-> The village can develop a resource problem without the player, and the player can address it through more than one real path while resource transfers remain authoritative Simulation state.
+Acceptance evidence is defined in [`VERIFICATION.md`](VERIFICATION.md). Mechanic semantics are in [`models/household-resource.md`](models/household-resource.md).
 
-The first M2 slice must remain vertical and observable. It should introduce the minimum real household resource state, one causal stock/consumption rule, a derived shortage read and visible Godot feedback without prebuilding a general inventory/economy framework.
+Milestone 2 is complete; active work must move to M3 instead of growing a general inventory/economy framework.
 
-Two admission gates apply immediately:
-
-1. **composition:** M2 is the first scenario expansion beyond the current two named actors, so ADR 0009 requires replacing the hardcoded application fixture with the minimum real composition/observation owner in the same bounded capability slice rather than adding more named IDs/feature branches;
-2. **time:** the first stock/consumption slice must not invent independent time progression merely to make depletion happen. An immediate authoritative resource transition may change `WorldRevision` without advancing `SimulationTick`. Before recurring/non-locomotion systems advance simulation time independently, re-admit movement-stream ordering under ADR 0009.
-
-Use a concrete historically plausible household staple/resource for the first slice and clearly separate acceptance-fixture quantities from historical rate claims. Precise regional yields, consumption rates or prices require targeted research before they become model constants.
-
-## Milestone 3 — Social Consequence
+## Milestone 3 — Social Consequence — active
 
 Minimum scope:
 

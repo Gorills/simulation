@@ -4,9 +4,9 @@ Status: DRAFT
 
 ## Gameplay purpose
 
-Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, become short through bounded NPC autonomy, expose that state through the real client, move the same conserved grain between household stock and a bounded actor carry slot through Draw, Deposit and Gift laws, and create a bounded positive grain yield through an actor-generic field Work law.
+Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, become short through bounded NPC autonomy, expose that state through the real client, move the same conserved grain between household stock and a bounded actor carry slot through Draw, Deposit and Gift laws, create a bounded positive grain yield through an actor-generic field Work law, and execute a source-household standing transfer pledge that moves remaining pledged grain into a durable destination household.
 
-M2.6 exposes the controlled actor's carry/member-household state and transfer laws through semantic protocol/GDExtension commands plus a minimal localized Godot affordance. M2.7 adds the native field/work assignment and shared World Work transition. M2.8 exposes that existing Work law through a purpose-built field projection, semantic controlled Work command, GDExtension translation and localized field cue/HUD without moving production authority into Godot.
+M2.6 exposes the controlled actor's carry/member-household state and transfer laws through semantic protocol/GDExtension commands plus a minimal localized Godot affordance. M2.7 adds the native field/work assignment and shared World Work transition. M2.8 exposes that existing Work law through a purpose-built field projection, semantic controlled Work command, GDExtension translation and localized field cue/HUD without moving production authority into Godot. M2.9 adds the Core standing household-transfer law. M2.10 exposes pledge projection and semantic pledge execution through protocol → GDExtension → Godot.
 
 This model is deliberately narrower than a general inventory, economy, market, farming, labor or needs framework.
 
@@ -31,7 +31,7 @@ For the current bounded Core/application/vertical subset:
 - Work takes only the acting actor identity, requires exact-spatial field occupancy, adds exactly the assignment yield to the destination household, decrements remaining work completions by one, advances `WorldRevision` exactly once and leaves `SimulationTick` unchanged;
 - Work does not require household membership and does not select its destination from current shortage; the destination is durable content truth;
 - missing spatial state, being outside the field, exhausted work capacity, invalid/dangling work content or checked-addition overflow is a Work refusal with no mutation;
-- snapshot/restore preserves carry/capacity, household resource quantities and field-work place/destination/yield/remaining count so later Consume/Draw/Deposit/Gift/Work outcomes continue deterministically;
+- snapshot/restore preserves carry/capacity, household resource quantities, standing-transfer remaining quantity/destination and field-work place/destination/yield/remaining count so later Consume/Draw/Deposit/Gift/Work/HouseholdTransfer outcomes continue deterministically;
 - the acceptance village is created by one bounded Core content builder rather than by named protocol actor fields;
 - protocol decision collection iterates the deterministic Core actor-id view, applies RestNeed movement to actors that have that state, and gives other exact-spatial non-controlled actors an idle locomotion intent;
 - bounded autonomous Consume is considered only for non-controlled actors whose current authoritative state makes the action feasible;
@@ -44,12 +44,14 @@ For the current bounded Core/application/vertical subset:
 - the controlled Work protocol command carries no payload and delegates to the same actor-generic `World::complete_field_work()` law; accepted results report produced grain, destination stock, remaining availability and tick/revision;
 - the GDExtension translates resource/Work projections/results/errors without recomputing resource law or owning resource state;
 - Godot resolves the tracked acceptance actor, household, shared rest/store position and field cue position from authoritative projections rather than fixture IDs or coordinates;
-- the Godot HUD renders protocol/Core-owned shortage, stock, carry and remaining Work availability through localized RU/EN text and exposes bounded keyboard Draw/Deposit/Gift/Work affordances;
+- Godot draws store and field occupancy pads from those projections and shows a localized occupancy prompt; it does not decide reachability from the presentation transform;
+- the Godot HUD renders protocol/Core-owned shortage, stock, carry, remaining Work availability and remaining pledged grain through localized RU/EN text and exposes bounded keyboard Draw/Deposit/Gift/Work/Transfer affordances;
 - the bounded `shortage` playtest advances only ordinary locomotion, submits no player economic command, observes the autonomous adequate-to-shortage transition and proves movement revision `R` followed by resource revision `R+1` on the same tick;
 - the bounded `gift` playtest waits for that autonomous shortage, draws from the controlled actor's own household, reaches the receiving store through ordinary locomotion, Gifts the entire carry, observes authoritative stock/carry conservation and shortage relief, and observes the M1 RestNeed as `blocked` while the player occupies the shared store/rest footprint;
 - the bounded `work` playtest waits for the same autonomous shortage, reaches the projected field through ordinary locomotion, completes exactly one Work action, observes destination stock increase by the projected fixture yield and remaining Work availability fall from one to zero, then proves a second Work refusal is non-mutating.
+- the bounded `transfer` playtest waits for the same autonomous shortage, executes the surplus household's standing pledge at its own store, moves the entire remaining pledged quantity into the durable destination household, clears the pledge, and proves a second execution refuses `pledge_zero` without mutation.
 
-The current verticals therefore expose one Core resource truth in the real client across autonomous shortage, Gift and Work intervention without introducing a client-side balance, generic inventory, scenario-only stock mutation or duplicate production law.
+The current verticals therefore expose one Core resource truth in the real client across autonomous shortage, Gift, Work and standing household transfer without introducing a client-side balance, generic inventory, scenario-only stock mutation or duplicate production law.
 
 ## Historical baseline and region
 
@@ -91,6 +93,17 @@ actor carry
       -> Gift: actor carry decreases == receiving stock increases
 ```
 
+Current standing household-transfer chain:
+
+```text
+source household standing pledge
+  + remaining pledged grain
+  + durable destination household
+  + source-household member occupying the source store
+      -> HouseholdTransfer: source stock decreases == destination stock increases
+      -> remaining pledged grain becomes zero
+```
+
 Current bounded Work chain:
 
 ```text
@@ -122,13 +135,13 @@ Core actor-id view
 Current player intervention path:
 
 ```text
-World resource/carry/field-work truth
+World resource/carry/field-work/pledge truth
   -> purpose-built protocol projections
-  -> semantic Draw / Deposit / Gift / Work command
+  -> semantic Draw / Deposit / Gift / Work / HouseholdTransfer command
   -> same actor-generic World law
   -> authoritative transition result
   -> GDExtension Dictionary translation
-  -> localized resource/carry/Work HUD + field cue reconciliation
+  -> localized resource/carry/Work/pledge HUD + field cue reconciliation
 ```
 
 M2.8 adds no automatic Work application loop. Work remains an explicit semantic command over the M2.7 native law; the bounded remaining-completion field is not a scheduler or time source.
@@ -147,13 +160,14 @@ Current household state contains:
 - non-negative grain stock;
 - non-negative shortage threshold;
 - positive content-owned consume amount;
-- remaining bounded consume budget.
+- remaining bounded consume budget;
+- standing transfer pledge: durable destination-household `EntityId` and non-negative remaining pledged grain.
 
 An actor belongs to at most one household. Household membership lists are authoritative; the current reverse membership lookup is derived bounded runtime work rather than persisted/indexed truth.
 
 ### Place
 
-The current resource place record contains a stable `EntityId`, local X/Z and non-negative per-axis tolerance. The same bounded record type represents household stores and the field work point. Resource/work occupancy uses exact arrival semantics: the actor's authoritative X/Z must fall within the stored tolerance on each axis. Unlike the M1 rest-body occupancy query, this check does not add actor body radius.
+The current resource place record contains a stable `EntityId`, local X/Z and non-negative per-axis tolerance. The same bounded record type represents household stores and the field work point. Resource/work occupancy uses exact arrival semantics: the actor's authoritative X/Z must fall within the stored tolerance on each axis. Unlike the M1 rest-body occupancy query, this check does not add actor body radius. The acceptance-village place/rest axis tolerance is a reachability fixture of 1000 mm so a human-controlled actor can stand on the rendered pad; it is not a historical building footprint.
 
 In the acceptance village the short household store intentionally uses the same X/Z/tolerance values as the M1 RestNeed target. That is one content fact shared by two mechanics, not a hidden protocol/Godot coordinate contract. The Godot client verifies this relationship from the two projections before caching the scenario target.
 
@@ -165,9 +179,9 @@ The field is a separate ordinary place. M2.8 exposes its identity/footprint only
 
 Actors carry one authoritative grain quantity and one authoritative grain carry-capacity quantity. Both are non-negative and carried grain cannot exceed capacity. This is a bounded one-staple carry slot, not a generic inventory, container, item-stack or equipment model.
 
-Consume, Draw, Deposit, Gift and Work are ordinary actor-generic World laws. Consume/Draw/Deposit derive the actor's household from authoritative membership. Gift accepts a receiving household identity and refuses the actor's own household so Deposit remains the own-household operation. Work does not require household membership; the field assignment owns the destination household.
+Consume, Draw, Deposit, Gift, Work and HouseholdTransfer are ordinary actor-generic World laws. Consume/Draw/Deposit derive the actor's household from authoritative membership. Gift accepts a receiving household identity and refuses the actor's own household so Deposit remains the own-household operation. Work does not require household membership; the field assignment owns the destination household. HouseholdTransfer authorizes only a member of the source household occupying that household's store; the pledge owns the destination household.
 
-The current application policy excludes the controlled actor from autonomous Consume. This is a decision-source policy only; it does not grant NPCs a different World mutation law. Draw/Deposit/Gift have no automatic NPC application policy; M2.6 adds an explicit controlled-actor protocol command source over the shared laws. M2.8 likewise adds only an explicit controlled Work command source; equivalent actors remain governed by the same M2.7 World law and there is no automatic labor policy yet.
+The current application policy excludes the controlled actor from autonomous Consume. This is a decision-source policy only; it does not grant NPCs a different World mutation law. Draw/Deposit/Gift/HouseholdTransfer have no automatic NPC application policy; M2.6 and M2.10 add explicit controlled-actor protocol command sources over the shared laws. M2.8 likewise adds only an explicit controlled Work command source; equivalent actors remain governed by the same World laws and there is no automatic labor or pledge-execution policy yet.
 
 ### Field work assignment
 
@@ -188,7 +202,7 @@ The current M2 acceptance village is code-defined Core content, not protocol-own
 - the existing M1 RestNeed actor in the household intended to become short;
 - one additional surplus-household NPC with exact spatial state, idle locomotion intent and the same bounded positive grain-carry capacity as the controlled actor;
 - one store place per household;
-- one household aggregate per store;
+- one household aggregate per store, with the surplus household holding a standing transfer pledge of four grain-units toward the short household;
 - one separate field place;
 - one bounded field-work assignment whose durable destination is the short household, with positive fixture yield and one remaining completion.
 
@@ -235,7 +249,15 @@ For current bounded Work:
 - refusal leaves destination stock, assignment state, tick and revision unchanged;
 - no representation-level promotion/demotion exists yet.
 
-Future standing-transfer mechanics must preserve the same stock/carry quantities rather than create parallel subsystem balances. Later production fidelity may replace the fixture abstraction only through an admitted causal model, not by silently adding a second balance.
+For current standing household transfer:
+
+- remaining pledged grain is non-negative content truth;
+- only a member of the source household occupying the source store may execute the pledge;
+- accepted execution moves the entire remaining pledged quantity from source stock into the durable destination household and sets remaining pledged grain to zero;
+- zero remaining pledge, insufficient source stock, missing membership/occupancy, invalid/self destination or checked destination overflow is an atomic refusal;
+- refusal leaves stocks, pledge remaining quantity, tick and revision unchanged.
+
+Later production fidelity may replace the fixture Work abstraction only through an admitted causal model, not by silently adding a second balance.
 
 ## Magic sensitivity surface
 
@@ -261,15 +283,17 @@ Gift takes the acting `EntityId` plus the receiving household `EntityId`. The ca
 
 Work takes only the acting `EntityId`. The caller does not supply yield, destination household, completion count or work duration. World reads those values from the authoritative field-work assignment and requires the actor's exact spatial state to occupy the referenced field place.
 
-At the protocol boundary, controlled Draw and Deposit carry no payload and controlled Gift carries only the receiving household id. M2.8 adds controlled Work with no payload. `protocol::Simulation` binds the controlled actor and delegates all four commands directly to the existing World laws; the GDExtension translates typed outcomes without owning mutation rules. `FieldWorkProjection` is read-only discovery of the bounded assignment/place needed by the client and carries no write authority.
+HouseholdTransfer takes only the acting `EntityId`. The caller does not supply amount or destination; World reads remaining pledged grain and destination from the actor's member-household standing pledge and requires exact occupancy of the source store.
+
+At the protocol boundary, controlled Draw and Deposit carry no payload and controlled Gift carries only the receiving household id. M2.8 adds controlled Work with no payload. M2.10 adds controlled HouseholdTransfer with no payload. `protocol::Simulation` binds the controlled actor and delegates those commands directly to the existing World laws; the GDExtension translates typed outcomes without owning mutation rules. `FieldWorkProjection` and `StandingTransferPledgeProjection` are read-only discovery of bounded Core content and carry no write authority.
 
 The application layer may propose autonomous Consume only after the ordinary locomotion transition and only when a read-only Core feasibility check says current authoritative state satisfies membership, exact store presence, remaining budget and stock. `World::consume_household_grain()` still revalidates those prerequisites before mutation. No automatic Work proposal is added by M2.8.
 
-The Godot shortage scenario still submits only zero controlled locomotion while ordinary NPC policy advances. Gift uses the real controlled Draw/Gift commands and ordinary locomotion; it never sets stock/carry, teleports, or supplies a transfer amount. Work likewise uses ordinary locomotion to the projected field and the real controlled Work command; it never sets stock, teleports, or supplies yield/destination/amount.
+The Godot shortage scenario still submits only zero controlled locomotion while ordinary NPC policy advances. Gift uses the real controlled Draw/Gift commands and ordinary locomotion; it never sets stock/carry, teleports, or supplies a transfer amount. Work likewise uses ordinary locomotion to the projected field and the real controlled Work command; it never sets stock, teleports, or supplies yield/destination/amount. Household transfer uses the real controlled pledge-execution command at the actor's own store; it never sets stock, rebinds the destination, or supplies an amount.
 
 ## Transitions / scheduling
 
-Consume, Draw, Deposit, Gift and Work are immediate authoritative transitions, not simulation-time schedules. Every accepted transition advances `WorldRevision` exactly once while leaving `SimulationTick` unchanged; every refusal leaves both unchanged.
+Consume, Draw, Deposit, Gift, Work and HouseholdTransfer are immediate authoritative transitions, not simulation-time schedules. Every accepted transition advances `WorldRevision` exactly once while leaving `SimulationTick` unchanged; every refusal leaves both unchanged.
 
 An accepted Consume:
 
@@ -318,6 +342,16 @@ An accepted Work:
 7. adds exactly the fixture yield to destination stock and decrements remaining work completions by one;
 8. commits one revision-only mutation.
 
+An accepted HouseholdTransfer:
+
+1. validates actor identity/existence and source-household membership;
+2. reads the source household's standing pledge remaining quantity and durable destination;
+3. requires a positive remaining pledge, a distinct existing destination household, and exact actor presence inside the source store;
+4. requires source stock to cover the entire remaining pledged quantity;
+5. checks that destination `stock + pledged quantity` fits the authoritative integer domain before mutation;
+6. subtracts that quantity from source stock, adds it to destination stock, and sets remaining pledged grain to zero;
+7. commits one revision-only mutation.
+
 For bounded autonomous application, one call to `protocol::Simulation::advance_locomotion_tick()` retains the existing M2.3 ordering:
 
 1. collect current controlled/NPC locomotion intents from the Core actor-id view;
@@ -328,11 +362,11 @@ For bounded autonomous application, one call to `protocol::Simulation::advance_l
 6. each accepted Consume is an ordinary revision-only World transition and therefore may make a later resource read report the same tick with a greater revision;
 7. an ordinary Consume refusal cannot retroactively fail or rewrite the successful movement batch.
 
-Draw, Deposit, Gift and controlled Work are explicit immediate commands rather than automatic schedules. Any accepted command may create an intervening revision between locomotion ticks; the next locomotion batch advances from that latest world revision rather than rejecting a valid command history.
+Draw, Deposit, Gift, controlled Work and controlled HouseholdTransfer are explicit immediate commands rather than automatic schedules. Any accepted command may create an intervening revision between locomotion ticks; the next locomotion batch advances from that latest world revision rather than rejecting a valid command history.
 
 Work is an explicit bounded fixture exception to the normal expectation that production processes consume simulation time. M2.8 does not add a labor schedule, duration timer, crop calendar or refill; the remaining-work count is content capacity for this acceptance proof, not time progression.
 
-The current acceptance content permits at most one autonomous Consume across the bounded scenario because only the short-household NPC has a positive remaining budget of one. It also permits exactly one accepted field Work transition because the assignment starts with one remaining completion. These bounds prove ordering/production rules without turning locomotion ticks into meals or field-work cycles. Recurring consumption or production over world time requires later time-system admission.
+The current acceptance content permits at most one autonomous Consume across the bounded scenario because only the short-household NPC has a positive remaining budget of one. It also permits exactly one accepted field Work transition because the assignment starts with one remaining completion, and exactly one accepted standing household transfer because the surplus pledge starts at four grain-units. These bounds prove ordering/production/transfer rules without turning locomotion ticks into meals, field-work cycles or a market. Recurring consumption or production over world time requires later time-system admission.
 
 ## Outputs / consequences
 
@@ -342,32 +376,34 @@ Current direct outputs are:
 - updated actor carried grain after accepted Draw/Deposit/Gift;
 - updated remaining consume budget after Consume;
 - updated remaining field-work completions after Work;
+- updated standing-pledge remaining quantity after HouseholdTransfer;
 - derived shortage state from the resulting household stock;
 - typed Core transition results carrying actor/household/place identity, moved or produced quantity, resulting quantities and current tick/revision;
 - unchanged `SimulationTick` and exactly one later `WorldRevision` for each accepted immediate resource/Work transition;
 - a village-scoped household-resource protocol read with authoritative tick/revision/version context;
 - a controlled-actor carry/member-household projection with authoritative carry/capacity and optional own-household stock;
 - a purpose-built field-work projection with authoritative field footprint, destination, fixture yield and remaining completion count;
-- semantic controlled Draw/Deposit/Gift/Work command results with no client-authored resource quantity or Work yield/destination;
+- a purpose-built standing-transfer projection with remaining pledged grain and durable destination household;
+- semantic controlled Draw/Deposit/Gift/Work/HouseholdTransfer command results with no client-authored resource quantity, Work yield/destination, or pledged amount;
 - actor-scoped observed-world output computed from the deterministic actor-id view;
-- GDExtension translation of household/carry/resource/Work projections, results and errors;
-- localized Godot shortage/carry/Work feedback, projected field cue and bounded RU/EN shortage, Gift and Work scenario evidence.
+- GDExtension translation of household/carry/resource/Work/pledge projections, results and errors;
+- localized Godot shortage/carry/Work/pledge feedback, projected field cue, player-visible refusal reasons, and bounded RU/EN shortage, Gift, Work and household-transfer scenario evidence.
 
 The movement batch and a resource read taken immediately afterward may deliberately carry different revisions on the same tick. Presentation retains the movement revision for controlled spatial state while a later observed-world refresh may reconcile its latest world revision to a post-Consume or explicit command revision.
 
 ## Player-facing exposure
 
-The purpose-built village household-resource, controlled carry and field-work projections are translated through the GDExtension and read by the Godot client. The client resolves household/store/field identity and positions from authoritative discovery, renders supplied status/quantities, and does not calculate or mutate resource state itself.
+The purpose-built village household-resource, controlled carry, field-work and standing-transfer projections are translated through the GDExtension and read by the Godot client. The client resolves household/store/field identity and positions from authoritative discovery, draws occupancy pads sized to those projections, renders a localized prompt for the occupied pad, and does not calculate or mutate resource state itself. Occupancy for the prompt uses the controlled actor's authoritative spatial projection, not the Godot presentation transform.
 
-The bounded `shortage` scenario proves the autonomous scarcity vertical: the tracked household starts adequate, the NPC reaches its Core-owned store through ordinary locomotion, application-level autonomous Consume makes the household short, and RU/EN Godot feedback renders that authoritative result without a player economic command.
+The bounded `shortage` scenario proves the autonomous scarcity vertical: the tracked household starts adequate, the NPC reaches its Core-owned store through ordinary locomotion, application-level autonomous Consume makes the household short while its Godot presentation may be absent, and RU/EN Godot feedback renders that authoritative result without a player economic command.
 
 The bounded `gift` scenario proves the first player intervention vertical over M2.5 laws: the controlled actor draws at its own store, waits for the neighbour to become short, moves through the ordinary controlled locomotion boundary to the discovered receiving store, Gifts its whole carry, observes target stock increase and carry clear on one revision-only transition, and renders the resulting adequate household/carry state in RU and EN. Because that store is also the M1 RestNeed target, the same run observes `blocked` while the player occupies the footprint; Gift does not invent an exclusivity exception.
 
-The bounded `work` scenario proves the second intervention path over the M2.7 law: the client first observes the neighbour become short, follows the projected field position through ordinary locomotion, completes one amount-less Work command, observes destination stock increase by the projected yield and remaining availability fall from one to zero on one revision-only transition, then proves a second Work is refused as exhausted without mutation. RU and EN render the field cue, Work availability/action feedback and resulting adequate household state.
+The bounded `work` scenario proves the second intervention path over the M2.7 law: the client first observes the neighbour become short, follows the projected field position through ordinary locomotion, completes one amount-less Work command, observes destination stock increase by the projected yield and remaining availability fall from one to zero on one revision-only transition, then proves a second Work is refused as exhausted without mutation. RU and EN render the field cue, Work availability/action feedback, localized refusal text and resulting adequate household state.
 
-The interactive client exposes only the smallest bounded affordance: E Draw, R Deposit, G Gift to the discovered tracked neighbour household, and F Work while at the projected field. This is an acceptance interaction surface, not a general inventory, job browser, target-selection UI or source of authoritative quantities.
+The bounded `transfer` scenario proves the third intervention path over the M2.9 law: the client observes the neighbour become short, executes the surplus household's standing pledge at the occupied source store, moves the entire remaining pledged quantity into the durable destination household, clears the pledge on one revision-only transition, then proves a second execution refuses `pledge_zero` without mutation. RU and EN render pledge/inventory feedback, localized refusal text and resulting adequate destination household state.
 
-This is not yet whole-milestone closure: standing household transfer remains a later capability.
+The interactive client exposes only the smallest bounded affordance: E Draw, R Deposit, G Gift to the discovered tracked neighbour household, F Work while at the projected field, and T HouseholdTransfer at the source store. Expected refusals render a localized player-visible reason. This is an acceptance interaction surface, not a general inventory, job browser, target-selection UI or source of authoritative quantities.
 
 ## Uncertainty
 
@@ -388,7 +424,8 @@ Current simplifications include:
 - no prices, currency, credit or market clearing;
 - no household internal allocation rule beyond the current Consume/Draw/Deposit operations;
 - one bounded code-defined acceptance village rather than a general content authoring system;
-- one tracked-neighbour Gift affordance and one projected-field Work affordance rather than general selection/task UI.
+- one tracked-neighbour Gift affordance, one projected-field Work affordance and one source-store standing-transfer affordance rather than general selection/task UI;
+- a one-way standing household transfer (neighbourly relief) rather than priced exchange.
 
 ## Deliberately not simulated
 
@@ -397,7 +434,7 @@ Not yet represented:
 - general inventory, item stacks, containers or equipment;
 - automatic NPC Gift decision-source policy or scheduling;
 - automatic actor Work policy, work duration/refill, crop calendars, seasonal yield, tools, skills, wages, tenure or acreage;
-- standing household transfer pledges;
+- automatic standing-transfer execution, priced exchange, coin, or a second commodity;
 - rents, tithe or institutional allocation;
 - transport logistics beyond exact actor movement plus the bounded carried-grain quantity;
 - independent economy time progression;
