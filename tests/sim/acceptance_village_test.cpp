@@ -18,7 +18,7 @@ namespace {
     return false;
 }
 
-TEST(AcceptanceVillage, CoreContentOwnsActorsHouseholdsStoresAndControlBinding) {
+TEST(AcceptanceVillage, CoreContentOwnsActorsHouseholdsStoresFieldAndControlBinding) {
     worldsim::sim::World world{worldsim::sim::WorldSeed{42}};
     const auto bindings = worldsim::sim::populate_household_resource_acceptance_village(world);
     ASSERT_TRUE(bindings.has_value());
@@ -27,7 +27,7 @@ TEST(AcceptanceVillage, CoreContentOwnsActorsHouseholdsStoresAndControlBinding) 
     ASSERT_EQ(world.household_ids().size(), 2U);
     EXPECT_TRUE(world.contains_actor(bindings->controlled_actor));
     EXPECT_EQ(world.tick(), (worldsim::sim::SimulationTick{0}));
-    EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{7}));
+    EXPECT_EQ(world.revision(), (worldsim::sim::WorldRevision{9}));
 
     std::optional<worldsim::sim::EntityId> rest_actor;
     for (const auto actor : world.actor_ids()) {
@@ -95,6 +95,18 @@ TEST(AcceptanceVillage, CoreContentOwnsActorsHouseholdsStoresAndControlBinding) 
     EXPECT_EQ(store->x, need->rest_x);
     EXPECT_EQ(store->z, need->rest_z);
     EXPECT_EQ(store->axis_occupancy_tolerance, need->axis_arrival_tolerance);
+
+    const auto work = world.field_work_assignment();
+    ASSERT_TRUE(work.has_value());
+    EXPECT_TRUE(world.contains_place(work->work_place));
+    EXPECT_EQ(work->destination_household, short_household->id);
+    EXPECT_EQ(work->yield_grain_units, 2);
+    EXPECT_EQ(work->remaining_work_completions, 1U);
+    const auto field = world.place_state(work->work_place);
+    ASSERT_TRUE(field.has_value());
+    EXPECT_EQ(field->x, (worldsim::sim::Millimeters{3'000}));
+    EXPECT_EQ(field->z, (worldsim::sim::Millimeters{3'000}));
+    EXPECT_EQ(field->axis_occupancy_tolerance, (worldsim::sim::Millimeters{150}));
 }
 
 } // namespace
