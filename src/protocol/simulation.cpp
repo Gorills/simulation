@@ -8,6 +8,7 @@
 #include <expected>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace worldsim::protocol {
