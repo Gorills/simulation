@@ -19,9 +19,9 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
-SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference", "shortage", "gift")
+SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference", "shortage", "gift", "work")
 SMOKE_AUDIO_DRIVER = "Dummy"
-PROTOCOL_VERSION = 8
+PROTOCOL_VERSION = 9
 OBSERVED_ENTITY_IDS = [1, 2, 3]
 
 
@@ -907,6 +907,215 @@ def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object
     return evidence
 
 
+def validate_work_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+    evidence = load_playtest_artifact(path)
+    if evidence.get("scenario") != "work":
+        raise SystemExit(f"unexpected Work scenario marker: {evidence.get('scenario')}")
+    for key in ("client_supplied_amount", "client_supplied_yield", "client_supplied_destination"):
+        if evidence.get(key) is not False:
+            raise SystemExit(f"Work scenario must prove {key}=false")
+
+    target_household_id = evidence.get("target_household_id")
+    if not isinstance(target_household_id, int) or target_household_id <= 0:
+        raise SystemExit("Work scenario has invalid destination household identity")
+
+    initial_field = evidence.get("initial_field_work")
+    initial_header = evidence.get("initial_resource_header")
+    shortage = evidence.get("shortage_before_approach")
+    shortage_header = evidence.get("shortage_resource_header")
+    field_before = evidence.get("field_before_work")
+    target_before = evidence.get("target_before_work")
+    before_header = evidence.get("resource_before_work")
+    movement = evidence.get("movement_before_work")
+    work = evidence.get("work_result")
+    field_after = evidence.get("field_after_work")
+    target_after = evidence.get("target_after_work")
+    after_header = evidence.get("resource_after_work")
+    exhausted = evidence.get("exhausted_refusal")
+    field_after_refusal = evidence.get("field_after_exhausted_refusal")
+    resource_after_refusal = evidence.get("resource_after_exhausted_refusal")
+    localization = evidence.get("localization")
+    sections = (
+        initial_field,
+        initial_header,
+        shortage,
+        shortage_header,
+        field_before,
+        target_before,
+        before_header,
+        movement,
+        work,
+        field_after,
+        target_after,
+        after_header,
+        exhausted,
+        field_after_refusal,
+        resource_after_refusal,
+        localization,
+    )
+    if not all(isinstance(section, dict) for section in sections):
+        raise SystemExit("Work artifact is missing authoritative field/resource/localization evidence")
+
+    assert isinstance(initial_field, dict)
+    assert isinstance(initial_header, dict)
+    assert isinstance(shortage, dict)
+    assert isinstance(shortage_header, dict)
+    assert isinstance(field_before, dict)
+    assert isinstance(target_before, dict)
+    assert isinstance(before_header, dict)
+    assert isinstance(movement, dict)
+    assert isinstance(work, dict)
+    assert isinstance(field_after, dict)
+    assert isinstance(target_after, dict)
+    assert isinstance(after_header, dict)
+    assert isinstance(exhausted, dict)
+    assert isinstance(field_after_refusal, dict)
+    assert isinstance(resource_after_refusal, dict)
+    assert isinstance(localization, dict)
+
+    for label, section in (
+        ("initial field", initial_field),
+        ("initial resource", initial_header),
+        ("shortage resource", shortage_header),
+        ("field before Work", field_before),
+        ("resource before Work", before_header),
+        ("movement before Work", movement),
+        ("Work result", work),
+        ("field after Work", field_after),
+        ("resource after Work", after_header),
+        ("field after exhausted refusal", field_after_refusal),
+        ("resource after exhausted refusal", resource_after_refusal),
+    ):
+        if section.get("protocol_version") != PROTOCOL_VERSION:
+            raise SystemExit(f"{label} protocol version mismatch: {section.get('protocol_version')}")
+
+    if (
+        initial_field.get("work_place_id") != 12
+        or initial_field.get("destination_household_id") != target_household_id
+        or initial_field.get("yield_grain_units") != 2
+        or initial_field.get("remaining_work_completions") != 1
+    ):
+        raise SystemExit(f"unexpected initial field projection: {initial_field}")
+    require_close_vector(initial_field.get("work_position_m"), [3.0, 0.0, 3.0], "field position")
+    tolerance = initial_field.get("work_axis_tolerance_m")
+    if not isinstance(tolerance, (int, float)) or not math.isclose(float(tolerance), 0.15, abs_tol=1e-5):
+        raise SystemExit(f"unexpected field tolerance: {tolerance}")
+    if initial_field.get("tick") != initial_header.get("tick") or initial_field.get("revision") != initial_header.get("revision"):
+        raise SystemExit("initial field/resource projections are not one unchanged revision")
+
+    shortage_stock = shortage.get("grain_stock_units")
+    threshold = shortage.get("shortage_threshold_units")
+    if (
+        shortage.get("household_id") != target_household_id
+        or shortage.get("status") != "shortage"
+        or not isinstance(shortage_stock, int)
+        or not isinstance(threshold, int)
+        or shortage_stock >= threshold
+    ):
+        raise SystemExit("Work destination did not become authoritatively short before approach")
+
+    if (
+        field_before.get("work_place_id") != initial_field.get("work_place_id")
+        or field_before.get("destination_household_id") != target_household_id
+        or field_before.get("yield_grain_units") != initial_field.get("yield_grain_units")
+        or field_before.get("remaining_work_completions") != 1
+    ):
+        raise SystemExit("field assignment changed before the allowed Work completion")
+    before_stock = target_before.get("grain_stock_units")
+    after_stock = target_after.get("grain_stock_units")
+    if (
+        target_before.get("household_id") != target_household_id
+        or target_before.get("status") != "shortage"
+        or not isinstance(before_stock, int)
+        or not isinstance(after_stock, int)
+    ):
+        raise SystemExit("Work target before/after stock evidence is invalid")
+    if target_before.get("shortage_threshold_units") != threshold:
+        raise SystemExit("Work changed the shortage threshold before production")
+
+    before_tick = field_before.get("tick")
+    before_revision = field_before.get("revision")
+    work_tick = work.get("tick")
+    work_revision = work.get("revision")
+    if not all(isinstance(value, int) for value in (before_tick, before_revision, work_tick, work_revision)):
+        raise SystemExit("Work temporal headers are invalid")
+    assert isinstance(before_tick, int)
+    assert isinstance(before_revision, int)
+    assert isinstance(work_tick, int)
+    assert isinstance(work_revision, int)
+    if movement.get("tick") != before_tick or movement.get("revision") != before_revision:
+        raise SystemExit("Work field precondition does not align with the movement batch")
+    if before_header.get("tick") != before_tick or before_header.get("revision") != before_revision:
+        raise SystemExit("Work field/resource reads are not one pre-command revision")
+    if work_tick != before_tick or work_revision != before_revision + 1:
+        raise SystemExit("Work did not commit exactly one revision without advancing SimulationTick")
+
+    produced = work.get("produced_grain_units")
+    if not isinstance(produced, int) or produced <= 0 or produced != field_before.get("yield_grain_units"):
+        raise SystemExit("Work did not use the authoritative fixture yield")
+    if (
+        work.get("entity_id") != 1
+        or work.get("work_place_id") != field_before.get("work_place_id")
+        or work.get("destination_household_id") != target_household_id
+        or work.get("remaining_work_completions") != 0
+        or work.get("destination_household_grain_stock_units") != after_stock
+    ):
+        raise SystemExit(f"Work result does not match authoritative post-production state: {work}")
+    if after_stock != before_stock + produced:
+        raise SystemExit("Work did not add exactly the authoritative yield to destination stock")
+    if target_after.get("household_id") != target_household_id or target_after.get("status") != "adequate":
+        raise SystemExit("Work did not relieve the bounded shortage destination")
+    if target_after.get("shortage_threshold_units") != threshold:
+        raise SystemExit("Work changed the shortage threshold")
+
+    if (
+        field_after.get("work_place_id") != field_before.get("work_place_id")
+        or field_after.get("destination_household_id") != target_household_id
+        or field_after.get("yield_grain_units") != produced
+        or field_after.get("remaining_work_completions") != 0
+        or field_after.get("tick") != work_tick
+        or field_after.get("revision") != work_revision
+    ):
+        raise SystemExit("post-Work field projection does not match the Work result")
+    if after_header.get("tick") != work_tick or after_header.get("revision") != work_revision:
+        raise SystemExit("post-Work resource projection does not match the Work result")
+
+    if exhausted.get("ok") is not False or exhausted.get("error") != "work_exhausted":
+        raise SystemExit(f"second Work did not refuse exhausted availability: {exhausted}")
+    if field_after_refusal != field_after:
+        raise SystemExit("exhausted Work refusal changed field assignment state")
+    if resource_after_refusal != after_header:
+        raise SystemExit("exhausted Work refusal changed resource temporal state")
+
+    localized = {
+        "ru": {
+            "scenario": "Помощь работой",
+            "work": "Работа в поле: 0 · F работать · Помощь работой",
+            "cue": "Поле для работы",
+            "adequate": "Запас достаточен",
+        },
+        "en": {
+            "scenario": "Work shortage relief",
+            "work": "Field work: 0 · F work · Work shortage relief",
+            "cue": "Field work",
+            "adequate": "Adequate",
+        },
+    }
+    if localization.get("locale") != expected_locale:
+        raise SystemExit(f"unexpected Work locale: {localization.get('locale')}")
+    if localization.get("scenario_text") != localized[expected_locale]["scenario"]:
+        raise SystemExit("localized Work scenario label is incorrect")
+    if localization.get("work_hud_text") != localized[expected_locale]["work"]:
+        raise SystemExit("localized Work HUD does not reflect exhausted availability")
+    if localization.get("field_cue_text") != localized[expected_locale]["cue"]:
+        raise SystemExit("localized field cue is incorrect")
+    expected_household_status = f"{localized[expected_locale]['adequate']} · {after_stock} / {threshold}"
+    if localization.get("household_resource_status_text") != expected_household_status:
+        raise SystemExit("localized household HUD does not reflect authoritative post-Work stock")
+
+    return evidence
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded Godot playtest owned by this repository")
     parser.add_argument("--scenario", default="smoke", choices=SUPPORTED_SCENARIOS)
@@ -985,6 +1194,8 @@ def main() -> int:
         evidence = validate_shortage_artifact(artifact_dir, args.locale)
     elif args.scenario == "gift":
         evidence = validate_gift_artifact(artifact_dir, args.locale)
+    elif args.scenario == "work":
+        evidence = validate_work_artifact(artifact_dir, args.locale)
     else:
         evidence = validate_smoke_artifact(artifact_dir, args.locale)
     metadata.update({"status": "passed", "evidence": evidence})
