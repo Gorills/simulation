@@ -292,6 +292,7 @@ func _advance_authoritative_locomotion(intent: Vector2i, pace: int) -> bool:
     _last_movement_batch = batch
     _controlled_actor_spatial_projection = controlled_projection
     _living_need_projection = sim.living_need_projection()
+    player.set_planar_move_intent(intent)
     return true
 
 
