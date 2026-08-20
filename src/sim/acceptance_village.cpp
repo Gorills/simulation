@@ -8,13 +8,19 @@ inline constexpr EntityId kShortHouseholdActor{2};
 inline constexpr EntityId kSurplusHouseholdNpc{3};
 inline constexpr EntityId kSurplusStore{10};
 inline constexpr EntityId kShortStore{11};
+inline constexpr EntityId kFieldPlace{12};
 inline constexpr EntityId kSurplusHousehold{20};
 inline constexpr EntityId kShortHousehold{21};
 
 inline constexpr Millimeters kShortStoreX{-3'000};
 inline constexpr Millimeters kShortStoreZ{-3'000};
+inline constexpr Millimeters kFieldX{3'000};
+inline constexpr Millimeters kFieldZ{3'000};
 inline constexpr Millimeters kStoreTolerance{150};
+inline constexpr Millimeters kFieldTolerance{150};
 inline constexpr std::int64_t kAcceptanceCarryCapacity{2};
+inline constexpr std::int64_t kAcceptanceFieldYield{2};
+inline constexpr std::uint32_t kAcceptanceWorkCompletions{1};
 
 [[nodiscard]] std::expected<void, WorldError> add_acceptance_actors(World &world) {
     auto result = world.spawn_actor(
@@ -120,6 +126,25 @@ inline constexpr std::int64_t kAcceptanceCarryCapacity{2};
     });
 }
 
+[[nodiscard]] std::expected<void, WorldError> add_acceptance_field_work(World &world) {
+    auto result = world.add_place(PlaceState{
+        .id = kFieldPlace,
+        .x = kFieldX,
+        .z = kFieldZ,
+        .axis_occupancy_tolerance = kFieldTolerance,
+    });
+    if (!result.has_value()) {
+        return result;
+    }
+
+    return world.add_field_work_assignment(FieldWorkAssignmentState{
+        .work_place = kFieldPlace,
+        .destination_household = kShortHousehold,
+        .yield_grain_units = kAcceptanceFieldYield,
+        .remaining_work_completions = kAcceptanceWorkCompletions,
+    });
+}
+
 } // namespace
 
 std::expected<HouseholdResourceAcceptanceVillageBindings, WorldError>
@@ -133,6 +158,10 @@ populate_household_resource_acceptance_village(World &world) {
         return std::unexpected(result.error());
     }
     result = add_acceptance_households(world);
+    if (!result.has_value()) {
+        return std::unexpected(result.error());
+    }
+    result = add_acceptance_field_work(world);
     if (!result.has_value()) {
         return std::unexpected(result.error());
     }
