@@ -57,6 +57,18 @@ constexpr double kMillimetersPerMeter = 1000.0;
     return godot::String("unknown");
 }
 
+[[nodiscard]] godot::String household_resource_status_name(
+    const protocol::HouseholdResourceStatus status
+) {
+    switch (status) {
+    case protocol::HouseholdResourceStatus::adequate:
+        return godot::String("adequate");
+    case protocol::HouseholdResourceStatus::shortage:
+        return godot::String("shortage");
+    }
+    return godot::String("unknown");
+}
+
 [[nodiscard]] std::optional<protocol::ControlledActorLocomotionPace> movement_pace(
     const std::int32_t value
 ) noexcept {
@@ -120,6 +132,10 @@ void SimFacade::_bind_methods() {
         &SimFacade::living_need_projection
     );
     godot::ClassDB::bind_method(
+        godot::D_METHOD("village_household_resource_projection"),
+        &SimFacade::village_household_resource_projection
+    );
+    godot::ClassDB::bind_method(
         godot::D_METHOD("controlled_actor_submit_move_intent", "x", "z", "pace"),
         &SimFacade::controlled_actor_submit_move_intent
     );
@@ -177,6 +193,14 @@ godot::Dictionary SimFacade::controlled_actor_spatial_projection() const {
 godot::Dictionary SimFacade::living_need_projection() const {
     try {
         return to_dictionary(simulation_.living_need_projection());
+    } catch (const std::overflow_error &) {
+        return protocol_integer_error_dictionary();
+    }
+}
+
+godot::Dictionary SimFacade::village_household_resource_projection() const {
+    try {
+        return to_dictionary(simulation_.village_household_resource_projection());
     } catch (const std::overflow_error &) {
         return protocol_integer_error_dictionary();
     }
@@ -287,6 +311,38 @@ godot::Dictionary SimFacade::to_dictionary(const protocol::LivingNeedProjection 
     result["tick"] = projection.tick;
     result["revision"] = projection.revision;
     result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
+    return result;
+}
+
+godot::Dictionary SimFacade::to_dictionary(
+    const protocol::VillageHouseholdResourceProjection &projection
+) {
+    godot::Array households;
+    for (const auto &household : projection.households) {
+        godot::Array member_actor_ids;
+        for (const auto member : household.member_actor_ids) {
+            member_actor_ids.push_back(member);
+        }
+
+        godot::Dictionary item;
+        item["household_id"] = household.household_id;
+        item["member_actor_ids"] = member_actor_ids;
+        item["store_place_id"] = household.store_place_id;
+        item["store_position_m"] = meters_vector(household.store_x_mm, 0, household.store_z_mm);
+        item["store_axis_tolerance_m"] = meters_from_millimeters(
+            household.store_axis_tolerance_mm
+        );
+        item["grain_stock_units"] = household.grain_stock_units;
+        item["shortage_threshold_units"] = household.shortage_threshold_units;
+        item["status"] = household_resource_status_name(household.status);
+        households.push_back(item);
+    }
+
+    godot::Dictionary result;
+    result["tick"] = projection.tick;
+    result["revision"] = projection.revision;
+    result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
+    result["households"] = households;
     return result;
 }
 
