@@ -53,11 +53,6 @@ struct PendingGroundedMove final {
     return GroundedLocomotionTickError::arithmetic_overflow;
 }
 
-// This is the single actor-state -> solver-limits seam. Today it resolves only
-// the actor's stored base locomotion capability plus semantic pace. When a real
-// mechanic later introduces wounds, carried load, progression or a concrete
-// magical effect, its authoritative state belongs here rather than in input,
-// Godot, an NPC-only multiplier, or a duplicate movement solver.
 [[nodiscard]] std::expected<GroundedStepConfig, GroundedLocomotionTickError>
 resolve_grounded_step_config(
     const GroundedStepConfig &world_config,
@@ -328,8 +323,6 @@ World::advance_grounded_locomotion_tick(
         });
     }
 
-    // Build and order the complete public result before mutating World state.
-    // Allocation failure therefore cannot leave a successful subset committed.
     std::vector<GroundedLocomotionSample> samples;
     samples.reserve(pending.size());
     for (const auto &update : pending) {
@@ -378,6 +371,7 @@ WorldSnapshot World::snapshot() const {
         .actors = actors_,
         .places = places_,
         .households = households_,
+        .field_work_assignment = field_work_assignment_,
     };
 }
 
@@ -386,8 +380,6 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         return std::unexpected(WorldSnapshotError::unsupported_schema_version);
     }
 
-    // Build into a temporary World so malformed snapshots or allocation failure
-    // never partially mutate the current authoritative state.
     World restored{snapshot_state.seed};
     restored.actors_.reserve(snapshot_state.actors.size());
     restored.places_.reserve(snapshot_state.places.size());
@@ -482,6 +474,20 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         restored.household_ids_.push_back(household.id);
     }
 
+    if (snapshot_state.field_work_assignment.has_value()) {
+        const auto &assignment = *snapshot_state.field_work_assignment;
+        if (!assignment.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_field_work_assignment_state);
+        }
+        if (!restored.contains_place(assignment.work_place)) {
+            return std::unexpected(WorldSnapshotError::unknown_work_place);
+        }
+        if (!restored.contains_household(assignment.destination_household)) {
+            return std::unexpected(WorldSnapshotError::unknown_work_destination_household);
+        }
+        restored.field_work_assignment_ = assignment;
+    }
+
     restored.tick_ = snapshot_state.tick;
     restored.revision_ = snapshot_state.revision;
     *this = std::move(restored);
@@ -574,9 +580,6 @@ bool World::is_planar_position_occupied_by_other_actor(
         return false;
     }
 
-    // Occupancy is body-overlap of the rest box, not a point-in-box test. The
-    // first playable capsule is 380 mm; the rest arrival box is smaller, so a
-    // standing actor covering the place would otherwise fail to occupy it.
     const auto occupancy_tolerance =
         static_cast<std::uint64_t>(axis_tolerance.value)
         + static_cast<std::uint64_t>(kFirstPlayableBody.radius.value);
