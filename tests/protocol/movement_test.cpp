@@ -33,7 +33,7 @@ TEST(ControlledMovementProtocol, LocomotionTickReturnsControlledRestNeedAndIdleA
     ASSERT_TRUE(result.has_value());
     ASSERT_EQ(result->samples.size(), 3U);
     EXPECT_EQ(result->tick, 1);
-    EXPECT_EQ(result->revision, 8);
+    EXPECT_EQ(result->revision, 10);
     EXPECT_EQ(result->protocol_version, worldsim::protocol::kProtocolVersion);
 
     const auto &controlled_sample = result->samples[0];
@@ -154,7 +154,7 @@ TEST(ControlledMovementProtocol, ZeroIntentBrakesGroundedMotionBeforeStopping) {
     EXPECT_EQ(stopped.samples[0].x_mm, 1'312);
     EXPECT_EQ(stopped.samples[0].velocity_x_mm_per_second, 0);
     EXPECT_EQ(stopped.tick, 53);
-    EXPECT_EQ(stopped.revision, 60);
+    EXPECT_EQ(stopped.revision, 62);
     EXPECT_EQ(stopped.samples[0].spatial_epoch, 1);
 }
 
@@ -170,7 +170,7 @@ TEST(ControlledMovementProtocol, RepeatedBatchesAreStrictlyOrderedByTickAndRevis
     ASSERT_TRUE(second.submit_controlled_actor_move_intent(intent).has_value());
 
     worldsim::protocol::ProtocolInteger previous_tick = 0;
-    worldsim::protocol::ProtocolInteger previous_revision = 7;
+    worldsim::protocol::ProtocolInteger previous_revision = 9;
     for (int tick = 0; tick < 60; ++tick) {
         const auto first_result = first.advance_locomotion_tick();
         const auto second_result = second.advance_locomotion_tick();
@@ -191,7 +191,7 @@ TEST(ControlledMovementProtocol, RepeatedBatchesAreStrictlyOrderedByTickAndRevis
     EXPECT_EQ(spatial.x_mm, 2'275);
     EXPECT_EQ(spatial.velocity_x_mm_per_second, 3'000);
     EXPECT_EQ(spatial.tick, 60);
-    EXPECT_EQ(spatial.revision, 67);
+    EXPECT_EQ(spatial.revision, 69);
     EXPECT_EQ(spatial.spatial_epoch, 1);
 }
 
