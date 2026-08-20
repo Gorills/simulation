@@ -37,6 +37,7 @@ add_library(sim_core STATIC)
 target_sources(
     sim_core
     PRIVATE
+        src/sim/acceptance_village.cpp
         src/sim/grounded_locomotion.cpp
         src/sim/household_resource.cpp
         src/sim/living_need.cpp
@@ -46,6 +47,7 @@ target_sources(
         FILE_SET HEADERS
         BASE_DIRS src
         FILES
+            src/sim/acceptance_village.hpp
             src/sim/grounded_locomotion.hpp
             src/sim/living_need.hpp
             src/sim/npc_locomotion.hpp
@@ -69,6 +71,7 @@ target_sources(
         FILES
             src/protocol/version.hpp
             src/protocol/bootstrap_move.hpp
+            src/protocol/household_resource.hpp
             src/protocol/movement.hpp
             src/protocol/observed_world.hpp
             src/protocol/spatial.hpp
@@ -87,6 +90,7 @@ if(WORLD_SIM_BUILD_TESTS)
 
     add_executable(
         sim_core_tests
+        tests/sim/acceptance_village_test.cpp
         tests/sim/composition_test.cpp
         tests/sim/grounded_locomotion_test.cpp
         tests/sim/household_resource_test.cpp
