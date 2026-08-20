@@ -52,6 +52,9 @@ msgstr "NPC rest need"
 msgid "UI_DEBUG_HOUSEHOLD_RESOURCE"
 msgstr "Neighbour household grain"
 
+msgid "UI_DEBUG_GRAIN_CARRY"
+msgstr "Carried grain"
+
 msgid "UI_NEED_TRAVELING"
 msgstr "Traveling to rest"
 
@@ -66,6 +69,9 @@ msgstr "Adequate"
 
 msgid "UI_RESOURCE_SHORTAGE"
 msgstr "Shortage"
+
+msgid "UI_RESOURCE_ACTION_HINT"
+msgstr "E draw · R deposit · G gift"
 
 msgid "UI_WORLD_REST_TARGET_HINT"
 msgstr "NPC rest place\nStand on the marker to block the place"
@@ -108,3 +114,6 @@ msgstr "Rest interference"
 
 msgid "UI_SCENARIO_SHORTAGE"
 msgstr "Autonomous shortage"
+
+msgid "UI_SCENARIO_GIFT"
+msgstr "Gift shortage relief"
