@@ -179,7 +179,11 @@ func _run_gift_scenario(artifact_dir: String) -> void:
 
         resources_before_gift = _sim.village_household_resource_projection()
         living_at_gift = _sim.living_need_projection()
-        movement_before_gift = _main.get("_last_movement_batch").duplicate(true)
+        var movement_value = _main.get("_last_movement_batch")
+        if typeof(movement_value) != TYPE_DICTIONARY:
+            _fail_gift("Gift approach lost the authoritative movement batch")
+            return
+        movement_before_gift = movement_value.duplicate(true)
 
         var gift_response: Dictionary = _sim.controlled_actor_gift_grain(_target_household_id)
         if not bool(gift_response.get("ok", false)):
@@ -218,6 +222,12 @@ func _run_gift_scenario(artifact_dir: String) -> void:
     ):
         _fail_gift("Gift result does not match authoritative conservation/temporal state")
         return
+    if str(before_target.get("status", "unknown")) != "shortage":
+        _fail_gift("Gift target was no longer short before the transfer")
+        return
+    if str(after_target.get("status", "unknown")) != "adequate":
+        _fail_gift("Gift did not relieve the bounded shortage target")
+        return
 
     _main.set("_village_household_resource_projection", after_resources)
     _main.set("_living_need_projection", _sim.living_need_projection())
@@ -226,19 +236,28 @@ func _run_gift_scenario(artifact_dir: String) -> void:
         return
     _refresh_carry_hud()
 
+    var resource_status_value = _main.get("debug_household_resource_status")
+    var resource_status_text := ""
+    if resource_status_value is Label:
+        resource_status_text = resource_status_value.text
+
     var evidence := {
         "scenario": "gift",
         "client_supplied_amount": false,
         "source_household_id": source_household_id,
         "target_household_id": _target_household_id,
         "initial_carry": _carry_evidence(initial_carry),
+        "initial_resource_header": _resource_header(initial_resources),
         "draw_result": draw_result,
         "shortage_before_approach": _household_evidence(
             _household_by_id(shortage_resources, _target_household_id)
         ),
+        "shortage_resource_header": _resource_header(shortage_resources),
         "target_before_gift": _household_evidence(before_target),
+        "resource_before_gift": _resource_header(resources_before_gift),
         "gift_result": gift_result,
         "target_after_gift": _household_evidence(after_target),
+        "resource_after_gift": _resource_header(after_resources),
         "carry_after_gift": _carry_evidence(after_carry),
         "living_need_at_gift": {
             "entity_id": int(living_at_gift.get("entity_id", 0)),
@@ -256,9 +275,7 @@ func _run_gift_scenario(artifact_dir: String) -> void:
             "locale": Localization.current_locale(),
             "scenario_text": tr(&"UI_SCENARIO_GIFT"),
             "carry_hud_text": _carry_label.text if _carry_label != null else "",
-            "household_resource_status_text": str(
-                _main.get("debug_household_resource_status").text
-            ),
+            "household_resource_status_text": resource_status_text,
         },
     }
 
@@ -291,6 +308,14 @@ func _household_evidence(household: Dictionary) -> Dictionary:
         "grain_stock_units": int(household.get("grain_stock_units", -1)),
         "shortage_threshold_units": int(household.get("shortage_threshold_units", -1)),
         "status": str(household.get("status", "unknown")),
+    }
+
+
+func _resource_header(projection: Dictionary) -> Dictionary:
+    return {
+        "tick": int(projection.get("tick", -1)),
+        "revision": int(projection.get("revision", -1)),
+        "protocol_version": int(projection.get("protocol_version", 0)),
     }
 
 
