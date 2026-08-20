@@ -520,19 +520,36 @@ def validate_rest_interference_artifact(path: Path, expected_locale: str) -> dic
     batch = movement_stream.get("batch")
     if not isinstance(batch, dict) or batch.get("tick") != living_need.get("tick"):
         raise SystemExit("final movement batch does not align with the satisfied need projection")
+    if batch.get("protocol_version") != PROTOCOL_VERSION:
+        raise SystemExit("final movement batch protocol mismatch")
+    batch_tick = batch.get("tick")
     batch_revision = batch.get("revision")
     presentation_revision = presentation.get("last_revision")
+    controlled_spatial_tick = presentation.get("controlled_spatial_tick")
+    controlled_spatial_revision = presentation.get("controlled_spatial_revision")
     living_revision = living_need.get("revision")
     if not all(
-        isinstance(revision, int)
-        for revision in (batch_revision, presentation_revision, living_revision)
+        isinstance(value, int)
+        for value in (
+            batch_tick,
+            batch_revision,
+            presentation_revision,
+            controlled_spatial_tick,
+            controlled_spatial_revision,
+            living_revision,
+        )
     ):
-        raise SystemExit("final rest-interference revisions are invalid")
+        raise SystemExit("final rest-interference temporal fields are invalid")
+    assert isinstance(batch_tick, int)
     assert isinstance(batch_revision, int)
     assert isinstance(presentation_revision, int)
+    assert isinstance(controlled_spatial_tick, int)
+    assert isinstance(controlled_spatial_revision, int)
     assert isinstance(living_revision, int)
-    if presentation_revision != batch_revision:
-        raise SystemExit("presented world revision does not match the final movement batch")
+    if controlled_spatial_tick != batch_tick or controlled_spatial_revision != batch_revision:
+        raise SystemExit("controlled spatial presentation does not match the final movement batch")
+    if presentation_revision != living_revision:
+        raise SystemExit("latest presented world revision does not match the final living-need read")
     if living_revision not in (batch_revision, batch_revision + 1):
         raise SystemExit(
             "final need revision is not aligned with movement or one post-movement resource transition"
