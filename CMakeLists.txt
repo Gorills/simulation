@@ -101,6 +101,7 @@ if(WORLD_SIM_BUILD_TESTS)
         tests/sim/household_resource_test.cpp
         tests/sim/household_transfer_test.cpp
         tests/sim/m2_path_permutation_test.cpp
+        tests/sim/m3_remembered_aid_test.cpp
         tests/sim/living_need_test.cpp
         tests/sim/locomotion_capability_test.cpp
         tests/sim/npc_locomotion_test.cpp

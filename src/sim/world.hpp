@@ -64,10 +64,12 @@ enum class WorldError : std::uint8_t {
     invalid_actor_grain_carry_state,
     invalid_place_state,
     invalid_household_state,
+    invalid_household_social_state,
     invalid_field_work_assignment_state,
     duplicate_entity,
     unknown_entity,
     unknown_household_member,
+    unknown_remembered_aid_actor,
     unknown_store_place,
     unknown_work_place,
     unknown_work_destination_household,
@@ -104,9 +106,11 @@ enum class WorldSnapshotError : std::uint8_t {
     invalid_grounded_locomotion_state,
     invalid_place_state,
     invalid_household_state,
+    invalid_household_social_state,
     invalid_field_work_assignment_state,
     duplicate_entity,
     unknown_household_member,
+    unknown_remembered_aid_actor,
     unknown_store_place,
     unknown_work_place,
     unknown_work_destination_household,
@@ -343,9 +347,11 @@ struct StandingTransferPledge final {
 };
 
 // Household state remains one bounded aggregate rather than an actor class or
-// inventory framework. It owns the first staple stock, derived-shortage threshold,
-// positive per-consume amount, finite acceptance consume budget, and optional
-// standing transfer pledge. Actor carry is separate authoritative actor state.
+// inventory/relationship framework. M3 adds one optional remembered-aid actor:
+// EntityId{0} means no outstanding personal favour; a positive actor id means
+// this household remembers one qualifying material Gift from that actor. The
+// slot is deliberately singular until a playable capability needs concurrent
+// household obligations toward multiple actors.
 struct HouseholdState final {
     EntityId id{};
     std::vector<EntityId> members{};
@@ -355,12 +361,17 @@ struct HouseholdState final {
     std::int64_t consume_amount_units{1};
     std::uint32_t remaining_consume_budget{};
     StandingTransferPledge standing_transfer_pledge{};
+    EntityId remembered_material_aid_actor{};
 
     [[nodiscard]] constexpr bool has_valid_resource_state() const noexcept {
         return grain_stock_units >= 0
             && shortage_threshold_units >= 0
             && consume_amount_units > 0
             && standing_transfer_pledge.remaining_grain_units >= 0;
+    }
+
+    [[nodiscard]] constexpr bool has_valid_social_state() const noexcept {
+        return remembered_material_aid_actor.value >= 0;
     }
 
     bool operator==(const HouseholdState &) const = default;
@@ -496,7 +507,7 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 9;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 10;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
 // protocol envelope versions belong to a later persistence layer. Authoritative
@@ -544,8 +555,11 @@ public:
     // Shared actor-generic grain carry laws. No operation accepts a quantity from
     // the caller: Draw fills toward the actor's bound, Deposit moves all carried
     // grain into the actor's own household, and Gift moves all carried grain into
-    // the explicitly selected receiving household. Accepted operations advance
-    // WorldRevision exactly once and never advance SimulationTick.
+    // the explicitly selected receiving household. A Gift to a household that is
+    // short immediately before the transition records the first outstanding
+    // remembered-aid actor in that same authoritative transition. Accepted
+    // operations advance WorldRevision exactly once and never advance
+    // SimulationTick.
     [[nodiscard]] std::expected<HouseholdDrawResult, HouseholdDrawError>
     draw_household_grain(EntityId actor) noexcept;
     [[nodiscard]] std::expected<HouseholdDepositResult, HouseholdDepositError>
