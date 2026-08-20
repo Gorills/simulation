@@ -317,14 +317,19 @@ ControlledActorSpatialProjection Simulation::controlled_actor_spatial_projection
 
 LivingNeedProjection Simulation::living_need_projection() const {
     const auto decision = sim::decide_npc_rest_need(world_, living_need_npc_);
+    const auto need = world_.actor_rest_need(living_need_npc_);
     assert(decision.has_value());
-    if (!decision.has_value()) {
+    assert(need.has_value());
+    if (!decision.has_value() || !need.has_value()) {
         return {};
     }
 
     return LivingNeedProjection{
         .entity_id = living_need_npc_.value,
         .status = living_need_status(*decision),
+        .target_x_mm = need->rest_x.value,
+        .target_z_mm = need->rest_z.value,
+        .axis_arrival_tolerance_mm = need->axis_arrival_tolerance.value,
         .tick = checked_protocol_integer(world_.tick().value),
         .revision = checked_protocol_integer(world_.revision().value),
         .protocol_version = kProtocolVersion,
