@@ -4,13 +4,13 @@ Status: DRAFT
 
 ## Gameplay purpose
 
-Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, and become short without a player-authored state mutation.
+Milestone 2 begins the first authoritative household resource loop with one staple: unmilled grain represented in integer grain-units. The current implemented subset proves that a household can hold real stock, consume it through an actor-generic World rule, become short through bounded NPC autonomy, and expose that state through a purpose-built protocol read without a player-authored mutation.
 
 This model is deliberately narrower than a general inventory, economy, market, farming or needs framework.
 
 ## Observable patterns / fit-for-purpose criteria
 
-For the current bounded Core subset:
+For the current bounded Core/application subset:
 
 - household grain stock is authoritative `World` state;
 - shortage is derived as `stock < shortage_threshold` and is never stored separately;
@@ -18,9 +18,15 @@ For the current bounded Core subset:
 - Consume requires exact-spatial presence inside that household's store place;
 - one accepted Consume removes the positive content-owned consume amount, decrements the finite consume budget, advances `WorldRevision` exactly once and does not advance `SimulationTick`;
 - zero budget, insufficient stock, missing membership/spatial presence, or being outside the store are refusals and leave the world unchanged;
-- snapshot/restore preserves the quantities that determine later Consume outcomes and deterministic continuation.
+- snapshot/restore preserves the quantities that determine later Consume outcomes and deterministic continuation;
+- the acceptance village is created by one bounded Core content builder rather than by named protocol actor fields;
+- protocol decision collection iterates the deterministic Core actor-id view, applies RestNeed movement to actors that have that state, and gives other exact-spatial non-controlled actors an idle locomotion intent;
+- bounded autonomous Consume is considered only for non-controlled actors whose current authoritative state makes the action feasible;
+- locomotion commits first; a successful autonomous Consume may then create a later `WorldRevision` on the same `SimulationTick` while the returned movement batch retains the locomotion commit revision;
+- the next locomotion batch remains consecutive in `SimulationTick` and strictly later in `WorldRevision`;
+- actor observation remains actor-scoped, while a separate village household-resource read exposes household membership, store identity/footprint, stock, threshold and derived shortage.
 
-Player-visible projection and Godot feedback are intentionally not part of this native-only increment; the first vertical M2 checkpoint will expose this same authoritative state rather than introduce a client-side duplicate.
+Player-visible Godot resource feedback is intentionally not part of this application-only increment; the first vertical M2 checkpoint will expose this same protocol state rather than introduce a client-side duplicate.
 
 ## Historical baseline and region
 
@@ -46,7 +52,19 @@ household membership
       -> WorldRevision advances
 ```
 
-There is no hidden hunger timer, background economy clock or Godot-owned stock.
+Current application ordering:
+
+```text
+Core actor-id view
+  -> collect controlled + NPC locomotion intents
+  -> commit one locomotion tick/revision
+  -> preserve that movement batch revision
+  -> re-read bounded Consume feasibility on post-movement World
+  -> optional actor-generic Consume
+  -> same SimulationTick, later WorldRevision
+```
+
+There is no hidden hunger timer, background economy clock, second time stream or Godot-owned stock.
 
 ## Entities / state / scales
 
@@ -68,9 +86,27 @@ An actor belongs to at most one household. Household membership lists are author
 
 The current resource place record contains a stable `EntityId`, local X/Z and non-negative per-axis tolerance. Resource occupancy uses exact arrival semantics: the actor's authoritative X/Z must fall within the stored tolerance on each axis. Unlike the M1 rest-body occupancy query, this check does not add actor body radius.
 
+In the acceptance village the short household store intentionally uses the same X/Z/tolerance values as the M1 RestNeed target. That is one content fact shared by two mechanics, not a hidden protocol/Godot coordinate contract.
+
 ### Actor
 
 Consume requires an ordinary actor with exact `SpatialState`. Human and NPC decision sources use the same World rule when the same state and prerequisites hold.
+
+The current application policy excludes the controlled actor from autonomous Consume. This is a decision-source policy only; it does not grant NPCs a different World mutation law.
+
+## Acceptance composition
+
+The current M2 acceptance village is code-defined Core content, not protocol-owned fixture state. It contains:
+
+- one controlled actor in the surplus household;
+- the existing M1 RestNeed actor in the household intended to become short;
+- one additional surplus-household NPC with exact spatial state and an idle locomotion intent;
+- one store place per household;
+- one household aggregate per store.
+
+The builder owns concrete acceptance IDs and returns only the controlled-actor session binding. Protocol discovers actors through `World::actor_ids()` and households through `World::household_ids()`; it does not keep a growing list of feature-named NPC IDs.
+
+This is deliberately not an ECS, entity registry, scenario DSL or data-driven content framework.
 
 ## Fidelity / representation level
 
@@ -111,6 +147,8 @@ None.
 
 Current semantic mutation input is the acting `EntityId` for Consume. The actor does not supply an amount, stock target, shortage flag or household balance. World derives the actor's household and uses the household's authoritative consume amount.
 
+The application layer may propose autonomous Consume only after the ordinary locomotion transition and only when a read-only Core feasibility check says current authoritative state satisfies membership, exact store presence, remaining budget and stock. `World::consume_household_grain()` still revalidates those prerequisites before mutation.
+
 ## Transitions / scheduling
 
 Consume is an immediate authoritative transition, not a simulation-time schedule.
@@ -125,6 +163,18 @@ An accepted Consume:
 6. subtracts the configured amount and decrements the budget;
 7. advances `WorldRevision` exactly once while leaving `SimulationTick` unchanged.
 
+For bounded autonomous application, one call to `protocol::Simulation::advance_locomotion_tick()` has explicit ordering:
+
+1. collect current controlled/NPC locomotion intents from the Core actor-id view;
+2. attempt the full locomotion batch;
+3. if locomotion fails, no autonomous Consume is attempted;
+4. if locomotion succeeds, preserve and return the locomotion tick/revision in the movement batch;
+5. against the post-movement World, consider feasible non-controlled actor Consume actions in the same bounded actor order;
+6. each accepted Consume is an ordinary revision-only World transition and therefore may make a later resource read report the same tick with a greater revision;
+7. an ordinary Consume refusal cannot retroactively fail or rewrite the successful movement batch.
+
+The current acceptance content permits at most one autonomous Consume because only the short-household NPC has a positive remaining budget. This prevents one locomotion call from becoming an unbounded resource burst while still proving the ordering contract.
+
 This bounded Consume budget proves finite autonomous depletion without inventing a meal cadence or independent economy clock. Recurring consumption over world time requires later time-system admission rather than treating locomotion ticks as meals.
 
 ## Outputs / consequences
@@ -134,12 +184,16 @@ Current direct outputs are:
 - updated authoritative household stock;
 - updated remaining consume budget;
 - derived shortage state;
-- unchanged `SimulationTick`;
-- one later `WorldRevision` on success.
+- unchanged `SimulationTick` for the Consume transition;
+- one later `WorldRevision` on successful Consume;
+- a village-scoped household-resource protocol read with authoritative tick/revision/version context;
+- actor-scoped observed-world output computed from the deterministic actor-id view.
+
+The movement batch and a resource read taken immediately afterward may therefore deliberately carry different revisions on the same tick.
 
 ## Player-facing exposure
 
-None in the current native-only increment. A later vertical M2 checkpoint will expose purpose-built household resource reads and localized feedback. Godot must read those projections and must not calculate or mutate stock/shortage itself.
+The protocol now has a purpose-built village household-resource discovery/read, but the GDExtension and Godot UI do not expose it yet. M2.4 is responsible for adapting this state, resolving the player-facing household/store identity from authoritative discovery and rendering localized shortage feedback. Godot must not calculate or mutate stock/shortage itself.
 
 ## Uncertainty
 
@@ -155,7 +209,8 @@ Current simplifications include:
 - bounded acceptance consume opportunities instead of a meal schedule;
 - no processing from grain to food;
 - no prices, currency, credit or market clearing;
-- no household internal allocation rule beyond the current Consume operation.
+- no household internal allocation rule beyond the current Consume operation;
+- one bounded code-defined acceptance village rather than a general content authoring system.
 
 ## Deliberately not simulated
 
