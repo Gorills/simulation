@@ -110,6 +110,10 @@ jobs:
         run: xvfb-run -a python tools/dev.py play --scenario gift --locale ru
       - name: Verify English Gift vertical
         run: xvfb-run -a python tools/dev.py play --scenario gift --locale en
+      - name: Verify Russian Work vertical
+        run: xvfb-run -a python tools/dev.py play --scenario work --locale ru
+      - name: Verify English Work vertical
+        run: xvfb-run -a python tools/dev.py play --scenario work --locale en
       - name: Verify offscreen continuation
         run: xvfb-run -a python tools/dev.py play --scenario offscreen --locale ru
       - name: Verify rest interference loop
