@@ -281,6 +281,8 @@ godot::Dictionary SimFacade::to_dictionary(const protocol::LivingNeedProjection 
     godot::Dictionary result;
     result["entity_id"] = projection.entity_id;
     result["status"] = living_need_status_name(projection.status);
+    result["target_position_m"] = meters_vector(projection.target_x_mm, 0, projection.target_z_mm);
+    result["axis_arrival_tolerance_m"] = meters_from_millimeters(projection.axis_arrival_tolerance_mm);
     result["tick"] = projection.tick;
     result["revision"] = projection.revision;
     result["protocol_version"] = static_cast<std::int64_t>(projection.protocol_version);
