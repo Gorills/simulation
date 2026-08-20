@@ -283,7 +283,7 @@ World::gift_household_grain(
     if (!actor_state.grain_carry.is_valid()) {
         return std::unexpected(HouseholdGiftError::invalid_actor_grain_carry_state);
     }
-    if (!household.has_valid_resource_state()) {
+    if (!household.has_valid_resource_state() || !household.has_valid_social_state()) {
         return std::unexpected(HouseholdGiftError::invalid_household_state);
     }
     if (actor_state.grain_carry.carried_grain_units == 0) {
@@ -311,8 +311,15 @@ World::gift_household_grain(
     }
 
     const auto gifted = actor_state.grain_carry.carried_grain_units;
+    const bool remember_personal_aid =
+        household.grain_stock_units < household.shortage_threshold_units
+        && !household.remembered_material_aid_actor.is_valid();
+
     household.grain_stock_units = updated_stock;
     actor_state.grain_carry.carried_grain_units = 0;
+    if (remember_personal_aid) {
+        household.remembered_material_aid_actor = actor;
+    }
     ++revision_.value;
 
     return HouseholdGiftResult{
