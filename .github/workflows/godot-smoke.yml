@@ -102,6 +102,10 @@ jobs:
         run: xvfb-run -a python tools/dev.py play --scenario smoke --locale ru
       - name: Verify English Godot smoke
         run: xvfb-run -a python tools/dev.py play --scenario smoke --locale en
+      - name: Verify Russian autonomous shortage
+        run: xvfb-run -a python tools/dev.py play --scenario shortage --locale ru
+      - name: Verify English autonomous shortage
+        run: xvfb-run -a python tools/dev.py play --scenario shortage --locale en
       - name: Verify offscreen continuation
         run: xvfb-run -a python tools/dev.py play --scenario offscreen --locale ru
       - name: Verify rest interference loop
