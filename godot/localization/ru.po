@@ -52,6 +52,9 @@ msgstr "Потребность NPC в отдыхе"
 msgid "UI_DEBUG_HOUSEHOLD_RESOURCE"
 msgstr "Зерно соседнего хозяйства"
 
+msgid "UI_DEBUG_GRAIN_CARRY"
+msgstr "Переносимое зерно"
+
 msgid "UI_NEED_TRAVELING"
 msgstr "Идёт к месту отдыха"
 
@@ -66,6 +69,9 @@ msgstr "Запас достаточен"
 
 msgid "UI_RESOURCE_SHORTAGE"
 msgstr "Нехватка"
+
+msgid "UI_RESOURCE_ACTION_HINT"
+msgstr "E взять · R вернуть · G подарить"
 
 msgid "UI_WORLD_REST_TARGET_HINT"
 msgstr "Место отдыха NPC\nВстаньте на метку, чтобы помешать"
@@ -108,3 +114,6 @@ msgstr "Вмешательство в отдых"
 
 msgid "UI_SCENARIO_SHORTAGE"
 msgstr "Автономная нехватка"
+
+msgid "UI_SCENARIO_GIFT"
+msgstr "Помощь зерном"
