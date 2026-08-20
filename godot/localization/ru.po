@@ -55,6 +55,9 @@ msgstr "Зерно соседнего хозяйства"
 msgid "UI_DEBUG_GRAIN_CARRY"
 msgstr "Переносимое зерно"
 
+msgid "UI_DEBUG_FIELD_WORK"
+msgstr "Работа в поле"
+
 msgid "UI_NEED_TRAVELING"
 msgstr "Идёт к месту отдыха"
 
@@ -72,6 +75,12 @@ msgstr "Нехватка"
 
 msgid "UI_RESOURCE_ACTION_HINT"
 msgstr "E взять · R вернуть · G подарить"
+
+msgid "UI_WORK_ACTION_HINT"
+msgstr "F работать"
+
+msgid "UI_FIELD_WORK_CUE"
+msgstr "Поле для работы"
 
 msgid "UI_WORLD_REST_TARGET_HINT"
 msgstr "Место отдыха NPC\nВстаньте на метку, чтобы помешать"
@@ -117,3 +126,6 @@ msgstr "Автономная нехватка"
 
 msgid "UI_SCENARIO_GIFT"
 msgstr "Помощь зерном"
+
+msgid "UI_SCENARIO_WORK"
+msgstr "Помощь работой"
