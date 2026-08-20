@@ -54,6 +54,36 @@ std::optional<bool> World::household_is_short(const EntityId id) const noexcept 
     return household.grain_stock_units < household.shortage_threshold_units;
 }
 
+bool World::can_consume_household_grain(const EntityId actor) const noexcept {
+    if (!actor.is_valid()) {
+        return false;
+    }
+
+    const auto actor_index_value = actor_index(actor);
+    if (!actor_index_value.has_value() || !actors_[*actor_index_value].spatial.has_value()) {
+        return false;
+    }
+
+    for (const auto &household : households_) {
+        bool is_member = false;
+        for (const auto member : household.members) {
+            if (member == actor) {
+                is_member = true;
+                break;
+            }
+        }
+        if (!is_member) {
+            continue;
+        }
+
+        return household.has_valid_resource_state()
+            && household.remaining_consume_budget > 0
+            && household.grain_stock_units >= household.consume_amount_units
+            && is_actor_inside_place(actor, household.store_place);
+    }
+    return false;
+}
+
 std::expected<HouseholdConsumeResult, HouseholdConsumeError>
 World::consume_household_grain(const EntityId actor) noexcept {
     if (!actor.is_valid()) {
