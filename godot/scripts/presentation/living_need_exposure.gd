@@ -3,10 +3,12 @@ extends Node
 const TEST_VALIDATION_FRAME_LIMIT := 120
 const FOOTPRINT_HEIGHT_M := 0.04
 const LABEL_HEIGHT_M := 1.25
+const CONTROLS_HINT_PATH := NodePath("HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/ControlsHint")
 
 var _scene: Node = null
 var _sim = null
 var _world_presentation: Node = null
+var _controls_hint: Label = null
 var _marker_root: Node3D = null
 var _footprint: MeshInstance3D = null
 var _footprint_mesh: BoxMesh = null
@@ -27,7 +29,7 @@ func _process(_delta: float) -> void:
     if current_scene != _scene:
         _bind_scene(current_scene)
 
-    if _scene == null or _sim == null or _world_presentation == null:
+    if _scene == null or _sim == null or _world_presentation == null or _controls_hint == null:
         _record_validation_wait()
         return
 
@@ -49,6 +51,7 @@ func _bind_scene(scene: Node) -> void:
     _scene = scene
     _sim = null
     _world_presentation = null
+    _controls_hint = null
     _validation_frames = 0
     _test_validated = false
 
@@ -57,7 +60,11 @@ func _bind_scene(scene: Node) -> void:
 
     _sim = _scene.get("sim")
     _world_presentation = _scene.get_node_or_null("WorldPresentation")
-    if _sim == null or _world_presentation == null:
+    _controls_hint = _scene.get_node_or_null(CONTROLS_HINT_PATH) as Label
+    if _sim == null or _world_presentation == null or _controls_hint == null:
+        if _test_scenario:
+            push_error("living-need exposure could not bind the ordinary gameplay scene")
+            get_tree().quit(12)
         return
 
     _marker_root = Node3D.new()
@@ -94,7 +101,7 @@ func _apply_projection(projection: Dictionary) -> bool:
     var status := str(projection.get("status", "unknown"))
     if entity_id <= 0 or typeof(target_value) != TYPE_VECTOR3 or tolerance < 0.0:
         return false
-    if _marker_root == null or _footprint_mesh == null or _target_label == null:
+    if _marker_root == null or _footprint_mesh == null or _target_label == null or _controls_hint == null:
         return false
 
     var target: Vector3 = target_value
@@ -102,6 +109,10 @@ func _apply_projection(projection: Dictionary) -> bool:
     var footprint_size: float = maxf(tolerance * 2.0, 0.05)
     _footprint_mesh.size = Vector3(footprint_size, FOOTPRINT_HEIGHT_M, footprint_size)
     _target_label.text = tr(&"UI_WORLD_REST_TARGET_HINT")
+    _controls_hint.text = "%s\n%s" % [
+        tr(&"UI_DEBUG_CONTROLS_HINT"),
+        tr(&"UI_WORLD_REST_TARGET_HINT"),
+    ]
 
     _refresh_npc_label(entity_id, status)
     return true
@@ -159,6 +170,7 @@ func _clear_runtime_nodes() -> void:
     _target_label = null
     _npc_label = null
     _npc_label_parent = null
+    _controls_hint = null
 
 
 func _scenario_name() -> String:
