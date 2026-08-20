@@ -92,4 +92,52 @@ struct ControlledActorResourceResult final {
 using ControlledActorResourceOutcome =
     std::expected<ControlledActorResourceResult, ControlledActorResourceError>;
 
+// Purpose-built Work discovery/read. The field assignment is one bounded Core
+// content record, so protocol exposes exactly that record rather than a generic
+// jobs/place registry. Yield/destination remain read-only authoritative facts.
+struct FieldWorkProjection final {
+    ProtocolInteger work_place_id{};
+    ProtocolInteger work_x_mm{};
+    ProtocolInteger work_z_mm{};
+    ProtocolInteger work_axis_tolerance_mm{};
+    ProtocolInteger destination_household_id{};
+    ProtocolInteger yield_grain_units{};
+    ProtocolInteger remaining_work_completions{};
+    ProtocolInteger tick{};
+    ProtocolInteger revision{};
+    std::uint32_t protocol_version{kProtocolVersion};
+
+    bool operator==(const FieldWorkProjection &) const = default;
+};
+
+enum class ControlledActorWorkError : std::uint8_t {
+    protocol_integer_exhausted,
+    controlled_actor_missing,
+    field_work_unavailable,
+    invalid_field_work_state,
+    controlled_actor_spatial_state_missing,
+    outside_field,
+    work_exhausted,
+    stock_overflow,
+};
+
+// Semantic Work result. No command payload supplies yield, destination or amount;
+// the result reports the authoritative content/output selected by Core.
+struct ControlledActorWorkResult final {
+    ProtocolInteger entity_id{};
+    ProtocolInteger work_place_id{};
+    ProtocolInteger destination_household_id{};
+    ProtocolInteger produced_grain_units{};
+    ProtocolInteger destination_household_grain_stock_units{};
+    ProtocolInteger remaining_work_completions{};
+    ProtocolInteger tick{};
+    ProtocolInteger revision{};
+    std::uint32_t protocol_version{kProtocolVersion};
+
+    bool operator==(const ControlledActorWorkResult &) const = default;
+};
+
+using ControlledActorWorkOutcome =
+    std::expected<ControlledActorWorkResult, ControlledActorWorkError>;
+
 } // namespace worldsim::protocol
