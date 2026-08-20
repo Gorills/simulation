@@ -23,6 +23,13 @@ jobs:
   smoke:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
+      CCACHE_NOHASHDIR: "true"
+      WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
+      WORLD_SIM_GODOT_IMPORT_ONCE: "1"
 
     steps:
       - uses: actions/checkout@v7
@@ -31,10 +38,27 @@ jobs:
           python-version: "3.12"
       - name: Install pinned build tools
         run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements-dev.txt
-      - name: Install virtual display
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/ccache
+          key: godot-smoke-ccache-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake', 'CMakePresets.json') }}
+          restore-keys: |
+            godot-smoke-ccache-${{ runner.os }}-
+      - name: Ensure compiler cache and virtual display
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xauth
+          missing=()
+          command -v ccache >/dev/null 2>&1 || missing+=(ccache)
+          command -v xvfb-run >/dev/null 2>&1 || missing+=(xvfb)
+          command -v xauth >/dev/null 2>&1 || missing+=(xauth)
+          if (( ${#missing[@]} )); then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends "${missing[@]}"
+          fi
+          ccache --set-config=max_size=750M
+          ccache --set-config=compression=true
+          ccache --zero-stats
       - name: Install pinned Godot
         run: |
           python - <<'PY'
@@ -68,23 +92,19 @@ jobs:
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
               env_file.write(f"GODOT_BIN={binary.resolve()}\n")
           PY
-      - name: Build development graph
-        run: python tools/dev.py check --preset dev
+      - name: Build smoke graph
+        run: |
+          cmake --preset smoke-ci -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build --preset smoke-ci
+          python tools/check_localization.py
+          ccache --show-stats
       - name: Verify Russian Godot smoke
-        env:
-          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
         run: xvfb-run -a python tools/dev.py play --scenario smoke --locale ru
       - name: Verify English Godot smoke
-        env:
-          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
         run: xvfb-run -a python tools/dev.py play --scenario smoke --locale en
       - name: Verify offscreen continuation
-        env:
-          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
         run: xvfb-run -a python tools/dev.py play --scenario offscreen --locale ru
       - name: Verify rest interference loop
-        env:
-          WORLD_SIM_GODOT_IMPORT_DISPLAY: "1"
         run: xvfb-run -a python tools/dev.py play --scenario rest_interference --locale ru
       - name: Upload Godot smoke evidence
         if: always()

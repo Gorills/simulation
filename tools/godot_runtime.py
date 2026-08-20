@@ -12,6 +12,8 @@ PROJECT = ROOT / "godot"
 LOCK = ROOT / "tools" / "toolchain.lock.json"
 PROJECT_CONFIG = PROJECT / "project.godot"
 CI_DISPLAY_IMPORT_ENV = "WORLD_SIM_GODOT_IMPORT_DISPLAY"
+CI_IMPORT_ONCE_ENV = "WORLD_SIM_GODOT_IMPORT_ONCE"
+CI_IMPORT_STAMP = ROOT / ".cache" / "godot-import-ci.stamp"
 
 
 def expected_godot_version() -> str:
@@ -59,6 +61,11 @@ def resolve_godot() -> str:
 
 
 def import_project_metadata(godot: str) -> None:
+    import_once = os.environ.get(CI_IMPORT_ONCE_ENV) == "1"
+    if import_once and CI_IMPORT_STAMP.is_file():
+        print(f"+ reuse Godot project metadata from {CI_IMPORT_STAMP}")
+        return
+
     use_display = os.environ.get(CI_DISPLAY_IMPORT_ENV) == "1"
     command = [godot]
     if use_display:
@@ -82,6 +89,10 @@ def import_project_metadata(godot: str) -> None:
         subprocess.run(command, cwd=ROOT, check=True, timeout=120)
     except subprocess.TimeoutExpired as exc:
         raise SystemExit("Godot project import timed out after 120 seconds") from exc
+
+    if import_once:
+        CI_IMPORT_STAMP.parent.mkdir(parents=True, exist_ok=True)
+        CI_IMPORT_STAMP.write_text(expected_godot_version(), encoding="utf-8")
 
 
 def expected_extension_library() -> Path:

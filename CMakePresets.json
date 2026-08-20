@@ -47,6 +47,14 @@
       }
     },
     {
+      "name": "smoke-ci",
+      "displayName": "Godot smoke CI build",
+      "inherits": "dev",
+      "cacheVariables": {
+        "WORLD_SIM_BUILD_TESTS": "OFF"
+      }
+    },
+    {
       "name": "release",
       "displayName": "Local release verification",
       "inherits": "base",
@@ -60,6 +68,7 @@
     {"name": "native", "configurePreset": "native"},
     {"name": "sanitize", "configurePreset": "sanitize"},
     {"name": "dev", "configurePreset": "dev"},
+    {"name": "smoke-ci", "configurePreset": "smoke-ci"},
     {"name": "release", "configurePreset": "release"}
   ],
   "testPresets": [
