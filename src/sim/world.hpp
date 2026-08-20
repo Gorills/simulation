@@ -61,8 +61,14 @@ enum class WorldError : std::uint8_t {
     invalid_spatial_state,
     invalid_locomotion_capability,
     invalid_rest_need_state,
+    invalid_place_state,
+    invalid_household_state,
     duplicate_entity,
     unknown_entity,
+    unknown_household_member,
+    unknown_store_place,
+    duplicate_household_member,
+    actor_already_in_household,
 };
 
 enum class GroundedLocomotionTickError : std::uint8_t {
@@ -87,7 +93,13 @@ enum class WorldSnapshotError : std::uint8_t {
     invalid_locomotion_capability,
     invalid_rest_need_state,
     invalid_grounded_locomotion_state,
+    invalid_place_state,
+    invalid_household_state,
     duplicate_entity,
+    unknown_household_member,
+    unknown_store_place,
+    duplicate_household_member,
+    actor_already_in_household,
 };
 
 struct GroundedLocomotionContext final {
@@ -194,6 +206,34 @@ struct ActorState final {
     constexpr bool operator==(const ActorState &) const = default;
 };
 
+// First Milestone 2 authoritative place record. It is intentionally only the
+// exact local interaction footprint required by household stores. Fields and
+// production assignments are admitted later by their own bounded tasks rather
+// than through a generic place ontology.
+struct PlaceState final {
+    EntityId id{};
+    Millimeters x{};
+    Millimeters z{};
+    Millimeters axis_occupancy_tolerance{};
+
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return id.is_valid() && axis_occupancy_tolerance.value >= 0;
+    }
+
+    constexpr bool operator==(const PlaceState &) const = default;
+};
+
+// Household composition is aggregate authoritative state, not an actor class or
+// presentation folder. M2.1 owns only identity, membership and the referenced
+// store place; stock and resource rules are added by the next bounded task.
+struct HouseholdState final {
+    EntityId id{};
+    std::vector<EntityId> members{};
+    EntityId store_place{};
+
+    bool operator==(const HouseholdState &) const = default;
+};
+
 // Intent carries direction/magnitude plus a semantic pace choice. It never
 // carries a requested meters-per-second value: World resolves that from the
 // authoritative actor capability so a client/NPC decision source cannot author
@@ -227,17 +267,20 @@ struct GroundedLocomotionTickResult final {
     bool operator==(const GroundedLocomotionTickResult &) const = default;
 };
 
-inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 4;
+inline constexpr std::uint32_t kWorldSnapshotSchemaVersion = 5;
 
 // Core-owned in-memory persistence contract. Serialization format, content and
-// protocol envelope versions belong to a later persistence layer; this value
-// snapshot contains only authoritative World state in deterministic actor order.
+// protocol envelope versions belong to a later persistence layer. Authoritative
+// records stay in deterministic insertion order; derived lookup/id-view state is
+// rebuilt on restore and is not persisted.
 struct WorldSnapshot final {
     std::uint32_t schema_version{kWorldSnapshotSchemaVersion};
     WorldSeed seed{};
     SimulationTick tick{};
     WorldRevision revision{};
     std::vector<ActorState> actors{};
+    std::vector<PlaceState> places{};
+    std::vector<HouseholdState> households{};
 
     bool operator==(const WorldSnapshot &) const = default;
 };
@@ -250,6 +293,8 @@ public:
         EntityId id,
         ActorSpawnState initial = {}
     );
+    [[nodiscard]] std::expected<void, WorldError> add_place(PlaceState place);
+    [[nodiscard]] std::expected<void, WorldError> add_household(HouseholdState household);
 
     // Milestone 0 transport probe only. Production spatial movement must use a
     // real actor-location contract rather than extending this cardinal grid API.
@@ -273,19 +318,30 @@ public:
 
     void advance_one_tick() noexcept;
 
-    // Snapshot/restore is intentionally value-based. Derived runtime indexes are
-    // rebuilt on restore and never persisted as authoritative state.
+    // Snapshot/restore is intentionally value-based. Derived runtime indexes and
+    // deterministic id views are rebuilt on restore and never persisted as
+    // authoritative state.
     [[nodiscard]] WorldSnapshot snapshot() const;
     [[nodiscard]] std::expected<void, WorldSnapshotError> restore(const WorldSnapshot &snapshot);
 
     // EntityId is the durable external reference. Queries return values rather
-    // than addresses into World storage so later actor growth cannot invalidate
+    // than addresses into World storage so later storage growth cannot invalidate
     // a caller-held pointer/reference.
     [[nodiscard]] bool contains_actor(EntityId id) const noexcept;
+    [[nodiscard]] bool contains_place(EntityId id) const noexcept;
+    [[nodiscard]] bool contains_household(EntityId id) const noexcept;
     [[nodiscard]] std::optional<GridPosition> actor_bootstrap_position(EntityId id) const noexcept;
     [[nodiscard]] std::optional<SpatialState> actor_spatial_state(EntityId id) const noexcept;
     [[nodiscard]] std::optional<ActorLocomotionCapability> actor_locomotion_capability(EntityId id) const noexcept;
     [[nodiscard]] std::optional<RestNeedState> actor_rest_need(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<PlaceState> place_state(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<HouseholdState> household_state(EntityId id) const;
+
+    // Bounded deterministic composition views for protocol observation/decision
+    // collection and household discovery. These are derived runtime views, not
+    // snapshot truth and not a generic entity registry.
+    [[nodiscard]] std::span<const EntityId> actor_ids() const noexcept;
+    [[nodiscard]] std::span<const EntityId> household_ids() const noexcept;
 
     // Bounded exact-spatial presence query for a concrete local causal condition.
     // Another exact-spatial actor occupies the place when its first-playable
@@ -303,13 +359,24 @@ public:
     [[nodiscard]] WorldSeed seed() const noexcept;
 
 private:
+    [[nodiscard]] bool entity_id_in_use(EntityId id) const noexcept;
+    [[nodiscard]] bool actor_belongs_to_household(EntityId id) const noexcept;
     [[nodiscard]] std::optional<std::size_t> actor_index(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<std::size_t> place_index(EntityId id) const noexcept;
+    [[nodiscard]] std::optional<std::size_t> household_index(EntityId id) const noexcept;
     [[nodiscard]] ActorState *find_actor(EntityId id) noexcept;
 
-    // actors_ owns deterministic insertion order and compact state. The index is
-    // lookup-only; its iteration order must never define simulation behavior.
+    // Authoritative record vectors own deterministic insertion order. Maps and
+    // id-only vectors are derived lookup/read structures and are rebuilt on
+    // restore rather than persisted in WorldSnapshot.
     std::vector<ActorState> actors_{};
+    std::vector<PlaceState> places_{};
+    std::vector<HouseholdState> households_{};
     std::unordered_map<std::int64_t, std::size_t> actor_index_by_id_{};
+    std::unordered_map<std::int64_t, std::size_t> place_index_by_id_{};
+    std::unordered_map<std::int64_t, std::size_t> household_index_by_id_{};
+    std::vector<EntityId> actor_ids_{};
+    std::vector<EntityId> household_ids_{};
     SimulationTick tick_{};
     WorldRevision revision_{};
     WorldSeed seed_{};
