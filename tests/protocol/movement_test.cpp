@@ -20,7 +20,7 @@ TEST(ControlledMovementProtocol, SubmittingIntentDoesNotMutateAuthoritativeWorld
     EXPECT_EQ(simulation.observed_world_projection(), observed_before);
 }
 
-TEST(ControlledMovementProtocol, LocomotionTickReturnsResolvedPlayerAndNpcSamples) {
+TEST(ControlledMovementProtocol, LocomotionTickReturnsControlledRestNeedAndIdleActorSamples) {
     worldsim::protocol::Simulation simulation{42};
     ASSERT_TRUE(simulation.submit_controlled_actor_move_intent({
         .x = 1000,
@@ -31,9 +31,9 @@ TEST(ControlledMovementProtocol, LocomotionTickReturnsResolvedPlayerAndNpcSample
     const auto result = simulation.advance_locomotion_tick();
 
     ASSERT_TRUE(result.has_value());
-    ASSERT_EQ(result->samples.size(), 2U);
+    ASSERT_EQ(result->samples.size(), 3U);
     EXPECT_EQ(result->tick, 1);
-    EXPECT_EQ(result->revision, 3);
+    EXPECT_EQ(result->revision, 8);
     EXPECT_EQ(result->protocol_version, worldsim::protocol::kProtocolVersion);
 
     const auto &controlled_sample = result->samples[0];
@@ -46,15 +46,25 @@ TEST(ControlledMovementProtocol, LocomotionTickReturnsResolvedPlayerAndNpcSample
     EXPECT_EQ(controlled_sample.velocity_z_mm_per_second, 0);
     EXPECT_EQ(controlled_sample.spatial_epoch, 1);
 
-    const auto &npc_sample = result->samples[1];
-    EXPECT_EQ(npc_sample.entity_id, 2);
-    EXPECT_EQ(npc_sample.x_mm, 2'999);
-    EXPECT_EQ(npc_sample.y_mm, 0);
-    EXPECT_EQ(npc_sample.z_mm, -3'000);
-    EXPECT_EQ(npc_sample.velocity_x_mm_per_second, -100);
-    EXPECT_EQ(npc_sample.velocity_y_mm_per_second, 0);
-    EXPECT_EQ(npc_sample.velocity_z_mm_per_second, 0);
-    EXPECT_EQ(npc_sample.spatial_epoch, 1);
+    const auto &rest_need_sample = result->samples[1];
+    EXPECT_EQ(rest_need_sample.entity_id, 2);
+    EXPECT_EQ(rest_need_sample.x_mm, 2'999);
+    EXPECT_EQ(rest_need_sample.y_mm, 0);
+    EXPECT_EQ(rest_need_sample.z_mm, -3'000);
+    EXPECT_EQ(rest_need_sample.velocity_x_mm_per_second, -100);
+    EXPECT_EQ(rest_need_sample.velocity_y_mm_per_second, 0);
+    EXPECT_EQ(rest_need_sample.velocity_z_mm_per_second, 0);
+    EXPECT_EQ(rest_need_sample.spatial_epoch, 1);
+
+    const auto &idle_sample = result->samples[2];
+    EXPECT_EQ(idle_sample.entity_id, 3);
+    EXPECT_EQ(idle_sample.x_mm, 2'000);
+    EXPECT_EQ(idle_sample.y_mm, 0);
+    EXPECT_EQ(idle_sample.z_mm, 2'000);
+    EXPECT_EQ(idle_sample.velocity_x_mm_per_second, 0);
+    EXPECT_EQ(idle_sample.velocity_y_mm_per_second, 0);
+    EXPECT_EQ(idle_sample.velocity_z_mm_per_second, 0);
+    EXPECT_EQ(idle_sample.spatial_epoch, 1);
 
     const auto projection = simulation.controlled_actor_spatial_projection();
     EXPECT_EQ(projection.entity_id, controlled_sample.entity_id);
@@ -88,7 +98,7 @@ TEST(ControlledMovementProtocol, InvalidIntentDoesNotReplaceLastAcceptedIntent) 
 
     const auto result = simulation.advance_locomotion_tick();
     ASSERT_TRUE(result.has_value());
-    ASSERT_EQ(result->samples.size(), 2U);
+    ASSERT_EQ(result->samples.size(), 3U);
     EXPECT_EQ(result->samples[0].entity_id, 1);
     EXPECT_EQ(result->samples[0].x_mm, 1);
     EXPECT_EQ(result->samples[0].velocity_x_mm_per_second, 100);
@@ -144,7 +154,7 @@ TEST(ControlledMovementProtocol, ZeroIntentBrakesGroundedMotionBeforeStopping) {
     EXPECT_EQ(stopped.samples[0].x_mm, 1'312);
     EXPECT_EQ(stopped.samples[0].velocity_x_mm_per_second, 0);
     EXPECT_EQ(stopped.tick, 53);
-    EXPECT_EQ(stopped.revision, 55);
+    EXPECT_EQ(stopped.revision, 60);
     EXPECT_EQ(stopped.samples[0].spatial_epoch, 1);
 }
 
@@ -160,16 +170,17 @@ TEST(ControlledMovementProtocol, RepeatedBatchesAreStrictlyOrderedByTickAndRevis
     ASSERT_TRUE(second.submit_controlled_actor_move_intent(intent).has_value());
 
     worldsim::protocol::ProtocolInteger previous_tick = 0;
-    worldsim::protocol::ProtocolInteger previous_revision = 2;
+    worldsim::protocol::ProtocolInteger previous_revision = 7;
     for (int tick = 0; tick < 60; ++tick) {
         const auto first_result = first.advance_locomotion_tick();
         const auto second_result = second.advance_locomotion_tick();
         ASSERT_TRUE(first_result.has_value());
         ASSERT_TRUE(second_result.has_value());
         EXPECT_EQ(*first_result, *second_result);
-        ASSERT_EQ(first_result->samples.size(), 2U);
+        ASSERT_EQ(first_result->samples.size(), 3U);
         EXPECT_EQ(first_result->samples[0].entity_id, 1);
         EXPECT_EQ(first_result->samples[1].entity_id, 2);
+        EXPECT_EQ(first_result->samples[2].entity_id, 3);
         EXPECT_GT(first_result->tick, previous_tick);
         EXPECT_GT(first_result->revision, previous_revision);
         previous_tick = first_result->tick;
@@ -180,7 +191,7 @@ TEST(ControlledMovementProtocol, RepeatedBatchesAreStrictlyOrderedByTickAndRevis
     EXPECT_EQ(spatial.x_mm, 2'275);
     EXPECT_EQ(spatial.velocity_x_mm_per_second, 3'000);
     EXPECT_EQ(spatial.tick, 60);
-    EXPECT_EQ(spatial.revision, 62);
+    EXPECT_EQ(spatial.revision, 67);
     EXPECT_EQ(spatial.spatial_epoch, 1);
 }
 
@@ -194,19 +205,25 @@ TEST(ControlledMovementProtocol, LivingNeedNpcWalksAndBrakesInsideAssignedRestTo
     for (int tick = 0; tick < 364; ++tick) {
         const auto advanced = simulation.advance_locomotion_tick();
         ASSERT_TRUE(advanced.has_value());
-        ASSERT_EQ(advanced->samples.size(), 2U);
+        ASSERT_EQ(advanced->samples.size(), 3U);
         EXPECT_EQ(advanced->samples[0].entity_id, 1);
         EXPECT_EQ(advanced->samples[1].entity_id, 2);
+        EXPECT_EQ(advanced->samples[2].entity_id, 3);
         last = *advanced;
     }
 
     EXPECT_EQ(last.tick, 364);
-    EXPECT_EQ(last.revision, 366);
     EXPECT_EQ(last.samples[1].x_mm, -2'912);
     EXPECT_EQ(last.samples[1].z_mm, -3'000);
     EXPECT_EQ(last.samples[1].velocity_x_mm_per_second, 0);
     EXPECT_EQ(last.samples[1].velocity_z_mm_per_second, 0);
     EXPECT_EQ(last.samples[1].spatial_epoch, 1);
+    EXPECT_EQ(simulation.living_need_projection().status, worldsim::protocol::LivingNeedStatus::satisfied);
+
+    const auto resources = simulation.village_household_resource_projection();
+    EXPECT_EQ(resources.tick, last.tick);
+    EXPECT_GE(resources.revision, last.revision);
+    EXPECT_LE(resources.revision, last.revision + 1);
 }
 
 } // namespace

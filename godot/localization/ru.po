@@ -49,6 +49,9 @@ msgstr "Сценарий"
 msgid "UI_DEBUG_LIVING_NEED"
 msgstr "Потребность NPC в отдыхе"
 
+msgid "UI_DEBUG_HOUSEHOLD_RESOURCE"
+msgstr "Зерно соседнего хозяйства"
+
 msgid "UI_NEED_TRAVELING"
 msgstr "Идёт к месту отдыха"
 
@@ -57,6 +60,12 @@ msgstr "Место отдыха занято"
 
 msgid "UI_NEED_SATISFIED"
 msgstr "Место отдыха доступно"
+
+msgid "UI_RESOURCE_ADEQUATE"
+msgstr "Запас достаточен"
+
+msgid "UI_RESOURCE_SHORTAGE"
+msgstr "Нехватка"
 
 msgid "UI_WORLD_REST_TARGET_HINT"
 msgstr "Место отдыха NPC\nВстаньте на метку, чтобы помешать"
@@ -96,3 +105,6 @@ msgstr "Smoke-тест"
 
 msgid "UI_SCENARIO_REST_INTERFERENCE"
 msgstr "Вмешательство в отдых"
+
+msgid "UI_SCENARIO_SHORTAGE"
+msgstr "Автономная нехватка"

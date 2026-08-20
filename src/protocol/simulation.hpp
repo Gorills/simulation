@@ -1,6 +1,7 @@
 #pragma once
 
 #include "protocol/bootstrap_move.hpp"
+#include "protocol/household_resource.hpp"
 #include "protocol/integer.hpp"
 #include "protocol/living_need.hpp"
 #include "protocol/movement.hpp"
@@ -23,18 +24,15 @@ public:
     [[nodiscard]] ObservedWorldProjection observed_world_projection() const;
     [[nodiscard]] ControlledActorSpatialProjection controlled_actor_spatial_projection() const;
     [[nodiscard]] LivingNeedProjection living_need_projection() const;
+    [[nodiscard]] VillageHouseholdResourceProjection village_household_resource_projection() const;
 
 private:
     sim::World world_;
     sim::GroundedLocomotionContext locomotion_context_;
 
-    // Milestone 0 scenario/session binding only. Runtime entity identity is
-    // Simulation/content-owned; clients must not choose authoritative IDs.
-    sim::EntityId controlled_actor_{1};
-    // First Milestone 1 identity-resolved NPC. Its need and exact spatial state
-    // remain World-owned; this application object only orchestrates its Core
-    // decision output into the same fixed locomotion batch as human control.
-    sim::EntityId living_need_npc_{2};
+    // Session/control binding only. Runtime entity identity and composition are
+    // Simulation Core content-owned; clients must not choose authoritative IDs.
+    sim::EntityId controlled_actor_{};
     // Session/control state, not world truth. Submission validates and replaces
     // the desired planar intent; the authoritative World consumes it only when
     // the fixed locomotion tick advances.

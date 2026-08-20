@@ -364,6 +364,22 @@ theme_type_variation = &"DsInfoLabel"
 text = "—"
 horizontal_alignment = 2
 
+[node name="HouseholdResourceLabel" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsMutedLabel"
+text = "UI_DEBUG_HOUSEHOLD_RESOURCE"
+
+[node name="DebugHouseholdResourceStatus" type="Label" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack/AuthorityGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"DsInfoLabel"
+text = "—"
+horizontal_alignment = 2
+
 [node name="SpatialDivider" type="HSeparator" parent="HUD/ScreenMargin/HUDRow/HUDStack/DebugPanel/DebugStack"]
 layout_mode = 2
 mouse_filter = 2

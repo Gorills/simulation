@@ -27,6 +27,8 @@ python tools/dev.py check --preset sanitize
 python tools/dev.py check --preset dev
 python tools/dev.py play --scenario smoke --locale ru
 python tools/dev.py play --scenario smoke --locale en
+python tools/dev.py play --scenario shortage --locale ru
+python tools/dev.py play --scenario shortage --locale en
 python tools/dev.py play --scenario offscreen --locale ru
 python tools/dev.py play --scenario rest_interference --locale ru
 ```
@@ -37,6 +39,7 @@ Use only the subset required by the change, but do not claim a gate that did not
 - `sanitize` runs the Godot-free graph with the configured sanitizer preset.
 - `dev` additionally builds the GDExtension development graph.
 - `play --scenario smoke` launches the real Godot project and validates the ordinary boundary/screenshot evidence.
+- `play --scenario shortage` proves the first Milestone 2 vertical path from authoritative household discovery through autonomous post-movement Consume to localized shortage feedback without a player economic command.
 - `play --scenario offscreen` proves an observed living-need NPC can lose its Godot node, continue receiving authoritative movement while absent, and rematerialize from fresh observation plus a later authoritative sample.
 - `play --scenario rest_interference` proves the real client observes the first need as `traveling`, creates a `blocked` outcome through ordinary controlled locomotion, renders localized blocked feedback, then removes the obstruction through the same movement path and observes later `satisfied` feedback.
 
@@ -103,6 +106,24 @@ The `smoke` scenario validates authoritative identity/presence, controlled exact
 
 This is boundary/runtime evidence. It does **not** prove subjective control feel, audio output, GPU-driver coverage or performance.
 
+### Autonomous shortage
+
+The `shortage` scenario is the first Milestone 2 vertical resource checkpoint. It uses only ordinary runtime advancement and read-only projections; it has no scenario-only stock setter or player economic command.
+
+It must prove on one bounded run that:
+
+- initial village household discovery, observed-world state, controlled spatial initialization and LivingNeed discovery are read before runtime advancement from one unchanged world revision;
+- the client resolves the tracked NPC, its household and the shared rest/store position from authoritative projections rather than fixture EntityIds or coordinates in Godot;
+- the tracked household begins adequate;
+- ordinary locomotion advances the NPC to its authoritative store and application-level autonomous Consume occurs only afterward;
+- the final movement batch retains its movement revision while the resource projection reports the same `SimulationTick` at exactly one later `WorldRevision`;
+- the household's protocol status becomes `shortage` with lower authoritative stock and an unchanged threshold;
+- Godot does not derive or mutate shortage, but renders the status supplied by the resource projection;
+- RU and EN runs render localized shortage/scenario feedback and capture the standard screenshot artifact;
+- presentation retains the movement revision for controlled spatial state while its latest observed world revision reconciles to the post-Consume resource revision.
+
+This scenario proves autonomous scarcity can become player-visible through the real boundary. It does not prove recurring meal cadence, production, carry, gifting, work or markets.
+
 ### Offscreen continuation
 
 The `offscreen` scenario is a presentation-lifecycle proof, not a scheduler or large-world simulation benchmark.
@@ -164,7 +185,7 @@ Unexpected engine `ERROR` lines should still be investigated; the pass/fail cont
 
 ## Godot smoke CI lane
 
-The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs RU and EN baseline smoke, runs the bounded RU offscreen continuation scenario, runs the bounded RU rest-interference/help scenario, and uploads `.cache/play` evidence even on failure.
+The repository carries persistent `.github/workflows/godot-smoke.yml` runtime integration evidence. It installs the pinned Godot version from `tools/toolchain.lock.json`, builds the development/GDExtension graph, runs RU and EN baseline smoke, runs the bounded RU and EN autonomous-shortage checkpoint, runs the bounded RU offscreen continuation scenario, runs the bounded RU rest-interference/help scenario, and uploads `.cache/play` evidence even on failure.
 
 Documentation-only changes are excluded. The lane remains deliberately bounded: no narrow-layout matrix, interactive input-feel automation, performance thresholds or cross-platform GPU matrix without a demonstrated need.
 

@@ -5,12 +5,11 @@ const MOVE_INTENT_SCALE := 1000
 const LOCOMOTION_PACE_WALK := 0
 const LOCOMOTION_PACE_RUN := 1
 const LOCOMOTION_PACE_SPRINT := 2
-const LIVING_NEED_NPC_ENTITY_ID := 2
-const REST_TARGET_M := Vector2(-3.0, -3.0)
 const REST_HOLD_TOLERANCE_M := 0.04
 const REST_RUN_SWITCH_DISTANCE_M := 0.75
 const REST_INTERFERENCE_APPROACH_LIMIT_TICKS := 480
 const REST_INTERFERENCE_RELEASE_LIMIT_TICKS := 120
+const SHORTAGE_SCENARIO_LIMIT_TICKS := 480
 
 @onready var controls: PlayerControls = %PlayerControls
 @onready var world_presentation: WorldPresentation = %WorldPresentation
@@ -28,6 +27,7 @@ const REST_INTERFERENCE_RELEASE_LIMIT_TICKS := 120
 @onready var debug_seed: Label = %DebugSeed
 @onready var debug_scenario: Label = %DebugScenario
 @onready var debug_living_need_status: Label = %DebugLivingNeedStatus
+@onready var debug_household_resource_status: Label = %DebugHouseholdResourceStatus
 @onready var debug_authority_position: Label = %DebugAuthorityPosition
 @onready var debug_epoch: Label = %DebugEpoch
 @onready var debug_presentation_position: Label = %DebugPresentationPosition
@@ -35,12 +35,18 @@ const REST_INTERFERENCE_RELEASE_LIMIT_TICKS := 120
 
 var sim := SimFacade.new()
 var _bootstrap_projection: Dictionary = {}
+var _initial_village_household_resource_projection: Dictionary = {}
+var _village_household_resource_projection: Dictionary = {}
 var _observed_world_projection: Dictionary = {}
 var _controlled_actor_spatial_projection: Dictionary = {}
 var _living_need_projection: Dictionary = {}
 var _last_movement_batch: Dictionary = {}
 var _offscreen_evidence: Dictionary = {}
 var _rest_interference_evidence: Dictionary = {}
+var _shortage_evidence: Dictionary = {}
+var _living_need_actor_id := 0
+var _tracked_household_id := 0
+var _rest_target_m := Vector2.ZERO
 var _debug_refresh_elapsed := 0.0
 var _scenario_name := "interactive"
 var _locomotion_runtime_enabled := false
@@ -53,6 +59,9 @@ var _duplicate_movement_batch_rejected := false
 
 
 func _ready() -> void:
+    _initial_village_household_resource_projection = sim.village_household_resource_projection()
+    _village_household_resource_projection = _initial_village_household_resource_projection.duplicate(true)
+
     _observed_world_projection = sim.observed_world_projection()
     if not world_presentation.apply_observed_world_projection(
         _observed_world_projection,
@@ -72,6 +81,10 @@ func _ready() -> void:
         return
 
     _living_need_projection = sim.living_need_projection()
+    if not _validate_startup_projection_revision() or not _resolve_acceptance_projection_bindings():
+        get_tree().quit(12)
+        return
+
     camera_rig.configure(controls, player)
     controls.input_device_changed.connect(_on_input_device_changed)
     Localization.locale_changed.connect(_on_locale_changed)
@@ -83,7 +96,7 @@ func _ready() -> void:
         _scenario_name = scenario
     _refresh_debug_hud()
 
-    if scenario == "smoke" or scenario == "offscreen" or scenario == "rest_interference":
+    if scenario in ["smoke", "offscreen", "rest_interference", "shortage"]:
         var artifact_dir := _user_arg_value("--artifact-dir")
         if artifact_dir.is_empty():
             push_error("bounded playtest scenario requires --artifact-dir")
@@ -94,6 +107,8 @@ func _ready() -> void:
                 call_deferred("_run_offscreen", artifact_dir)
             "rest_interference":
                 call_deferred("_run_rest_interference", artifact_dir)
+            "shortage":
+                call_deferred("_run_shortage", artifact_dir)
             _:
                 call_deferred("_run_smoke", artifact_dir)
         return
@@ -139,6 +154,108 @@ func _on_locale_changed(_locale: String) -> void:
 
 func _set_bootstrap_projection(projection: Dictionary) -> void:
     _bootstrap_projection = projection
+
+
+func _validate_startup_projection_revision() -> bool:
+    var projections := [
+        _initial_village_household_resource_projection,
+        _observed_world_projection,
+        _controlled_actor_spatial_projection,
+        _living_need_projection,
+    ]
+    var expected_tick := int(_initial_village_household_resource_projection.get("tick", -1))
+    var expected_revision := int(_initial_village_household_resource_projection.get("revision", -1))
+    var expected_protocol := int(
+        _initial_village_household_resource_projection.get("protocol_version", 0)
+    )
+    if expected_tick < 0 or expected_revision < 0 or expected_protocol <= 0:
+        push_error("initial village resource projection has an invalid temporal header")
+        return false
+    for projection_value in projections:
+        if typeof(projection_value) != TYPE_DICTIONARY:
+            push_error("startup projection is not a Dictionary")
+            return false
+        var projection: Dictionary = projection_value
+        if (
+            int(projection.get("tick", -1)) != expected_tick
+            or int(projection.get("revision", -1)) != expected_revision
+            or int(projection.get("protocol_version", 0)) != expected_protocol
+        ):
+            push_error("startup projections are not from one unchanged world revision")
+            return false
+    return true
+
+
+func _resolve_acceptance_projection_bindings() -> bool:
+    _living_need_actor_id = int(_living_need_projection.get("entity_id", 0))
+    var target_value = _living_need_projection.get("target_position_m", null)
+    if _living_need_actor_id <= 0 or typeof(target_value) != TYPE_VECTOR3:
+        push_error("living-need projection cannot resolve the acceptance actor/target")
+        return false
+
+    var household := _household_for_member(
+        _initial_village_household_resource_projection,
+        _living_need_actor_id
+    )
+    if household.is_empty():
+        push_error("living-need actor is not present in authoritative household discovery")
+        return false
+
+    var store_value = household.get("store_position_m", null)
+    if typeof(store_value) != TYPE_VECTOR3:
+        push_error("tracked household has no authoritative store position")
+        return false
+    var target: Vector3 = target_value
+    var store: Vector3 = store_value
+    if not is_equal_approx(target.x, store.x) or not is_equal_approx(target.z, store.z):
+        push_error("RestNeed target and household store are not the same Core content fact")
+        return false
+
+    _tracked_household_id = int(household.get("household_id", 0))
+    if _tracked_household_id <= 0:
+        push_error("tracked household has an invalid EntityId")
+        return false
+    _rest_target_m = Vector2(target.x, target.z)
+    return true
+
+
+func _household_for_member(projection: Dictionary, actor_id: int) -> Dictionary:
+    var households_value = projection.get("households", null)
+    if typeof(households_value) != TYPE_ARRAY or actor_id <= 0:
+        return {}
+    for household_value in households_value:
+        if typeof(household_value) != TYPE_DICTIONARY:
+            return {}
+        var household: Dictionary = household_value
+        var members_value = household.get("member_actor_ids", null)
+        if typeof(members_value) != TYPE_ARRAY:
+            return {}
+        for member_value in members_value:
+            if int(member_value) == actor_id:
+                return household
+    return {}
+
+
+func _household_by_id(projection: Dictionary, household_id: int) -> Dictionary:
+    var households_value = projection.get("households", null)
+    if typeof(households_value) != TYPE_ARRAY or household_id <= 0:
+        return {}
+    for household_value in households_value:
+        if typeof(household_value) != TYPE_DICTIONARY:
+            return {}
+        var household: Dictionary = household_value
+        if int(household.get("household_id", 0)) == household_id:
+            return household
+    return {}
+
+
+func _refresh_village_household_resource_projection() -> bool:
+    var projection: Dictionary = sim.village_household_resource_projection()
+    if typeof(projection.get("households", null)) != TYPE_ARRAY:
+        push_error("village household resource bridge read is invalid")
+        return false
+    _village_household_resource_projection = projection
+    return true
 
 
 func _advance_authoritative_locomotion(intent: Vector2i, pace: int) -> bool:
@@ -255,7 +372,7 @@ func _controlled_planar_position() -> Vector2:
 
 
 func _intent_toward_rest_target() -> Vector2i:
-    var delta := REST_TARGET_M - _controlled_planar_position()
+    var delta := _rest_target_m - _controlled_planar_position()
     if abs(delta.x) <= REST_HOLD_TOLERANCE_M and abs(delta.y) <= REST_HOLD_TOLERANCE_M:
         return Vector2i.ZERO
     if delta.is_zero_approx():
@@ -268,12 +385,14 @@ func _intent_toward_rest_target() -> Vector2i:
 
 
 func _pace_toward_rest_target() -> int:
-    var distance := (REST_TARGET_M - _controlled_planar_position()).length()
+    var distance := (_rest_target_m - _controlled_planar_position()).length()
     return LOCOMOTION_PACE_RUN if distance > REST_RUN_SWITCH_DISTANCE_M else LOCOMOTION_PACE_WALK
 
 
 func _refresh_debug_hud() -> void:
     _living_need_projection = sim.living_need_projection()
+    if not _refresh_village_household_resource_projection():
+        debug_household_resource_status.text = "—"
     var authoritative_position := world_presentation.controlled_authoritative_position()
     var presentation_position := player.get_global_transform_interpolated().origin
     var fps := int(Performance.get_monitor(Performance.TIME_FPS))
@@ -293,6 +412,9 @@ func _refresh_debug_hud() -> void:
     debug_scenario.text = _scenario_text()
     debug_living_need_status.text = _living_need_status_text(
         str(_living_need_projection.get("status", "unknown"))
+    )
+    debug_household_resource_status.text = _household_resource_status_text(
+        _household_by_id(_village_household_resource_projection, _tracked_household_id)
     )
 
     debug_authority_position.text = "(%.2f, %.2f, %.2f) m" % [
@@ -321,6 +443,24 @@ func _living_need_status_text(status: String) -> String:
             return "—"
 
 
+func _household_resource_status_text(household: Dictionary) -> String:
+    if household.is_empty():
+        return "—"
+    var status_text := "—"
+    match str(household.get("status", "unknown")):
+        "adequate":
+            status_text = tr(&"UI_RESOURCE_ADEQUATE")
+        "shortage":
+            status_text = tr(&"UI_RESOURCE_SHORTAGE")
+        _:
+            return "—"
+    return "%s · %d / %d" % [
+        status_text,
+        int(household.get("grain_stock_units", 0)),
+        int(household.get("shortage_threshold_units", 0)),
+    ]
+
+
 func _active_input_device_text() -> String:
     match controls.active_device():
         PlayerControls.InputDevice.GAMEPAD:
@@ -335,6 +475,8 @@ func _scenario_text() -> String:
             return tr(&"UI_SCENARIO_SMOKE")
         "rest_interference":
             return tr(&"UI_SCENARIO_REST_INTERFERENCE")
+        "shortage":
+            return tr(&"UI_SCENARIO_SHORTAGE")
         _:
             return tr(&"UI_SCENARIO_INTERACTIVE")
 
@@ -413,18 +555,18 @@ func _run_offscreen(artifact_dir: String) -> void:
         get_tree().quit(10)
         return
 
-    var initial_npc_presentation := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID)
+    var initial_npc_presentation := world_presentation.presentation_for(_living_need_actor_id)
     if initial_npc_presentation == null or not initial_npc_presentation.visible:
         push_error("offscreen scenario requires an initially materialized visible NPC")
         get_tree().quit(10)
         return
-    if not world_presentation.dematerialize_observed_non_controlled(LIVING_NEED_NPC_ENTITY_ID):
+    if not world_presentation.dematerialize_observed_non_controlled(_living_need_actor_id):
         get_tree().quit(10)
         return
     await get_tree().process_frame
 
-    var observed_while_absent := world_presentation.is_observed(LIVING_NEED_NPC_ENTITY_ID)
-    var absent_before_tick := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID) == null
+    var observed_while_absent := world_presentation.is_observed(_living_need_actor_id)
+    var absent_before_tick := world_presentation.presentation_for(_living_need_actor_id) == null
     if not observed_while_absent or not absent_before_tick:
         push_error("NPC must remain observed while its presentation is absent")
         get_tree().quit(10)
@@ -435,7 +577,7 @@ func _run_offscreen(artifact_dir: String) -> void:
         return
     var offscreen_batch := _last_movement_batch.duplicate(true)
     var offscreen_batch_evidence := _movement_batch_evidence(offscreen_batch)
-    var absent_after_tick := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID) == null
+    var absent_after_tick := world_presentation.presentation_for(_living_need_actor_id) == null
     if offscreen_batch_evidence.is_empty() or not absent_after_tick:
         push_error("authoritative offscreen tick must succeed without rematerializing the NPC")
         get_tree().quit(10)
@@ -449,7 +591,7 @@ func _run_offscreen(artifact_dir: String) -> void:
         push_error("failed to rematerialize NPC from fresh observed-world projection")
         get_tree().quit(10)
         return
-    var rematerialized := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID)
+    var rematerialized := world_presentation.presentation_for(_living_need_actor_id)
     var hidden_before_sample := rematerialized != null and not rematerialized.visible
     if not hidden_before_sample:
         push_error("rematerialized NPC must wait hidden for a fresh authoritative sample")
@@ -459,7 +601,7 @@ func _run_offscreen(artifact_dir: String) -> void:
     if not await _run_one_smoke_movement():
         get_tree().quit(8)
         return
-    var rematerialized_after_sample := world_presentation.presentation_for(LIVING_NEED_NPC_ENTITY_ID)
+    var rematerialized_after_sample := world_presentation.presentation_for(_living_need_actor_id)
     var visible_after_sample := (
         rematerialized_after_sample != null and rematerialized_after_sample.visible
     )
@@ -469,7 +611,7 @@ func _run_offscreen(artifact_dir: String) -> void:
         return
 
     _offscreen_evidence = {
-        "entity_id": LIVING_NEED_NPC_ENTITY_ID,
+        "entity_id": _living_need_actor_id,
         "observed_while_absent": observed_while_absent,
         "presentation_absent_before_tick": absent_before_tick,
         "presentation_absent_after_tick": absent_after_tick,
@@ -564,7 +706,7 @@ func _run_rest_interference(artifact_dir: String) -> void:
 
     var satisfied_position := _controlled_planar_position()
     _rest_interference_evidence = {
-        "entity_id": LIVING_NEED_NPC_ENTITY_ID,
+        "entity_id": _living_need_actor_id,
         "initial_status": initial_status,
         "blocked_projection": blocked_projection,
         "satisfied_projection": satisfied_projection,
@@ -596,6 +738,89 @@ func _run_rest_interference(artifact_dir: String) -> void:
     get_tree().quit(0)
 
 
+func _run_shortage(artifact_dir: String) -> void:
+    await get_tree().process_frame
+    var initial_household := _household_by_id(
+        _initial_village_household_resource_projection,
+        _tracked_household_id
+    )
+    if initial_household.is_empty() or str(initial_household.get("status", "unknown")) != "adequate":
+        push_error("autonomous shortage scenario must begin with an adequate tracked household")
+        get_tree().quit(13)
+        return
+
+    var shortage_projection: Dictionary = {}
+    for _tick in range(SHORTAGE_SCENARIO_LIMIT_TICKS):
+        if not await _run_one_scripted_movement(Vector2i.ZERO, LOCOMOTION_PACE_WALK):
+            get_tree().quit(8)
+            return
+        if not _refresh_village_household_resource_projection():
+            get_tree().quit(13)
+            return
+        var household := _household_by_id(
+            _village_household_resource_projection,
+            _tracked_household_id
+        )
+        if household.is_empty():
+            push_error("tracked household disappeared from authoritative discovery")
+            get_tree().quit(13)
+            return
+        if str(household.get("status", "unknown")) == "shortage":
+            shortage_projection = _village_household_resource_projection.duplicate(true)
+            break
+
+    if shortage_projection.is_empty():
+        push_error("autonomous NPC Consume did not produce shortage before the deadline")
+        get_tree().quit(13)
+        return
+
+    _village_household_resource_projection = shortage_projection
+    _observed_world_projection = sim.observed_world_projection()
+    if not world_presentation.apply_observed_world_projection(
+        _observed_world_projection,
+        player_entity_binding
+    ):
+        push_error("failed to reconcile presentation to the post-Consume world revision")
+        get_tree().quit(13)
+        return
+
+    _refresh_debug_hud()
+    var final_household := _household_by_id(
+        _village_household_resource_projection,
+        _tracked_household_id
+    )
+    if final_household.is_empty() or str(final_household.get("status", "unknown")) != "shortage":
+        push_error("localized shortage feedback lost the authoritative shortage household")
+        get_tree().quit(13)
+        return
+
+    _shortage_evidence = {
+        "actor_id": _living_need_actor_id,
+        "household_id": _tracked_household_id,
+        "player_economic_intent_submitted": false,
+        "initial_status": str(initial_household.get("status", "unknown")),
+        "final_status": str(final_household.get("status", "unknown")),
+        "initial_stock_units": int(initial_household.get("grain_stock_units", -1)),
+        "final_stock_units": int(final_household.get("grain_stock_units", -1)),
+        "shortage_threshold_units": int(final_household.get("shortage_threshold_units", -1)),
+        "movement_tick": int(_last_movement_batch.get("tick", -1)),
+        "movement_revision": int(_last_movement_batch.get("revision", -1)),
+        "resource_tick": int(_village_household_resource_projection.get("tick", -1)),
+        "resource_revision": int(_village_household_resource_projection.get("revision", -1)),
+        "shortage_hud_text": debug_household_resource_status.text,
+    }
+
+    await RenderingServer.frame_post_draw
+    if not _write_debug_artifact(artifact_dir):
+        get_tree().quit(4)
+        return
+    if not _write_screenshot(artifact_dir):
+        get_tree().quit(5)
+        return
+
+    get_tree().quit(0)
+
+
 func _write_debug_artifact(artifact_dir: String) -> bool:
     var mkdir_error := DirAccess.make_dir_recursive_absolute(artifact_dir)
     if mkdir_error != OK:
@@ -609,12 +834,25 @@ func _write_debug_artifact(artifact_dir: String) -> bool:
 
     var spatial_evidence := _spatial_evidence(_controlled_actor_spatial_projection)
     var movement_evidence := _movement_batch_evidence(_last_movement_batch)
-    if spatial_evidence.is_empty() or movement_evidence.is_empty():
-        push_error("authoritative spatial movement is not serializable smoke evidence")
+    var initial_resource_evidence := _resource_projection_evidence(
+        _initial_village_household_resource_projection
+    )
+    var resource_evidence := _resource_projection_evidence(
+        _village_household_resource_projection
+    )
+    if (
+        spatial_evidence.is_empty()
+        or movement_evidence.is_empty()
+        or initial_resource_evidence.is_empty()
+        or resource_evidence.is_empty()
+    ):
+        push_error("authoritative runtime state is not serializable playtest evidence")
         return false
 
     var evidence := {
         "bootstrap_projection": _bootstrap_projection,
+        "initial_village_household_resource_projection": initial_resource_evidence,
+        "village_household_resource_projection": resource_evidence,
         "observed_world_projection": _observed_world_projection,
         "controlled_actor_spatial_projection": spatial_evidence,
         "living_need_projection": _living_need_projection,
@@ -629,12 +867,16 @@ func _write_debug_artifact(artifact_dir: String) -> bool:
             "hud_title": tr(&"UI_DEBUG_TITLE"),
             "controls_hint": tr(&"UI_DEBUG_CONTROLS_HINT"),
             "living_need_status_text": debug_living_need_status.text,
+            "household_resource_status_text": debug_household_resource_status.text,
+            "scenario_text": debug_scenario.text,
         },
     }
     if not _offscreen_evidence.is_empty():
         evidence["offscreen_continuation"] = _offscreen_evidence
     if not _rest_interference_evidence.is_empty():
         evidence["rest_interference"] = _rest_interference_evidence
+    if not _shortage_evidence.is_empty():
+        evidence["autonomous_shortage"] = _shortage_evidence
     file.store_string(JSON.stringify(evidence, "  "))
     return true
 
@@ -686,6 +928,40 @@ func _movement_batch_evidence(batch: Dictionary) -> Dictionary:
         "revision": int(batch.get("revision", -1)),
         "protocol_version": int(batch.get("protocol_version", 0)),
         "samples": serialized_samples,
+    }
+
+
+func _resource_projection_evidence(projection: Dictionary) -> Dictionary:
+    var households_value = projection.get("households", null)
+    if typeof(households_value) != TYPE_ARRAY:
+        return {}
+
+    var serialized_households: Array = []
+    for household_value in households_value:
+        if typeof(household_value) != TYPE_DICTIONARY:
+            return {}
+        var household: Dictionary = household_value
+        var members_value = household.get("member_actor_ids", null)
+        var store_value = household.get("store_position_m", null)
+        if typeof(members_value) != TYPE_ARRAY or typeof(store_value) != TYPE_VECTOR3:
+            return {}
+        var store: Vector3 = store_value
+        serialized_households.append({
+            "household_id": int(household.get("household_id", 0)),
+            "member_actor_ids": members_value,
+            "store_place_id": int(household.get("store_place_id", 0)),
+            "store_position_m": [store.x, store.y, store.z],
+            "store_axis_tolerance_m": float(household.get("store_axis_tolerance_m", -1.0)),
+            "grain_stock_units": int(household.get("grain_stock_units", -1)),
+            "shortage_threshold_units": int(household.get("shortage_threshold_units", -1)),
+            "status": str(household.get("status", "unknown")),
+        })
+
+    return {
+        "tick": int(projection.get("tick", -1)),
+        "revision": int(projection.get("revision", -1)),
+        "protocol_version": int(projection.get("protocol_version", 0)),
+        "households": serialized_households,
     }
 
 

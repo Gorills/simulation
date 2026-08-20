@@ -49,6 +49,9 @@ msgstr "Scenario"
 msgid "UI_DEBUG_LIVING_NEED"
 msgstr "NPC rest need"
 
+msgid "UI_DEBUG_HOUSEHOLD_RESOURCE"
+msgstr "Neighbour household grain"
+
 msgid "UI_NEED_TRAVELING"
 msgstr "Traveling to rest"
 
@@ -57,6 +60,12 @@ msgstr "Rest place blocked"
 
 msgid "UI_NEED_SATISFIED"
 msgstr "Rest place available"
+
+msgid "UI_RESOURCE_ADEQUATE"
+msgstr "Adequate"
+
+msgid "UI_RESOURCE_SHORTAGE"
+msgstr "Shortage"
 
 msgid "UI_WORLD_REST_TARGET_HINT"
 msgstr "NPC rest place\nStand on the marker to block the place"
@@ -96,3 +105,6 @@ msgstr "Smoke test"
 
 msgid "UI_SCENARIO_REST_INTERFERENCE"
 msgstr "Rest interference"
+
+msgid "UI_SCENARIO_SHORTAGE"
+msgstr "Autonomous shortage"

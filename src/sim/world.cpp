@@ -24,6 +24,17 @@ struct PendingGroundedMove final {
     return static_cast<std::uint64_t>(second) - static_cast<std::uint64_t>(first);
 }
 
+[[nodiscard]] bool has_duplicate_members(const std::vector<EntityId> &members) noexcept {
+    for (std::size_t index = 0; index < members.size(); ++index) {
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            if (members[index] == members[previous]) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 [[nodiscard]] GroundedLocomotionTickError map_step_error(const GroundedStepError error) noexcept {
     switch (error) {
     case GroundedStepError::invalid_environment:
@@ -97,11 +108,13 @@ std::expected<void, WorldError> World::spawn_actor(
     if (initial.rest_need.has_value() && !initial.rest_need->is_valid()) {
         return std::unexpected(WorldError::invalid_rest_need_state);
     }
-
-    const auto [index_entry, inserted] = actor_index_by_id_.emplace(id.value, actors_.size());
-    if (!inserted) {
+    if (entity_id_in_use(id)) {
         return std::unexpected(WorldError::duplicate_entity);
     }
+
+    const auto [index_entry, inserted] = actor_index_by_id_.emplace(id.value, actors_.size());
+    assert(inserted);
+    (void)inserted;
 
     try {
         actors_.push_back(ActorState{
@@ -111,8 +124,92 @@ std::expected<void, WorldError> World::spawn_actor(
             .locomotion_capability = initial.locomotion_capability,
             .rest_need = initial.rest_need,
         });
+        try {
+            actor_ids_.push_back(id);
+        } catch (...) {
+            actors_.pop_back();
+            throw;
+        }
     } catch (...) {
         actor_index_by_id_.erase(index_entry);
+        throw;
+    }
+
+    ++revision_.value;
+    return {};
+}
+
+std::expected<void, WorldError> World::add_place(const PlaceState place) {
+    if (!place.id.is_valid()) {
+        return std::unexpected(WorldError::invalid_entity_id);
+    }
+    if (!place.is_valid()) {
+        return std::unexpected(WorldError::invalid_place_state);
+    }
+    if (entity_id_in_use(place.id)) {
+        return std::unexpected(WorldError::duplicate_entity);
+    }
+
+    const auto [index_entry, inserted] = place_index_by_id_.emplace(place.id.value, places_.size());
+    assert(inserted);
+    (void)inserted;
+    try {
+        places_.push_back(place);
+    } catch (...) {
+        place_index_by_id_.erase(index_entry);
+        throw;
+    }
+
+    ++revision_.value;
+    return {};
+}
+
+std::expected<void, WorldError> World::add_household(HouseholdState household) {
+    if (!household.id.is_valid()) {
+        return std::unexpected(WorldError::invalid_entity_id);
+    }
+    if (!household.store_place.is_valid() || !household.has_valid_resource_state()) {
+        return std::unexpected(WorldError::invalid_household_state);
+    }
+    for (const auto member : household.members) {
+        if (!member.is_valid()) {
+            return std::unexpected(WorldError::invalid_household_state);
+        }
+    }
+    if (entity_id_in_use(household.id)) {
+        return std::unexpected(WorldError::duplicate_entity);
+    }
+    if (!contains_place(household.store_place)) {
+        return std::unexpected(WorldError::unknown_store_place);
+    }
+    if (has_duplicate_members(household.members)) {
+        return std::unexpected(WorldError::duplicate_household_member);
+    }
+    for (const auto member : household.members) {
+        if (!contains_actor(member)) {
+            return std::unexpected(WorldError::unknown_household_member);
+        }
+        if (actor_belongs_to_household(member)) {
+            return std::unexpected(WorldError::actor_already_in_household);
+        }
+    }
+
+    const auto [index_entry, inserted] = household_index_by_id_.emplace(
+        household.id.value,
+        households_.size()
+    );
+    assert(inserted);
+    (void)inserted;
+    try {
+        households_.push_back(std::move(household));
+        try {
+            household_ids_.push_back(households_.back().id);
+        } catch (...) {
+            households_.pop_back();
+            throw;
+        }
+    } catch (...) {
+        household_index_by_id_.erase(index_entry);
         throw;
     }
 
@@ -275,6 +372,8 @@ WorldSnapshot World::snapshot() const {
         .tick = tick_,
         .revision = revision_,
         .actors = actors_,
+        .places = places_,
+        .households = households_,
     };
 }
 
@@ -287,7 +386,13 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
     // never partially mutate the current authoritative state.
     World restored{snapshot_state.seed};
     restored.actors_.reserve(snapshot_state.actors.size());
+    restored.places_.reserve(snapshot_state.places.size());
+    restored.households_.reserve(snapshot_state.households.size());
     restored.actor_index_by_id_.reserve(snapshot_state.actors.size());
+    restored.place_index_by_id_.reserve(snapshot_state.places.size());
+    restored.household_index_by_id_.reserve(snapshot_state.households.size());
+    restored.actor_ids_.reserve(snapshot_state.actors.size());
+    restored.household_ids_.reserve(snapshot_state.households.size());
 
     for (const auto &actor : snapshot_state.actors) {
         if (!actor.id.is_valid()) {
@@ -308,14 +413,66 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         ) {
             return std::unexpected(WorldSnapshotError::invalid_grounded_locomotion_state);
         }
-
-        const bool inserted = restored.actor_index_by_id_
-                                  .emplace(actor.id.value, restored.actors_.size())
-                                  .second;
-        if (!inserted) {
+        if (restored.entity_id_in_use(actor.id)) {
             return std::unexpected(WorldSnapshotError::duplicate_entity);
         }
+
+        restored.actor_index_by_id_.emplace(actor.id.value, restored.actors_.size());
         restored.actors_.push_back(actor);
+        restored.actor_ids_.push_back(actor.id);
+    }
+
+    for (const auto &place : snapshot_state.places) {
+        if (!place.id.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_entity_id);
+        }
+        if (!place.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_place_state);
+        }
+        if (restored.entity_id_in_use(place.id)) {
+            return std::unexpected(WorldSnapshotError::duplicate_entity);
+        }
+
+        restored.place_index_by_id_.emplace(place.id.value, restored.places_.size());
+        restored.places_.push_back(place);
+    }
+
+    for (const auto &household : snapshot_state.households) {
+        if (!household.id.is_valid()) {
+            return std::unexpected(WorldSnapshotError::invalid_entity_id);
+        }
+        if (!household.store_place.is_valid() || !household.has_valid_resource_state()) {
+            return std::unexpected(WorldSnapshotError::invalid_household_state);
+        }
+        for (const auto member : household.members) {
+            if (!member.is_valid()) {
+                return std::unexpected(WorldSnapshotError::invalid_household_state);
+            }
+        }
+        if (restored.entity_id_in_use(household.id)) {
+            return std::unexpected(WorldSnapshotError::duplicate_entity);
+        }
+        if (!restored.contains_place(household.store_place)) {
+            return std::unexpected(WorldSnapshotError::unknown_store_place);
+        }
+        if (has_duplicate_members(household.members)) {
+            return std::unexpected(WorldSnapshotError::duplicate_household_member);
+        }
+        for (const auto member : household.members) {
+            if (!restored.contains_actor(member)) {
+                return std::unexpected(WorldSnapshotError::unknown_household_member);
+            }
+            if (restored.actor_belongs_to_household(member)) {
+                return std::unexpected(WorldSnapshotError::actor_already_in_household);
+            }
+        }
+
+        restored.household_index_by_id_.emplace(
+            household.id.value,
+            restored.households_.size()
+        );
+        restored.households_.push_back(household);
+        restored.household_ids_.push_back(household.id);
     }
 
     restored.tick_ = snapshot_state.tick;
@@ -326,6 +483,14 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
 
 bool World::contains_actor(const EntityId id) const noexcept {
     return id.is_valid() && actor_index_by_id_.contains(id.value);
+}
+
+bool World::contains_place(const EntityId id) const noexcept {
+    return id.is_valid() && place_index_by_id_.contains(id.value);
+}
+
+bool World::contains_household(const EntityId id) const noexcept {
+    return id.is_valid() && household_index_by_id_.contains(id.value);
 }
 
 std::optional<GridPosition> World::actor_bootstrap_position(const EntityId id) const noexcept {
@@ -358,6 +523,30 @@ std::optional<RestNeedState> World::actor_rest_need(const EntityId id) const noe
         return std::nullopt;
     }
     return actors_[*index].rest_need;
+}
+
+std::optional<PlaceState> World::place_state(const EntityId id) const noexcept {
+    const auto index = place_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
+    }
+    return places_[*index];
+}
+
+std::optional<HouseholdState> World::household_state(const EntityId id) const {
+    const auto index = household_index(id);
+    if (!index.has_value()) {
+        return std::nullopt;
+    }
+    return households_[*index];
+}
+
+std::span<const EntityId> World::actor_ids() const noexcept {
+    return {actor_ids_.data(), actor_ids_.size()};
+}
+
+std::span<const EntityId> World::household_ids() const noexcept {
+    return {household_ids_.data(), household_ids_.size()};
 }
 
 bool World::is_planar_position_occupied_by_other_actor(
@@ -402,11 +591,27 @@ WorldSeed World::seed() const noexcept {
     return seed_;
 }
 
+bool World::entity_id_in_use(const EntityId id) const noexcept {
+    return actor_index_by_id_.contains(id.value)
+        || place_index_by_id_.contains(id.value)
+        || household_index_by_id_.contains(id.value);
+}
+
+bool World::actor_belongs_to_household(const EntityId id) const noexcept {
+    for (const auto &household : households_) {
+        for (const auto member : household.members) {
+            if (member == id) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::optional<std::size_t> World::actor_index(const EntityId id) const noexcept {
     if (!id.is_valid()) {
         return std::nullopt;
     }
-
     const auto entry = actor_index_by_id_.find(id.value);
     if (entry == actor_index_by_id_.end()) {
         return std::nullopt;
@@ -414,6 +619,34 @@ std::optional<std::size_t> World::actor_index(const EntityId id) const noexcept 
 
     assert(entry->second < actors_.size());
     assert(actors_[entry->second].id == id);
+    return entry->second;
+}
+
+std::optional<std::size_t> World::place_index(const EntityId id) const noexcept {
+    if (!id.is_valid()) {
+        return std::nullopt;
+    }
+    const auto entry = place_index_by_id_.find(id.value);
+    if (entry == place_index_by_id_.end()) {
+        return std::nullopt;
+    }
+
+    assert(entry->second < places_.size());
+    assert(places_[entry->second].id == id);
+    return entry->second;
+}
+
+std::optional<std::size_t> World::household_index(const EntityId id) const noexcept {
+    if (!id.is_valid()) {
+        return std::nullopt;
+    }
+    const auto entry = household_index_by_id_.find(id.value);
+    if (entry == household_index_by_id_.end()) {
+        return std::nullopt;
+    }
+
+    assert(entry->second < households_.size());
+    assert(households_[entry->second].id == id);
     return entry->second;
 }
 

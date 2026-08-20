@@ -1,13 +1,15 @@
 #include "protocol/simulation.hpp"
 
+#include "sim/acceptance_village.hpp"
 #include "sim/living_need.hpp"
 
-#include <array>
 #include <cassert>
 #include <cstddef>
 #include <expected>
 #include <optional>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace worldsim::protocol {
 namespace {
@@ -71,6 +73,19 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
     return LivingNeedStatus::traveling;
 }
 
+[[nodiscard]] HouseholdResourceStatus household_resource_status(const bool shortage) noexcept {
+    return shortage ? HouseholdResourceStatus::shortage : HouseholdResourceStatus::adequate;
+}
+
+[[nodiscard]] std::optional<sim::EntityId> first_living_need_actor(const sim::World &world) noexcept {
+    for (const auto actor : world.actor_ids()) {
+        if (world.actor_rest_need(actor).has_value()) {
+            return actor;
+        }
+    }
+    return std::nullopt;
+}
+
 [[nodiscard]] sim::WorldSeed checked_world_seed(const ProtocolInteger seed) {
     if (seed < 0) {
         throw std::invalid_argument("protocol seed must be non-negative");
@@ -130,43 +145,12 @@ static_assert(kPlanarMoveIntentScale == sim::kIntentScale);
 Simulation::Simulation(const ProtocolInteger seed)
     : world_(checked_world_seed(seed)),
       locomotion_context_(sim::make_flat_locomotion_acceptance_context()) {
-    const auto controlled_spawned = world_.spawn_actor(
-        controlled_actor_,
-        sim::ActorSpawnState{
-            .spatial = sim::SpatialState{
-                .position = {},
-                .velocity = {},
-                .epoch = sim::SpatialEpoch{1},
-            },
-        }
-    );
-    assert(controlled_spawned.has_value());
-    (void)controlled_spawned;
-
-    // First Milestone 1 acceptance scenario: the NPC starts six meters away
-    // from its assigned local rest point. RestNeedState is authoritative actor
-    // state; the visible Godot shell merely presents the resulting samples.
-    const auto npc_spawned = world_.spawn_actor(
-        living_need_npc_,
-        sim::ActorSpawnState{
-            .spatial = sim::SpatialState{
-                .position = {
-                    .x = sim::Millimeters{3'000},
-                    .y = sim::Millimeters{0},
-                    .z = sim::Millimeters{-3'000},
-                },
-                .velocity = {},
-                .epoch = sim::SpatialEpoch{1},
-            },
-            .rest_need = sim::RestNeedState{
-                .rest_x = sim::Millimeters{-3'000},
-                .rest_z = sim::Millimeters{-3'000},
-                .axis_arrival_tolerance = sim::Millimeters{150},
-            },
-        }
-    );
-    assert(npc_spawned.has_value());
-    (void)npc_spawned;
+    const auto bindings = sim::populate_household_resource_acceptance_village(world_);
+    if (!bindings.has_value()) {
+        throw std::logic_error("household resource acceptance village is invalid");
+    }
+    controlled_actor_ = bindings->controlled_actor;
+    assert(world_.contains_actor(controlled_actor_));
 }
 
 BootstrapMoveOutcome Simulation::bootstrap_move(const BootstrapMoveIntent &intent) {
@@ -212,26 +196,49 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
         return std::unexpected(ControlledActorMovementError::invalid_pace);
     }
 
-    const auto npc_decision = sim::decide_npc_rest_need(world_, living_need_npc_);
-    if (!npc_decision.has_value()) {
-        return std::unexpected(ControlledActorMovementError::world_rejected);
+    // Reuse this one bounded actor view for movement collection and post-movement
+    // autonomy. No snapshot copy, named NPC field or second entity enumeration.
+    const auto actor_ids = world_.actor_ids();
+    std::vector<sim::ActorGroundedMoveIntent> intents;
+    intents.reserve(actor_ids.size());
+
+    for (const auto actor : actor_ids) {
+        if (actor == controlled_actor_) {
+            intents.push_back(sim::ActorGroundedMoveIntent{
+                .actor = actor,
+                .move = sim::PlanarMoveIntent{
+                    .x = controlled_move_intent_.x,
+                    .z = controlled_move_intent_.z,
+                },
+                .pace = *controlled_pace,
+            });
+            continue;
+        }
+
+        if (world_.actor_rest_need(actor).has_value()) {
+            const auto decision = sim::decide_npc_rest_need(world_, actor);
+            if (!decision.has_value()) {
+                return std::unexpected(ControlledActorMovementError::world_rejected);
+            }
+            intents.push_back(decision->movement);
+            continue;
+        }
+
+        // Exact-spatial actors without a current movement-producing behavior still
+        // join the authoritative batch with idle intent so presentation can
+        // materialize them without a feature-named branch.
+        if (world_.actor_spatial_state(actor).has_value()) {
+            intents.push_back(sim::ActorGroundedMoveIntent{
+                .actor = actor,
+                .move = {},
+                .pace = sim::LocomotionPace::walk,
+            });
+        }
     }
 
-    const std::array intents{
-        sim::ActorGroundedMoveIntent{
-            .actor = controlled_actor_,
-            .move = sim::PlanarMoveIntent{
-                .x = controlled_move_intent_.x,
-                .z = controlled_move_intent_.z,
-            },
-            .pace = *controlled_pace,
-        },
-        npc_decision->movement,
-    };
-
-    // Allocate the protocol result before mutating World. Both human and NPC
-    // intents enter one fixed authoritative batch; result ordering is supplied
-    // by World and is independent of collection order.
+    // Allocate the protocol result before mutating World. Human and NPC intents
+    // enter one fixed authoritative batch; result ordering is supplied by World
+    // and is independent of collection order.
     AuthoritativeMovementSampleBatch result{};
     result.samples.resize(intents.size());
 
@@ -250,6 +257,21 @@ ControlledActorLocomotionTickOutcome Simulation::advance_locomotion_tick() {
     for (std::size_t index = 0; index < advanced->samples.size(); ++index) {
         result.samples[index] = movement_sample(advanced->samples[index]);
     }
+
+    // Movement is already committed and its batch keeps that exact revision.
+    // Then bounded NPC policy may apply the same actor-generic Consume law against
+    // post-movement World state. Infeasible proposals are suppressed; an ordinary
+    // refusal can never retroactively turn successful locomotion into failure.
+    for (const auto actor : actor_ids) {
+        if (actor == controlled_actor_ || world_.revision().value >= kMaxProtocolInteger) {
+            continue;
+        }
+        if (!world_.can_consume_household_grain(actor)) {
+            continue;
+        }
+        (void)world_.consume_household_grain(actor);
+    }
+
     return result;
 }
 
@@ -273,9 +295,7 @@ BootstrapActorProjection Simulation::bootstrap_controlled_actor_projection() con
 
 ObservedWorldProjection Simulation::observed_world_projection() const {
     const bool controlled_actor_exists = world_.contains_actor(controlled_actor_);
-    const bool npc_exists = world_.contains_actor(living_need_npc_);
     assert(controlled_actor_exists);
-    assert(npc_exists);
 
     ObservedWorldProjection result{
         .controlled_actor_id = controlled_actor_exists ? controlled_actor_.value : 0,
@@ -284,11 +304,9 @@ ObservedWorldProjection Simulation::observed_world_projection() const {
         .protocol_version = kProtocolVersion,
     };
 
-    if (controlled_actor_exists) {
-        result.entities.push_back(ObservedEntityProjection{.entity_id = controlled_actor_.value});
-    }
-    if (npc_exists) {
-        result.entities.push_back(ObservedEntityProjection{.entity_id = living_need_npc_.value});
+    result.entities.reserve(world_.actor_ids().size());
+    for (const auto actor : world_.actor_ids()) {
+        result.entities.push_back(ObservedEntityProjection{.entity_id = actor.value});
     }
     return result;
 }
@@ -316,8 +334,14 @@ ControlledActorSpatialProjection Simulation::controlled_actor_spatial_projection
 }
 
 LivingNeedProjection Simulation::living_need_projection() const {
-    const auto decision = sim::decide_npc_rest_need(world_, living_need_npc_);
-    const auto need = world_.actor_rest_need(living_need_npc_);
+    const auto actor = first_living_need_actor(world_);
+    assert(actor.has_value());
+    if (!actor.has_value()) {
+        return {};
+    }
+
+    const auto decision = sim::decide_npc_rest_need(world_, *actor);
+    const auto need = world_.actor_rest_need(*actor);
     assert(decision.has_value());
     assert(need.has_value());
     if (!decision.has_value() || !need.has_value()) {
@@ -325,7 +349,7 @@ LivingNeedProjection Simulation::living_need_projection() const {
     }
 
     return LivingNeedProjection{
-        .entity_id = living_need_npc_.value,
+        .entity_id = actor->value,
         .status = living_need_status(*decision),
         .target_x_mm = need->rest_x.value,
         .target_z_mm = need->rest_z.value,
@@ -336,6 +360,49 @@ LivingNeedProjection Simulation::living_need_projection() const {
         .revision = checked_protocol_integer(world_.revision().value),
         .protocol_version = kProtocolVersion,
     };
+}
+
+VillageHouseholdResourceProjection Simulation::village_household_resource_projection() const {
+    VillageHouseholdResourceProjection result{
+        .tick = checked_protocol_integer(world_.tick().value),
+        .revision = checked_protocol_integer(world_.revision().value),
+        .protocol_version = kProtocolVersion,
+    };
+    result.households.reserve(world_.household_ids().size());
+
+    for (const auto household_id : world_.household_ids()) {
+        const auto household = world_.household_state(household_id);
+        const auto shortage = world_.household_is_short(household_id);
+        assert(household.has_value());
+        assert(shortage.has_value());
+        if (!household.has_value() || !shortage.has_value()) {
+            continue;
+        }
+
+        const auto store = world_.place_state(household->store_place);
+        assert(store.has_value());
+        if (!store.has_value()) {
+            continue;
+        }
+
+        HouseholdResourceProjection projection{
+            .household_id = household->id.value,
+            .store_place_id = store->id.value,
+            .store_x_mm = store->x.value,
+            .store_z_mm = store->z.value,
+            .store_axis_tolerance_mm = store->axis_occupancy_tolerance.value,
+            .grain_stock_units = household->grain_stock_units,
+            .shortage_threshold_units = household->shortage_threshold_units,
+            .status = household_resource_status(*shortage),
+        };
+        projection.member_actor_ids.reserve(household->members.size());
+        for (const auto member : household->members) {
+            projection.member_actor_ids.push_back(member.value);
+        }
+        result.households.push_back(std::move(projection));
+    }
+
+    return result;
 }
 
 } // namespace worldsim::protocol
