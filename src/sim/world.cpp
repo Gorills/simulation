@@ -204,6 +204,9 @@ std::expected<void, WorldError> World::add_household(HouseholdState household) {
     if (!household.store_place.is_valid() || !household.has_valid_resource_state()) {
         return std::unexpected(WorldError::invalid_household_state);
     }
+    if (!household.has_valid_social_state()) {
+        return std::unexpected(WorldError::invalid_household_social_state);
+    }
     for (const auto member : household.members) {
         if (!member.is_valid()) {
             return std::unexpected(WorldError::invalid_household_state);
@@ -225,6 +228,12 @@ std::expected<void, WorldError> World::add_household(HouseholdState household) {
         if (actor_belongs_to_household(member)) {
             return std::unexpected(WorldError::actor_already_in_household);
         }
+    }
+    if (
+        household.remembered_material_aid_actor.is_valid()
+        && !contains_actor(household.remembered_material_aid_actor)
+    ) {
+        return std::unexpected(WorldError::unknown_remembered_aid_actor);
     }
     if (const auto pledge_error = standing_transfer_composition_error(
             household,
@@ -484,6 +493,9 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
         if (!household.store_place.is_valid() || !household.has_valid_resource_state()) {
             return std::unexpected(WorldSnapshotError::invalid_household_state);
         }
+        if (!household.has_valid_social_state()) {
+            return std::unexpected(WorldSnapshotError::invalid_household_social_state);
+        }
         for (const auto member : household.members) {
             if (!member.is_valid()) {
                 return std::unexpected(WorldSnapshotError::invalid_household_state);
@@ -505,6 +517,12 @@ std::expected<void, WorldSnapshotError> World::restore(const WorldSnapshot &snap
             if (restored.actor_belongs_to_household(member)) {
                 return std::unexpected(WorldSnapshotError::actor_already_in_household);
             }
+        }
+        if (
+            household.remembered_material_aid_actor.is_valid()
+            && !restored.contains_actor(household.remembered_material_aid_actor)
+        ) {
+            return std::unexpected(WorldSnapshotError::unknown_remembered_aid_actor);
         }
         if (const auto pledge_error = standing_transfer_composition_error(
                 household,
