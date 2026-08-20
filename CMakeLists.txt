@@ -119,6 +119,7 @@ if(WORLD_SIM_BUILD_TESTS)
         protocol_tests
         tests/protocol/household_resource_action_test.cpp
         tests/protocol/m2_performance_test.cpp
+        tests/protocol/m3_reciprocal_aid_test.cpp
         tests/protocol/simulation_test.cpp
         tests/protocol/movement_test.cpp
     )
@@ -148,6 +149,7 @@ if(WORLD_SIM_BUILD_GDEXTENSION)
         PRIVATE
             src/adapters/gdextension/register_types.cpp
             src/adapters/gdextension/sim_facade.cpp
+            src/adapters/gdextension/sim_facade_reciprocal_aid.cpp
             src/adapters/gdextension/sim_facade_work.cpp
             src/adapters/gdextension/sim_facade_transfer.cpp
             src/adapters/gdextension/sim_facade.hpp
