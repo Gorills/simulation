@@ -14,6 +14,7 @@ inline constexpr EntityId kShortHousehold{21};
 inline constexpr Millimeters kShortStoreX{-3'000};
 inline constexpr Millimeters kShortStoreZ{-3'000};
 inline constexpr Millimeters kStoreTolerance{150};
+inline constexpr std::int64_t kAcceptanceCarryCapacity{2};
 
 [[nodiscard]] std::expected<void, WorldError> add_acceptance_actors(World &world) {
     auto result = world.spawn_actor(
@@ -23,6 +24,9 @@ inline constexpr Millimeters kStoreTolerance{150};
                 .position = {},
                 .velocity = {},
                 .epoch = SpatialEpoch{1},
+            },
+            .grain_carry = ActorGrainCarryState{
+                .grain_carry_capacity_units = kAcceptanceCarryCapacity,
             },
         }
     );
@@ -64,6 +68,9 @@ inline constexpr Millimeters kStoreTolerance{150};
                 },
                 .velocity = {},
                 .epoch = SpatialEpoch{1},
+            },
+            .grain_carry = ActorGrainCarryState{
+                .grain_carry_capacity_units = kAcceptanceCarryCapacity,
             },
         }
     );
