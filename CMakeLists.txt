@@ -107,6 +107,7 @@ if(WORLD_SIM_BUILD_TESTS)
 
     add_executable(
         protocol_tests
+        tests/protocol/household_resource_action_test.cpp
         tests/protocol/simulation_test.cpp
         tests/protocol/movement_test.cpp
     )
