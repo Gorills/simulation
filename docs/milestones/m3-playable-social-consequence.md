@@ -33,10 +33,11 @@ The bounded M3 vignette is built on the M2 acceptance village.
 1. The short household autonomously develops the existing grain shortage.
 2. The player can see which household is affected and can distinguish the relevant neighbour from the other villagers without reading entity IDs or opening technical diagnostics.
 3. The player may address the shortage through the existing M2 material paths; M3 must not create a fake social-only "help" button that bypasses them. For the first personal social-memory path, use an action whose contribution is causally attributable to the acting actor (Gift or Work are valid candidates). Executing the existing standing household transfer does **not** automatically create a personal obligation toward the executor, because the transferred stock and pledge belong to the source household.
-4. A real accepted, attributable material contribution records a bounded social consequence for the contributing actor. A refused/impossible action, or merely executing another party's material obligation, does not create personal social credit.
-5. A control path also exists in which the shortage is materially addressed without the actor earning the relevant remembered aid. The standing household transfer is a natural candidate because it can change the target household's stock through an existing real world rule without falsely attributing the source household's contribution to the executor. Verification must keep the later material prerequisites comparable enough that the contrasting outcome cannot be explained by stock, occupancy, or another non-social failure.
-6. Later, the player can ask the previously affected household for one bounded reciprocal aid opportunity. The request succeeds only when the authoritative social condition is present and all material prerequisites are still valid; otherwise it is refused without mutation.
-7. The successful reciprocal aid must change existing authoritative world state through a shared actor-generic rule. The client may request the action and present the result, but it may not own the relationship or manufacture the reward.
+4. A real accepted, attributable material contribution records a bounded social consequence for the contributing actor. For a qualifying M3 action, the material effect and resulting social credit are one authoritative causal transition boundary: the game must never expose a committed contribution whose required social memory then fails to appear, nor social credit without the material contribution that caused it. The implementation may extend an existing World transition or use another atomic Core mechanism that reuses the M2 law, but it must not bolt a separately fallible social-state mutation onto a previously committed M2 command.
+5. A refused/impossible action, or merely executing another party's material obligation, does not create personal social credit.
+6. A control path also exists in which the shortage is materially addressed without the actor earning the relevant remembered aid. The standing household transfer is a natural candidate because it can change the target household's stock through an existing real world rule without falsely attributing the source household's contribution to the executor. Verification must keep the later material prerequisites comparable enough that the contrasting outcome cannot be explained by stock, occupancy, or another non-social failure.
+7. Later, the player can ask the previously affected household for one bounded reciprocal aid opportunity. The request succeeds only when the authoritative social condition is present and all material prerequisites are still valid; otherwise it is refused without mutation.
+8. The successful reciprocal aid must change existing authoritative world state through a shared actor-generic rule. The client may request the action and present the result, but it may not own the relationship or manufacture the reward.
 
 The exact qualifying M2 action, quantity/bounds of reciprocal aid, and social-state representation are implementation/model decisions, not historical claims and not owned by this document. The detailed mechanic semantics belong in the M3 model document once implementation starts.
 
@@ -51,6 +52,7 @@ Required semantics:
 - the remembered consequence identifies the relevant actor and social counterparty; it is not a global player reputation flag;
 - social credit follows the causally attributable contributor, not whichever actor happened to submit/execute a command on behalf of another household;
 - only an accepted qualifying material contribution can create/increase the M3 obligation;
+- the qualifying material consequence and the corresponding social-state change commit or refuse together at one authoritative Core transition boundary; no protocol/Godot/application follow-up call may be required to make the social consequence true after the material action has already committed;
 - refusal/no-op cannot create social state;
 - the later reciprocal opportunity checks current authoritative social state and current material feasibility;
 - consuming the bounded reciprocal opportunity changes or clears the corresponding obligation according to the mechanic contract;
@@ -105,14 +107,15 @@ The unit of implementation is one playable beat, not one horizontal subsystem la
 A bounded M3 implementation slice should normally cross only the layers needed to make the next piece of this vignette real:
 
 ```text
-material event
-  -> authoritative social memory
+qualifying material + social transition
   -> semantic projection/command
   -> ordinary-play feedback/opportunity
   -> targeted proof
 ```
 
 Do not land several independent "relationship foundation" tasks that leave `main` with no new understandable player consequence. A short native-first enabler is acceptable only when its immediate consumer is part of the same bounded implementation task or the next explicitly blocked vertical slice.
+
+Do not implement qualifying social memory as a best-effort application/protocol callback after an already successful Gift/Work transition. The M3 model must define one Core-owned transition boundary that reuses the material law without creating a second mutable truth or a partial-success state.
 
 ## Acceptance
 
@@ -123,6 +126,7 @@ Milestone 3 is accepted only when bounded ordinary-play evidence demonstrates bo
 - the shortage appears without a player economic command;
 - the player can identify the affected neighbour/household;
 - the player performs a real accepted M2 material contribution that the mechanic contract attributes to that actor;
+- the authoritative post-action state contains both the material consequence and its qualifying social memory from the same successful transition boundary;
 - ordinary play communicates that the contribution was recognized;
 - a later reciprocal-aid opportunity is available;
 - taking that opportunity changes authoritative world state;
