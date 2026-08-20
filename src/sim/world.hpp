@@ -333,6 +333,11 @@ public:
     [[nodiscard]] std::expected<void, WorldError> add_place(PlaceState place);
     [[nodiscard]] std::expected<void, WorldError> add_household(HouseholdState household);
 
+    // Read-only application eligibility filter. It intentionally mirrors the
+    // actor-generic Consume prerequisites so bounded autonomy can suppress
+    // impossible proposals; consume_household_grain still revalidates authority.
+    [[nodiscard]] bool can_consume_household_grain(EntityId actor) const noexcept;
+
     // Shared actor-generic M2 consumption rule. Membership, exact-spatial store
     // occupancy, positive content, remaining budget and stock are revalidated
     // against current World state. Accepted Consume changes revision exactly once;
