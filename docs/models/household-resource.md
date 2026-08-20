@@ -30,7 +30,7 @@ For the current bounded Core/application/vertical subset:
 - one bounded `FieldWorkAssignmentState` references an ordinary work-place `EntityId` and a durable destination-household `EntityId`, owns a positive fixture yield and a non-negative remaining-work count;
 - Work takes only the acting actor identity, requires exact-spatial field occupancy, adds exactly the assignment yield to the destination household, decrements remaining work completions by one, advances `WorldRevision` exactly once and leaves `SimulationTick` unchanged;
 - Work does not require household membership and does not select its destination from current shortage; the destination is durable content truth;
-- missing spatial state, being outside the field, exhausted work capacity, invalid/dangling work content or checked stock overflow is a Work refusal with no mutation;
+- missing spatial state, being outside the field, exhausted work capacity, invalid/dangling work content or checked-addition overflow is a Work refusal with no mutation;
 - snapshot/restore preserves carry/capacity, household resource quantities and field-work place/destination/yield/remaining count so later Consume/Draw/Deposit/Gift/Work outcomes continue deterministically;
 - the acceptance village is created by one bounded Core content builder rather than by named protocol actor fields;
 - protocol decision collection iterates the deterministic Core actor-id view, applies RestNeed movement to actors that have that state, and gives other exact-spatial non-controlled actors an idle locomotion intent;
