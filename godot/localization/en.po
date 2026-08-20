@@ -58,6 +58,9 @@ msgstr "Rest place blocked"
 msgid "UI_NEED_SATISFIED"
 msgstr "Rest place available"
 
+msgid "WORLD_REST_TARGET_HINT"
+msgstr "NPC rest place\nStand on the marker to interfere"
+
 msgid "UI_DEBUG_SPATIAL"
 msgstr "SPATIAL"
 
@@ -77,7 +80,7 @@ msgid "UI_DEBUG_TRANSPORT_NOTE"
 msgstr "Bootstrap transport probe is retained in smoke evidence, not presented as authoritative spatial truth."
 
 msgid "UI_DEBUG_CONTROLS_HINT"
-msgstr "WASD / stick move  ·  Shift sprint  ·  mouse / right stick look  ·  Esc releases pointer"
+msgstr "WASD / stick move  ·  Shift sprint  ·  stand on the rest marker to interfere with the NPC  ·  Esc releases pointer"
 
 msgid "UI_INPUT_KEYBOARD_MOUSE"
 msgstr "Keyboard / mouse"
