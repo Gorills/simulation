@@ -54,7 +54,7 @@ Required semantics:
 - the later reciprocal opportunity checks current authoritative social state and current material feasibility;
 - consuming the bounded reciprocal opportunity changes or clears the corresponding obligation according to the mechanic contract;
 - the same rule is available to any actor with equivalent state/prerequisites. NPC policy does not need to exercise every path in the Godot client during M3, but native evidence must prove no player-only domain branch exists;
-- social state survives normal snapshot/restore if snapshot schema already owns the authoritative state added by M3.
+- the M3 social state is authoritative World state and therefore must be captured/restored by the versioned `WorldSnapshot` contract under ADR 0008; derived projections/views are not snapshot truth.
 
 Do not prebuild a universal relationship ontology. If a later capability needs trust, reputation, kinship, status, debt, patronage, hostility, legitimacy, or information provenance, add the smallest new dimension when that capability requires it.
 
