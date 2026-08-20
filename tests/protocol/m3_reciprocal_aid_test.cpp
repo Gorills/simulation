@@ -191,16 +191,15 @@ TEST(M3ReciprocalAidProtocol, StandingTransferControlIsMateriallyFeasibleButSoci
     const auto transfer = simulation.controlled_actor_execute_household_transfer_pledge();
     ASSERT_TRUE(transfer.has_value());
 
-    const auto memory = simulation.reciprocal_aid_projection(target_id);
-    ASSERT_TRUE(memory.has_value());
-    ASSERT_FALSE(memory->remembered_for_controlled_actor);
-
     ASSERT_TRUE(reach_store(simulation, target_id));
     const auto resources = simulation.village_household_resource_projection();
     const auto *target = find_household(resources, target_id);
     ASSERT_NE(target, nullptr);
     const auto carry = simulation.controlled_actor_carry_projection();
     const auto spatial = simulation.controlled_actor_spatial_projection();
+    const auto memory = simulation.reciprocal_aid_projection(target_id);
+    ASSERT_TRUE(memory.has_value());
+    ASSERT_FALSE(memory->remembered_for_controlled_actor);
 
     ASSERT_TRUE(at_store(spatial, *target));
     ASSERT_GT(target->grain_stock_units, target->shortage_threshold_units);
