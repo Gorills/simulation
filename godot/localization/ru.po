@@ -58,6 +58,9 @@ msgstr "Место отдыха занято"
 msgid "UI_NEED_SATISFIED"
 msgstr "Место отдыха доступно"
 
+msgid "WORLD_REST_TARGET_HINT"
+msgstr "Место отдыха NPC\nВстаньте на метку, чтобы помешать"
+
 msgid "UI_DEBUG_SPATIAL"
 msgstr "ПРОСТРАНСТВО"
 
@@ -77,7 +80,7 @@ msgid "UI_DEBUG_TRANSPORT_NOTE"
 msgstr "Bootstrap-зонд сохраняется только в smoke evidence и не считается авторитетным пространственным состоянием."
 
 msgid "UI_DEBUG_CONTROLS_HINT"
-msgstr "WASD / стик — движение  ·  Shift — спринт  ·  мышь / правый стик — обзор  ·  Esc — курсор"
+msgstr "WASD / стик — движение  ·  Shift — спринт  ·  встаньте на метку отдыха, чтобы помешать NPC  ·  Esc — курсор"
 
 msgid "UI_INPUT_KEYBOARD_MOUSE"
 msgstr "Клавиатура / мышь"
