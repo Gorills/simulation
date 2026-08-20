@@ -67,6 +67,7 @@ target_sources(
     sim_protocol
     PRIVATE
         src/protocol/simulation.cpp
+        src/protocol/simulation_reciprocal_aid.cpp
         src/protocol/simulation_work.cpp
         src/protocol/simulation_transfer.cpp
     PUBLIC
@@ -78,6 +79,7 @@ target_sources(
             src/protocol/household_resource.hpp
             src/protocol/movement.hpp
             src/protocol/observed_world.hpp
+            src/protocol/reciprocal_aid.hpp
             src/protocol/spatial.hpp
             src/protocol/simulation.hpp
 )
