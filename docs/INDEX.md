@@ -19,6 +19,7 @@ This repository deliberately has **no monolithic `TZ.md`**. Each durable concern
 | Simulation authority vs spatial implementation choice, offscreen exact-spatial limits, future external/LLM decision-source boundary | [`decisions/0009-simulation-authority-and-decision-sources.md`](decisions/0009-simulation-authority-and-decision-sources.md) | scaling spatial work, adding offscreen continuation/time systems, or considering external NPC policy/language control |
 | grounded locomotion behavior + neutral acceptance arena | [`models/grounded-locomotion.md`](models/grounded-locomotion.md) | movement solver, collision, slope/step/grounding or first test-arena work |
 | first NPC living need / causal rest task | [`models/living-need.md`](models/living-need.md) | Milestone 1 need/task behavior, NPC rest decision or its presentation evidence |
+| household grain stock, bounded Consume and derived shortage | [`models/household-resource.md`](models/household-resource.md) | Milestone 2 household resource state/rules and their causal semantics |
 | runtime UI localization, supported locales, translation keys/plurals | [`engineering/localization.md`](engineering/localization.md) | adding/changing player-visible text, locale selection or localization verification |
 | tests, playtest supervisor, evidence, local DoD | [`VERIFICATION.md`](VERIFICATION.md) | verification/tooling/gameplay acceptance |
 | current milestone direction | [`ROADMAP.md`](ROADMAP.md) | choosing/understanding implementation target |
