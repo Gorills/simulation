@@ -19,9 +19,9 @@ from godot_runtime import PROJECT, ROOT, expected_extension_library, import_proj
 CACHE = ROOT / ".cache" / "play"
 LOCK_PATH = CACHE / "godot.lock"
 SUPPORTED_LOCALES = ("ru", "en")
-SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference", "shortage")
+SUPPORTED_SCENARIOS = ("smoke", "offscreen", "rest_interference", "shortage", "gift")
 SMOKE_AUDIO_DRIVER = "Dummy"
-PROTOCOL_VERSION = 7
+PROTOCOL_VERSION = 8
 OBSERVED_ENTITY_IDS = [1, 2, 3]
 
 
@@ -714,6 +714,199 @@ def validate_shortage_artifact(path: Path, expected_locale: str) -> dict[str, ob
     return evidence
 
 
+def validate_gift_artifact(path: Path, expected_locale: str) -> dict[str, object]:
+    evidence = load_playtest_artifact(path)
+    if evidence.get("scenario") != "gift":
+        raise SystemExit(f"unexpected Gift scenario marker: {evidence.get('scenario')}")
+    if evidence.get("client_supplied_amount") is not False:
+        raise SystemExit("Gift scenario must prove that the client supplied no grain amount")
+
+    source_household_id = evidence.get("source_household_id")
+    target_household_id = evidence.get("target_household_id")
+    if (
+        not isinstance(source_household_id, int)
+        or source_household_id <= 0
+        or not isinstance(target_household_id, int)
+        or target_household_id <= 0
+        or source_household_id == target_household_id
+    ):
+        raise SystemExit("Gift scenario has invalid source/target household identity")
+
+    initial_carry = evidence.get("initial_carry")
+    initial_header = evidence.get("initial_resource_header")
+    draw = evidence.get("draw_result")
+    shortage = evidence.get("shortage_before_approach")
+    shortage_header = evidence.get("shortage_resource_header")
+    target_before = evidence.get("target_before_gift")
+    before_header = evidence.get("resource_before_gift")
+    gift = evidence.get("gift_result")
+    target_after = evidence.get("target_after_gift")
+    after_header = evidence.get("resource_after_gift")
+    carry_after = evidence.get("carry_after_gift")
+    living = evidence.get("living_need_at_gift")
+    movement = evidence.get("movement_before_gift")
+    localization = evidence.get("localization")
+    sections = (
+        initial_carry,
+        initial_header,
+        draw,
+        shortage,
+        shortage_header,
+        target_before,
+        before_header,
+        gift,
+        target_after,
+        after_header,
+        carry_after,
+        living,
+        movement,
+        localization,
+    )
+    if not all(isinstance(section, dict) for section in sections):
+        raise SystemExit("Gift artifact is missing authoritative carry/resource/need/localization evidence")
+
+    assert isinstance(initial_carry, dict)
+    assert isinstance(initial_header, dict)
+    assert isinstance(draw, dict)
+    assert isinstance(shortage, dict)
+    assert isinstance(shortage_header, dict)
+    assert isinstance(target_before, dict)
+    assert isinstance(before_header, dict)
+    assert isinstance(gift, dict)
+    assert isinstance(target_after, dict)
+    assert isinstance(after_header, dict)
+    assert isinstance(carry_after, dict)
+    assert isinstance(living, dict)
+    assert isinstance(movement, dict)
+    assert isinstance(localization, dict)
+
+    for label, section in (
+        ("initial carry", initial_carry),
+        ("initial resource", initial_header),
+        ("draw result", draw),
+        ("shortage resource", shortage_header),
+        ("resource before Gift", before_header),
+        ("Gift result", gift),
+        ("resource after Gift", after_header),
+        ("carry after Gift", carry_after),
+        ("living need at Gift", living),
+        ("movement before Gift", movement),
+    ):
+        if section.get("protocol_version") != PROTOCOL_VERSION:
+            raise SystemExit(f"{label} protocol version mismatch: {section.get('protocol_version')}")
+
+    if (
+        initial_carry.get("entity_id") != 1
+        or initial_carry.get("carried_grain_units") != 0
+        or initial_carry.get("grain_carry_capacity_units") != 2
+        or initial_carry.get("member_household_id") != source_household_id
+    ):
+        raise SystemExit(f"unexpected initial controlled carry projection: {initial_carry}")
+    if initial_header.get("tick") != initial_carry.get("tick") or initial_header.get("revision") != initial_carry.get("revision"):
+        raise SystemExit("initial carry/resource projections are not one unchanged revision")
+
+    moved = draw.get("moved_grain_units")
+    if not isinstance(moved, int) or moved <= 0:
+        raise SystemExit("Draw did not move a positive authoritative quantity")
+    if (
+        draw.get("entity_id") != 1
+        or draw.get("affected_household_id") != source_household_id
+        or draw.get("carried_grain_units") != moved
+        or draw.get("tick") != initial_carry.get("tick")
+        or draw.get("revision") != initial_carry.get("revision") + 1
+    ):
+        raise SystemExit(f"Draw result does not prove one revision-only semantic transfer: {draw}")
+
+    if (
+        shortage.get("household_id") != target_household_id
+        or shortage.get("status") != "shortage"
+    ):
+        raise SystemExit("Gift target did not become short before player approach")
+    shortage_stock = shortage.get("grain_stock_units")
+    shortage_threshold = shortage.get("shortage_threshold_units")
+    if (
+        not isinstance(shortage_stock, int)
+        or not isinstance(shortage_threshold, int)
+        or shortage_stock >= shortage_threshold
+    ):
+        raise SystemExit("shortage evidence does not contain a stock below threshold")
+
+    before_stock = target_before.get("grain_stock_units")
+    after_stock = target_after.get("grain_stock_units")
+    threshold = target_before.get("shortage_threshold_units")
+    if not all(isinstance(value, int) for value in (before_stock, after_stock, threshold)):
+        raise SystemExit("Gift target stock/threshold quantities are invalid")
+    assert isinstance(before_stock, int)
+    assert isinstance(after_stock, int)
+    assert isinstance(threshold, int)
+    if target_before.get("household_id") != target_household_id or target_before.get("status") != "shortage":
+        raise SystemExit("target was not authoritatively short immediately before Gift")
+    if target_after.get("household_id") != target_household_id or target_after.get("status") != "adequate":
+        raise SystemExit("Gift did not produce an adequate target household afterward")
+    if after_stock != before_stock + moved:
+        raise SystemExit("Gift does not conserve the moved carry into target household stock")
+    if target_after.get("shortage_threshold_units") != threshold:
+        raise SystemExit("Gift changed the shortage threshold")
+
+    before_tick = before_header.get("tick")
+    before_revision = before_header.get("revision")
+    gift_tick = gift.get("tick")
+    gift_revision = gift.get("revision")
+    if not all(isinstance(value, int) for value in (before_tick, before_revision, gift_tick, gift_revision)):
+        raise SystemExit("Gift temporal headers are invalid")
+    assert isinstance(before_tick, int)
+    assert isinstance(before_revision, int)
+    assert isinstance(gift_tick, int)
+    assert isinstance(gift_revision, int)
+    if gift_tick != before_tick or gift_revision != before_revision + 1:
+        raise SystemExit("Gift did not commit exactly one revision without advancing SimulationTick")
+    if (
+        gift.get("entity_id") != 1
+        or gift.get("affected_household_id") != target_household_id
+        or gift.get("moved_grain_units") != moved
+        or gift.get("carried_grain_units") != 0
+        or gift.get("affected_household_grain_stock_units") != after_stock
+    ):
+        raise SystemExit(f"Gift result does not match authoritative post-transfer state: {gift}")
+    if after_header.get("tick") != gift_tick or after_header.get("revision") != gift_revision:
+        raise SystemExit("post-Gift resource read does not match the Gift result revision")
+    if carry_after.get("carried_grain_units") != 0:
+        raise SystemExit("controlled carry was not emptied by Gift")
+    if carry_after.get("tick") != gift_tick or carry_after.get("revision") != gift_revision:
+        raise SystemExit("post-Gift carry read does not match the Gift result revision")
+
+    if living.get("status") != "blocked":
+        raise SystemExit("Gift at the short-household store did not preserve M1 rest interference")
+    if living.get("tick") != before_tick or living.get("revision") != before_revision:
+        raise SystemExit("blocked living-need read does not align with the pre-Gift movement revision")
+    if movement.get("tick") != before_tick or movement.get("revision") != before_revision:
+        raise SystemExit("Gift precondition resource read does not align with the movement batch")
+
+    localized = {
+        "ru": {
+            "scenario": "Помощь зерном",
+            "carry": "Переносимое зерно: 0 / 2 · E взять · R вернуть · G подарить · Помощь зерном",
+            "adequate": "Запас достаточен",
+        },
+        "en": {
+            "scenario": "Gift shortage relief",
+            "carry": "Carried grain: 0 / 2 · E draw · R deposit · G gift · Gift shortage relief",
+            "adequate": "Adequate",
+        },
+    }
+    if localization.get("locale") != expected_locale:
+        raise SystemExit(f"unexpected Gift locale: {localization.get('locale')}")
+    if localization.get("scenario_text") != localized[expected_locale]["scenario"]:
+        raise SystemExit("localized Gift scenario label is incorrect")
+    if localization.get("carry_hud_text") != localized[expected_locale]["carry"]:
+        raise SystemExit("localized carry/action HUD does not match authoritative zero carry after Gift")
+    expected_household_status = f"{localized[expected_locale]['adequate']} · {after_stock} / {threshold}"
+    if localization.get("household_resource_status_text") != expected_household_status:
+        raise SystemExit("localized household HUD does not reflect the authoritative post-Gift stock")
+
+    return evidence
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded Godot playtest owned by this repository")
     parser.add_argument("--scenario", default="smoke", choices=SUPPORTED_SCENARIOS)
@@ -790,6 +983,8 @@ def main() -> int:
         evidence = validate_rest_interference_artifact(artifact_dir, args.locale)
     elif args.scenario == "shortage":
         evidence = validate_shortage_artifact(artifact_dir, args.locale)
+    elif args.scenario == "gift":
+        evidence = validate_gift_artifact(artifact_dir, args.locale)
     else:
         evidence = validate_smoke_artifact(artifact_dir, args.locale)
     metadata.update({"status": "passed", "evidence": evidence})
