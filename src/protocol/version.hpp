@@ -4,6 +4,6 @@
 
 namespace worldsim::protocol {
 
-inline constexpr std::uint32_t kProtocolVersion = 8;
+inline constexpr std::uint32_t kProtocolVersion = 9;
 
 } // namespace worldsim::protocol
